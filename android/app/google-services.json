@@ -1,36 +1,26 @@
 {
   "project_info": {
-    "project_number": "639557424313",
-    "project_id": "chat-b3055",
-    "storage_bucket": "chat-b3055.appspot.com"
+    "project_number": "606601921652",
+    "project_id": "connectx-app-f8407",
+    "storage_bucket": "connectx-app-f8407.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:639557424313:android:8181df543a936999677768",
+        "mobilesdk_app_id": "1:606601921652:android:f7382c642a8315475dbd21",
         "android_client_info": {
           "package_name": "com.example.newfluuter15042023"
         }
       },
-      "oauth_client": [
-        {
-          "client_id": "639557424313-o598l4s6j65mk3t3h4aqb26d288772uk.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
+      "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDv9TwsmJYC4almICO2BBmsKDi-XqCrbnU"
+          "current_key": "AIzaSyCmOqCIjNRE9YDLLQb1wLSwKQ_PIPWtPNs"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "639557424313-o598l4s6j65mk3t3h4aqb26d288772uk.apps.googleusercontent.com",
-              "client_type": 3
-            }
-          ]
+          "other_platform_oauth_client": []
         }
       }
     }
