@@ -1,22 +1,17 @@
-import 'dart:async';
-
-import 'package:Chat/fcm_reciever.dart';
 import 'package:Chat/models/User.dart';
-import 'package:elegant_notification/elegant_notification.dart';
-import 'package:elegant_notification/resources/arrays.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_database/firebase_database.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'chat_screen.dart';
-import 'firebase_options.dart';
 import 'login.dart';
 import 'main_screen.dart';
 import 'new_chat_screen.dart';
 
-Future<void> main() async => runApp(const MyApp(user: null));
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
+  runApp(const MyApp(user: null));
+}
 
 const title = "Chat";
 User1? _user;
@@ -31,9 +26,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder(
-      future: Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    ),
+      future: Future<void>.value(),
       builder: (context, snapshot) {
         _user = user;
 
@@ -123,8 +116,6 @@ class _MainState extends State<Main> {
     scrim: Color(0xFF000000),
   );
 
-  late StreamSubscription notificationSub;
-
   @override
   Widget build(BuildContext context) {
 
@@ -161,53 +152,5 @@ class _MainState extends State<Main> {
     );
   }
 
-  @override void initState() {
-    super.initState();
 
-    notificationSub = FirebaseMessaging.onMessage.listen((message) async {
-      RemoteNotification? notification = message.notification;
-
-      User1? user;
-
-      await FirebaseDatabase.instance.ref("Users")
-          .child(notification!.title!.split("/")[1]).once().then((event) {
-        user = User1(
-          name: event.snapshot.child("name").value.toString(),
-          username: event.snapshot.child("username").value.toString(),
-          key: event.snapshot.child("key").value.toString(),
-          fcmToken: event.snapshot.child("fcmToken").value.toString(),
-          online: event.snapshot.child("online").value as bool,
-          lastSeen: event.snapshot.child("lastSeen").value as int,
-        );
-      });
-
-      if(mounted && (currentRoute!= "/chat" || checkIfShouldSendNotifications(notification))) {
-        ElegantNotification(
-            width: MediaQuery
-                .of(context)
-                .size
-                .width,
-            notificationPosition: NotificationPosition.topCenter,
-            animation: AnimationType.fromTop,
-            title: Text(notification.title!.split("/")[0],),
-            description: Text(notification.body!,),
-            icon: const SizedBox(),
-            background: Theme
-                .of(context)
-                .colorScheme
-                .background,
-            showProgressIndicator: false,
-            onTap: () {
-              if (user != null) {
-                Navigator.of(context).popAndPushNamed("/chat", arguments: user);
-              }
-            }
-        ).show(context);
-      }
-    });
-
-    FcmReceiver().init();
-    FirebaseMessaging.onBackgroundMessage((message) =>
-        FcmReceiver().onBackgroundMessage(message, context));
-  }
 }
