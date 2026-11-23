@@ -1,8 +1,4 @@
-import 'dart:convert';
 import 'package:Chat/main.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart' show defaultTargetPlatform;
-import 'package:http/http.dart' as http;
 import 'package:Chat/utils/chat_message.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -177,13 +173,6 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
                             sender: FirebaseAuth.instance.currentUser!.uid
                           ).toJson()
                         );
-                        if (defaultTargetPlatform == TargetPlatform.android) {
-                          sendPushNotification(
-                            title: "${FirebaseAuth.instance.currentUser!.displayName!}/${FirebaseAuth.instance.currentUser!.uid}",
-                            body: message,
-                            token: user!.fcmToken,
-                          );
-                        }
                         textFieldController.clear();
                       }
                     },
@@ -243,45 +232,6 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
     scrollController.dispose();
     super.dispose();
   }
-}
-
-bool checkIfShouldSendNotifications(RemoteNotification notification){
-  if(ChatScreenState().user != null) {
-    return notification.title!.split("/")[0] != ChatScreenState().user!.username
-        && notification.title!.split("/")[0] !=
-            FirebaseAuth.instance.currentUser!.displayName;
-  }else {
-    return false;
-  }
-}
-
-void sendPushNotification({required String body, required String title, required String token}) async {
-
-  try {
-    await http.post(
-      Uri.parse('https://fcm.googleapis.com/fcm/send'),
-      headers: <String, String>{
-        'Content-Type': 'application/json',
-        'Authorization':
-        'key=AAAAlOiX1Lk:APA91bGIKvUK96G6biZqwAZD43xFJwsRGZQ5dSbGCmNHVl8DIn5TdoMeN-dTvgONxdS40wkkhLXo5LQiSfOFoM4vZ3gdjMAoBqGC6F9jaiyAcfKFiavboqaEeTE--5ydeogbBmvEOwnI',
-      },
-      body: jsonEncode(
-        <String, dynamic>{
-          'notification': <String, dynamic>{
-            'body': body,
-            'title': title,
-          },
-          'priority': 'high',
-          'data': <String, dynamic>{
-            'click_action': 'FLUTTER_NOTIFICATION_CLICK',
-            'id': '1',
-            'status': 'done'
-          },
-          "to": token,
-        },
-      ),
-    );
-  }catch (e){/**/}
 }
 
 String assignUsers(String user1,String user2) {
