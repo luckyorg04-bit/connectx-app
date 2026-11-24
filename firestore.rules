@@ -57,6 +57,15 @@ service cloud.firestore {
         )
         ||
         (
+          resource.data.isViewOnce == true
+          && resource.data.sender != request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewedBy'])
+          && request.resource.data.viewedBy is map
+          && request.resource.data.viewedBy.diff(resource.data.viewedBy).affectedKeys().hasOnly([request.auth.uid])
+          && request.resource.data.viewedBy[request.auth.uid] is timestamp
+        )
+        ||
+        (
           resource.data.type == 'poll'
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pollVotes'])
           && request.resource.data.pollVotes is map
