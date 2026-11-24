@@ -202,7 +202,13 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
         ),
         Expanded(
           child: _chatFilter == 'All'
-              ? UserList(users: users, key: userListKey, wantChats: true)
+              ? users.isEmpty
+                  ? _SectionEmptyState(
+                      icon: Icons.chat_bubble_outline_rounded,
+                      title: 'No chats yet',
+                      description: 'Start a conversation with someone on ConnectX.',
+                    )
+                  : UserList(users: users, key: userListKey, wantChats: true)
               : _SectionEmptyState(
                   icon: _chatFilter == 'Unread'
                       ? Icons.mark_chat_unread_outlined
