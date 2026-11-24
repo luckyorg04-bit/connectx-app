@@ -41,7 +41,7 @@ async function migrate() {
     const privateOld = privateExisting || {};
     const publicProfile = {
       name: String(publicOld.name ?? legacyValue.name ?? 'ConnectX User'),
-      username: String(publicOld.username ?? legacyValue.username ?? ('user_' + uid.slice(0, 8))),
+      username: String(publicOld.username ?? legacyValue.username ?? ('user_' + uid.slice(0, 8))).toLowerCase(),
       key: uid,
       online: publicOld.online === true || legacyValue.online === true,
       lastSeen: Number.isFinite(Number(publicOld.lastSeen ?? legacyValue.lastSeen)) ? Number(publicOld.lastSeen ?? legacyValue.lastSeen) : Date.now(),
