@@ -26,8 +26,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
   bool _showProfile = false;
   String _chatFilter = 'All';
 
-  static const _tabTitles = ['ConnectX', 'Updates', 'Communities', 'Calls'];
-
   @override
   void initState() {
     super.initState();
