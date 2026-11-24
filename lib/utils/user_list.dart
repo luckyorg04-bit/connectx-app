@@ -22,6 +22,7 @@ class UserListState extends State<UserList> {
   final Map<String, int> _unread = {};
   final Map<String, Map<String, dynamic>> _meta = {};
   final Set<String> _blockedUsers = <String>{};
+  final Map<String, StreamSubscription<QuerySnapshot<Map<String, dynamic>>>> _messageSubscriptions = {};
 
   @override
   void initState() { super.initState(); _refresh(); }
@@ -61,6 +62,35 @@ class UserListState extends State<UserList> {
     }));
     if (!mounted) return;
     setState(() { _latest..clear()..addAll(latest); _unread..clear()..addAll(unread); _meta..clear()..addAll(metadata); _blockedUsers..clear()..addAll(blocked); });
+    for (final contact in widget.users) {
+      if (contact.key != uid) _listenToContactMessages(uid, contact);
+    }
+  }
+
+  void _listenToContactMessages(String uid, User1 contact) {
+    if (_messageSubscriptions.containsKey(contact.key)) return;
+    final stream = FirebaseFirestore.instance.collection('messages')
+        .doc(assignUsers(uid, contact.key)).collection('chats')
+        .orderBy('timestamp', descending: true).limit(10).snapshots();
+    _messageSubscriptions[contact.key] = stream.listen((snapshot) {
+      if (!mounted) return;
+      final messages = snapshot.docs.map(Message.fromSnapshot).toList();
+      setState(() {
+        _latest[contact.key] = messages.isEmpty ? null : messages.first;
+        _unread[contact.key] = messages.where((m) => !m.isRead && m.sender != uid).length;
+      });
+    }, onError: (Object error) {
+      debugPrint('ConnectX chat-list listener failed for ${contact.key}: $error');
+    });
+  }
+
+  @override
+  void dispose() {
+    for (final subscription in _messageSubscriptions.values) {
+      subscription.cancel();
+    }
+    _messageSubscriptions.clear();
+    super.dispose();
   }
 
   Future<void> _setMeta(User1 contact, String key, bool value) async {
