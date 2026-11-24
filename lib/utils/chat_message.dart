@@ -11,6 +11,7 @@ final Set<String> _readReceiptAttempts = <String>{};
 
 class ChatMessage extends StatefulWidget {
   final Message message;
+  final DocumentReference<Map<String, dynamic>>? messageRef;
   final bool isMe;
   final int? previousMessage;
   final bool isFirstMessage;
@@ -19,6 +20,7 @@ class ChatMessage extends StatefulWidget {
   const ChatMessage({
     Key? key,
     required this.message,
+    this.messageRef,
     required this.isMe,
     required this.previousMessage,
     required this.isFirstMessage,
@@ -81,6 +83,50 @@ class _ChatMessageState extends State<ChatMessage> {
           subtitle: Text('Tap to open document', style: TextStyle(color: secondary, fontSize: 11)),
           onTap: () => _openUrl(url),
         );
+      case 'poll':
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        final votes = message.pollVotes;
+        final total = votes.length;
+        final selected = uid == null ? null : votes[uid];
+        return SizedBox(width: 245, child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(children: [Icon(Icons.poll_outlined, size: 18), SizedBox(width: 6), Text('POLL', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11))]),
+            const SizedBox(height: 7),
+            Text(message.message, style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            ...message.pollOptions.asMap().entries.map((entry) {
+              final count = votes.values.where((v) => v == entry.key).length;
+              final percent = total == 0 ? 0.0 : count / total;
+              final isSelected = selected == entry.key;
+              return InkWell(
+                onTap: uid == null || widget.messageRef == null ? null : () {
+                  widget.messageRef!.update({'pollVotes.$uid': entry.key}).catchError((_) {});
+                },
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 7),
+                  padding: const EdgeInsets.all(9),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: isSelected ? Theme.of(context).colorScheme.primary : secondary.withOpacity(.4)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [
+                      Expanded(child: Text(entry.value, style: TextStyle(color: textColor))),
+                      Text('$count', style: TextStyle(color: secondary, fontSize: 11)),
+                      if (isSelected) const Icon(Icons.check_circle, size: 15),
+                    ]),
+                    const SizedBox(height: 5),
+                    ClipRRect(borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(value: percent, minHeight: 4)),
+                  ]),
+                ),
+              );
+            }),
+            Text('$total vote(s) · Tap an option to vote/change vote',
+              style: TextStyle(color: secondary, fontSize: 10)),
+          ],
+        ));
       case 'audio':
         return Row(mainAxisSize: MainAxisSize.min, children: [
           IconButton(
