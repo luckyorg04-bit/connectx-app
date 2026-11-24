@@ -120,10 +120,17 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     if (callType == null || !mounted) return;
     try {
       final uid = FirebaseAuth.instance.currentUser!.uid;
+      final groupSnapshot = await FirebaseFirestore.instance.collection('groupChats').doc(_groupId).get();
+      final groupData = groupSnapshot.data();
+      final groupMembers = List<String>.from(groupData?['memberUids'] ?? []);
+      if (!groupSnapshot.exists || !groupMembers.contains(uid)) {
+        throw Exception('Only current group members can start a group call.');
+      }
       final ref = FirebaseFirestore.instance.collection('groupCalls').doc();
       await ref.set({
         'groupId': _groupId,
         'groupName': _groupName,
+        'groupMemberUids': groupMembers,
         'createdBy': uid,
         'participants': [uid],
         'activeUids': [uid],
@@ -177,7 +184,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       body: Column(children: [
         StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
           stream: FirebaseFirestore.instance.collection('groupCalls')
-            .where('groupId', isEqualTo: _groupId).where('status', isEqualTo: 'active').snapshots(),
+            .where('groupId', isEqualTo: _groupId)\n            .where('groupMemberUids', arrayContains: uid)\n            .where('status', isEqualTo: 'active').snapshots(),
           builder: (context, calls) {
             if (!calls.hasData || calls.data!.docs.isEmpty) return const SizedBox.shrink();
             final activeCall = calls.data!.docs.first;
