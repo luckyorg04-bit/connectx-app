@@ -6,7 +6,7 @@ class ProfileScreen extends StatelessWidget {
   const ProfileScreen({Key? key}) : super(key: key);
 
   String _initials(String name) {
-    final parts = name.trim().split(RegExp(r'\\s+')).where((part) => part.isNotEmpty).toList();
+    final parts = name.trim().split(RegExp(r'\s+')).where((part) => part.isNotEmpty).toList();
     if (parts.isEmpty) return 'C';
     if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
     return (parts.first[0] + parts.last[0]).toUpperCase();
