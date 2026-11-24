@@ -29,6 +29,7 @@ class _CallScreenState extends State<CallScreen> {
   bool _muted = false;
   bool _cameraOff = false;
   bool _remoteDescriptionSet = false;
+  bool _leaving = false;
   String? _error;
 
   String get _uid => FirebaseAuth.instance.currentUser!.uid;
@@ -165,8 +166,9 @@ class _CallScreenState extends State<CallScreen> {
         if (mounted) setState(() => _accepted = true);
       }
     }
-    if (status == 'declined' || status == 'ended' || status == 'failed' || status == 'missed') {
-      if (mounted && ModalRoute.of(context)?.isCurrent == true) {
+    if (status == 'declined' || status == 'ended' || status == 'failed' || status == 'missed' || status == 'cancelled') {
+      if (!_leaving && mounted && ModalRoute.of(context)?.isCurrent == true) {
+        _leaving = true;
         Navigator.of(context).pop();
       }
     }
@@ -207,6 +209,8 @@ class _CallScreenState extends State<CallScreen> {
   }
 
   Future<void> _finishCall(String status) async {
+    if (_leaving) return;
+    _leaving = true;
     try {
       if (_isCaller) {
         await _callRef.update({'status': status, 'endedAt': FieldValue.serverTimestamp()});
@@ -247,7 +251,9 @@ class _CallScreenState extends State<CallScreen> {
         backgroundColor: const Color(0xFF101820),
         title: Text('${_isVideo ? 'Video' : 'Voice'} call · $_peerName'),
       ),
-      body: SafeArea(child: Column(children: [
+      body: WillPopScope(
+        onWillPop: () async { await _finishCall(_isCaller && !_accepted ? 'cancelled' : 'ended'); return false; },
+        child: SafeArea(child: Column(children: [
         Expanded(child: Stack(children: [
           Positioned.fill(child: _isVideo && _remoteRenderer.srcObject != null
             ? RTCVideoView(_remoteRenderer, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover)
@@ -287,7 +293,7 @@ class _CallScreenState extends State<CallScreen> {
                 icon: const Icon(Icons.call_end, color: Colors.white))),
           ],
         )),
-      ])),
+      ]))),
     );
   }
 }
