@@ -46,29 +46,37 @@ class _ChatMessageState extends State<ChatMessage> {
     if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
-  Future<bool> _markViewOnce() async {
+  Future<String?> _prepareMediaUrl(String value) async {
     final message = widget.message;
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (!message.isViewOnce || widget.isMe) return true;
+    if (!message.isViewOnce || widget.isMe) return value;
     if (uid == null || message.viewedBy.containsKey(uid)) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('This view-once item has already been opened.')));
-      return false;
+      return null;
     }
-    if (widget.messageRef == null) return false;
+    if (widget.messageRef == null) return null;
     try {
       await widget.messageRef!.update({'viewedBy.$uid': FieldValue.serverTimestamp()});
-      return true;
+      final token = await FirebaseAuth.instance.currentUser!.getIdToken();
+      if (token == null || token.isEmpty) return null;
+      final uri = Uri.parse(value);
+      return uri.replace(queryParameters: {
+        ...uri.queryParameters,
+        'viewOnce': '1',
+        'auth': token,
+      }).toString();
     } catch (_) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('This view-once item is no longer available.')));
-      return false;
+      return null;
     }
   }
 
   Future<void> _openMedia(String value) async {
-    if (!await _markViewOnce()) return;
-    await _openUrl(value);
+    final prepared = await _prepareMediaUrl(value);
+    if (prepared == null) return;
+    await _openUrl(prepared);
   }
 
   Widget _mediaContent(Color textColor, Color secondary) {
@@ -172,8 +180,9 @@ class _ChatMessageState extends State<ChatMessage> {
                 await _audioPlayer.pause();
                 if (mounted) setState(() => _audioPlaying = false);
               } else {
-                if (!await _markViewOnce()) return;
-              await _audioPlayer.play(UrlSource(url));
+                final playUrl = await _prepareMediaUrl(url);
+              if (playUrl == null) return;
+              await _audioPlayer.play(UrlSource(playUrl));
                 if (mounted) setState(() => _audioPlaying = true);
                 _audioPlayer.onPlayerComplete.listen((_) {
                   if (mounted) setState(() => _audioPlaying = false);
