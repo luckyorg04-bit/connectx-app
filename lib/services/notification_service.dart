@@ -37,7 +37,8 @@ class NotificationService {
     const androidSettings = AndroidInitializationSettings('@mipmap/logo');
     const settings = InitializationSettings(android: androidSettings);
     try {
-      await _localNotifications.initialize(settings, onSelectNotification: (payload) async {
+      await _localNotifications.initialize(settings, onDidReceiveNotificationResponse: (response) async {
+        final payload = response.payload;
         if (payload == null || payload.isEmpty) return;
         try { openIncomingCall(Map<String, dynamic>.from(jsonDecode(payload) as Map)); } catch (_) {}
       });
