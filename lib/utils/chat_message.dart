@@ -190,7 +190,7 @@ class _ChatMessageState extends State<ChatMessage> {
                   if (!controller.value.isInitialized) {
                     return const SizedBox(
                       height: 120,
-                      child: Center(child: Icon(Icons.broken_video_outlined)),
+                      child: Center(child: Icon(Icons.broken_image_outlined)),
                     );
                   }
                   return ClipRRect(
