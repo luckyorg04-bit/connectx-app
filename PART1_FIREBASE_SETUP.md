@@ -1,51 +1,57 @@
-# ConnectX Part 1 Firebase setup
+# ConnectX Part 1 — Firebase and backend setup
 
-The Flutter code in this repository uses Firebase Authentication, Realtime Database, Cloud Firestore, Firebase Storage and Firebase Cloud Messaging.
+This repository uses:
+- Firebase Authentication for Google and email/password sign-in.
+- Cloud Firestore for direct messages, groups, calls, statuses, communities and channels.
+- Firebase Realtime Database for user profiles, online state and chat-list metadata.
+- Firebase Cloud Messaging for push notifications.
+- The ConnectX VPS API for message/status/profile media uploads, media delivery, notification dispatch and TURN credentials.
 
-## 1. Publish Firestore rules
+## Required deployment
 
-Firebase Console → Firestore Database → Rules.
+1. Deploy `firestore.rules` and `firestore.indexes.json` for project `connectx-app-f8407`.
+2. Deploy the current `vps-api/server.js` to the existing `connectx-api` container.
+3. Preserve the persistent host upload mount `/opt/connectx-api/uploads:/app/uploads`.
+4. Keep the Firebase service account mounted read-only at `/run/secrets/firebase-service-account.json`.
+5. Verify `https://connecttx.duckdns.org/health` returns a successful health response.
+6. Verify authenticated uploads and media reads using two signed-in test accounts.
 
-Replace the complete rules editor content with the repository file `firestore.rules`, then click Publish.
+The controlled script `deploy_part2.sh` deploys Firestore rules/indexes, updates only the ConnectX API container, and configures Coturn. It now refuses to proceed if the API upload directory is not mounted persistently. It performs API syntax and health checks before reporting success.
 
-This rules file covers:
-- 1-to-1 message read/create/edit/read receipts/reactions/delete
-- Group membership and group messages
-- User report submissions
-
-## 2. Firebase Storage billing requirement
-
-Firebase Console → Build → Storage → Get started.
-
-Important: Cloud Storage for Firebase now requires the Blaze pay-as-you-go plan, including access to default buckets. If this project remains on Spark, image/video/document/voice upload through Firebase Storage will fail. The code is ready for Firebase Storage, but the user must either enable Blaze billing or move the upload service to a separately hosted server. See Google's current requirement: https://firebase.google.com/docs/storage/faqs-storage-changes-announced-sept-2024.
-
-If the project is on Blaze, create the default bucket, then open Storage → Rules and publish the complete contents of `storage.rules`.
-
-## 3. Push notification delivery
-
-The app requests notification permission and registers the current FCM token in:
-`Users/{uid}/fcmToken`
-
-Foreground notifications are displayed by the app. Background delivery requires the Cloud Functions in `functions/index.js`.
-
-Cloud Functions also requires the Blaze plan. FCM itself is no-cost, but the server-side trigger that sends a push notification when a Firestore message is created must run somewhere. Deploy from the repository root after installing Firebase CLI and signing in:
+Run it on the ConnectX VPS as root:
 
 ```bash
-npm --prefix functions install
-firebase deploy --only functions
+curl -fsSL https://raw.githubusercontent.com/luckyorg04-bit/connectx-app/master/deploy_part2.sh -o /root/deploy_part2.sh && bash /root/deploy_part2.sh
 ```
 
-Firebase Cloud Functions deployment requires the Firebase project to use the Blaze (pay-as-you-go) plan and a linked billing account. Usage may fit within no-cost quotas, but deployment still requires billing. Do not deploy if you do not accept that requirement. See https://firebase.google.com/docs/functions/faq-and-troubleshooting.
+Afterward, allow these ports in the Hostinger firewall:
+- TCP and UDP 3478
+- UDP 49160–49200
 
-## 4. Android permissions
+## Realtime Database access model
 
-The app requests microphone and location access only when the related feature is used. Android 13+ notification permission is requested by Firebase Messaging.
+The app writes a user's own profile and own chat-index entry. The trusted ConnectX VPS Admin SDK writes the conversation index for both participants when a Firestore direct-message document is created. Do not permit a client to write arbitrary data under another user's `Users/{uid}` record.
 
-## 5. Important feature boundaries
+The repository currently does not include a Realtime Database rules file. Review and publish rules in Firebase Console that permit:
+- Authenticated users to read the profile fields needed for user search and chat display.
+- A signed-in user to write only their own profile, online state, FCM token and own chat metadata.
+- No client writes to another user's profile or chat index.
+- No public reads of private account fields.
 
-- Contact sharing currently lets the user enter a contact name and phone number manually; it does not read the device address book.
-- Video and document files are uploaded to Firebase Storage and opened using an external app/browser.
-- Location sharing sends the current device coordinates after permission is granted.
-- Block state is stored per user in Realtime Database; report submissions are stored in Firestore.
-- Groups use Firestore membership documents. Group text messages are supported; group media and admin roles are not part of this Part 1 implementation.
-- Messages are not yet end-to-end encrypted. Firebase transport/security rules do not equal Signal Protocol E2E encryption.
+## Media and billing
+
+Direct-chat attachments, status media and profile photos use the VPS API, not Firebase Storage. Firebase Storage is therefore not required for these code paths. The API stores files under `/app/uploads`; the host mount is required so container restarts do not erase uploads.
+
+Uploads are limited to 25 MB and supported file extensions/MIME types. Validate real device uploads for JPG/PNG/WebP, MP4/MOV, audio and supported documents. A successful APK build does not verify the VPS API, firewall, persistent storage or media access.
+
+## Push notifications
+
+The current VPS API listens to Firestore and sends FCM notifications using the Admin SDK. It also updates the chat index for both participants. Do not separately deploy the legacy `functions/index.js` notification triggers unless the VPS notification listener is intentionally disabled; running both paths can send duplicate notifications.
+
+## Known feature boundaries
+
+- Contact sharing currently accepts a name and phone number entered manually; it does not read the device address book.
+- Video and document attachments open in an external player/viewer.
+- Direct messages are not end-to-end encrypted. Firebase transport encryption and Firestore security rules are not Signal-protocol end-to-end encryption.
+- Group message media attachments are not currently included in the Part 2 implementation.
+- Play Store release signing, privacy-policy publication, account-deletion workflow and real-device call/media verification are separate production-readiness tasks.
