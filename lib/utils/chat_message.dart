@@ -52,7 +52,7 @@ class _ChatMessageState extends State<ChatMessage> {
   void _initializeVideo() {
     final url = widget.message.type == 'video' ? widget.message.mediaUrl : null;
     if (url == null || url.isEmpty) return;
-    final controller = VideoPlayerController.network(url);
+    final controller = VideoPlayerController.networkUrl(Uri.parse(url));
     _videoController = controller;
     _videoInitialization = controller.initialize().then((_) {
       if (mounted) setState(() {});
@@ -179,7 +179,7 @@ class _ChatMessageState extends State<ChatMessage> {
                     if (snapshot.hasError) {
                       return const SizedBox(
                         height: 120,
-                        child: Center(child: Icon(Icons.broken_video_outlined)),
+                        child: Center(child: Icon(Icons.broken_image_outlined)),
                       );
                     }
                     return const SizedBox(
