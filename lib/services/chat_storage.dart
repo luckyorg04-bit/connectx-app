@@ -11,6 +11,8 @@ class ChatStorage {
     required List<int> bytes,
     required String contentType,
     bool viewOnce = false,
+    String resourceType = 'message',
+    List<String>? audienceUids,
   }) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('Please sign in before uploading media.');
@@ -22,6 +24,8 @@ class ChatStorage {
     request.fields['conversationId'] = conversationId;
     request.fields['contentType'] = contentType;
     request.fields['viewOnce'] = viewOnce ? 'true' : 'false';
+    request.fields['resourceType'] = resourceType;
+    if (audienceUids != null) request.fields['audienceUids'] = jsonEncode(audienceUids);
     request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: fileName));
 
     final streamed = await request.send().timeout(const Duration(seconds: 120));
