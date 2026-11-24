@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -14,6 +15,7 @@ import 'app_navigator.dart';
 import 'models/user.dart';
 import 'profile_screen.dart';
 import 'services/notification_service.dart';
+import 'services/profile_storage.dart';
 
 List<User1> users = [];
 List<Chat> chats = [];
@@ -354,62 +356,144 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
     final ref = FirebaseDatabase.instance.ref("Users").child(uid);
     final snapshot = await ref.get();
     if (!mounted) return;
+
     final nameController = TextEditingController(
       text: snapshot.child('name').value?.toString() ??
           FirebaseAuth.instance.currentUser?.displayName ?? '',
     );
-    final aboutController = TextEditingController(
-      text: snapshot.child('about').value?.toString() ?? 'Available on ConnectX',
+    final bioController = TextEditingController(
+      text: snapshot.child('bio').value?.toString() ??
+          snapshot.child('about').value?.toString() ?? '',
     );
+    final currentPhotoUrl = snapshot.child('photoUrl').value?.toString() ??
+        FirebaseAuth.instance.currentUser?.photoURL ?? '';
+    XFile? pickedPhoto;
+    var removePhoto = false;
+
     final shouldSave = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Edit profile'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              maxLength: 40,
-              decoration: const InputDecoration(
-                labelText: 'Name',
-                prefixIcon: Icon(Icons.person_outline),
-              ),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Edit profile'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircleAvatar(
+                  radius: 42,
+                  backgroundImage: pickedPhoto != null
+                      ? FileImage(File(pickedPhoto!.path))
+                      : (!removePhoto && currentPhotoUrl.isNotEmpty
+                          ? NetworkImage(currentPhotoUrl) : null),
+                  child: pickedPhoto == null && (removePhoto || currentPhotoUrl.isEmpty)
+                      ? const Icon(Icons.person, size: 42)
+                      : null,
+                ),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  children: [
+                    TextButton.icon(
+                      icon: const Icon(Icons.photo_camera_outlined),
+                      label: const Text('Change photo'),
+                      onPressed: () async {
+                        final image = await ImagePicker().pickImage(
+                          source: ImageSource.gallery,
+                          imageQuality: 85,
+                          maxWidth: 1200,
+                        );
+                        if (image != null) {
+                          setDialogState(() {
+                            pickedPhoto = image;
+                            removePhoto = false;
+                          });
+                        }
+                      },
+                    ),
+                    if (currentPhotoUrl.isNotEmpty || pickedPhoto != null)
+                      TextButton.icon(
+                        icon: const Icon(Icons.delete_outline),
+                        label: const Text('Remove photo'),
+                        onPressed: () => setDialogState(() {
+                          pickedPhoto = null;
+                          removePhoto = true;
+                        }),
+                      ),
+                  ],
+                ),
+                TextField(
+                  controller: nameController,
+                  maxLength: 40,
+                  decoration: const InputDecoration(
+                    labelText: 'Name',
+                    prefixIcon: Icon(Icons.person_outline),
+                  ),
+                ),
+                TextField(
+                  controller: bioController,
+                  maxLength: 160,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Bio',
+                    prefixIcon: Icon(Icons.edit_outlined),
+                  ),
+                ),
+              ],
             ),
-            TextField(
-              controller: aboutController,
-              maxLength: 80,
-              decoration: const InputDecoration(
-                labelText: 'About',
-                prefixIcon: Icon(Icons.info_outline),
-              ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Save'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Save'),
-          ),
-        ],
       ),
     );
+
     if (shouldSave == true && nameController.text.trim().isNotEmpty) {
-      final name = nameController.text.trim();
-      await ref.update({'name': name, 'about': aboutController.text.trim()});
-      await FirebaseAuth.instance.currentUser?.updateDisplayName(name);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile updated')),
+      try {
+        var photoUrl = currentPhotoUrl;
+        if (pickedPhoto != null) {
+          photoUrl = await ProfileStorage.upload(pickedPhoto!);
+          if (currentPhotoUrl.isNotEmpty && currentPhotoUrl != photoUrl) {
+            await ProfileStorage.delete(currentPhotoUrl);
+          }
+        } else if (removePhoto) {
+          await ProfileStorage.delete(currentPhotoUrl);
+          photoUrl = '';
+        }
+
+        final name = nameController.text.trim();
+        await ref.update({
+          'name': name,
+          'bio': bioController.text.trim(),
+          'photoUrl': photoUrl,
+          'about': null,
+        });
+        await FirebaseAuth.instance.currentUser?.updateDisplayName(name);
+        await FirebaseAuth.instance.currentUser?.updatePhotoURL(
+          photoUrl.isEmpty ? null : photoUrl,
         );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Profile updated')),
+          );
+        }
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Profile update failed: $error')),
+          );
+        }
       }
     }
+
     nameController.dispose();
-    aboutController.dispose();
+    bioController.dispose();
   }
 
   Future<void> _logout() async {
