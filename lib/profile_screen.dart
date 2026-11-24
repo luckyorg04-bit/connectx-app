@@ -106,7 +106,7 @@ class _ProfileInfoTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       elevation: 0,
-      color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.45),
+      color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.45),
       margin: const EdgeInsets.only(bottom: 12),
       child: ListTile(
         leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
