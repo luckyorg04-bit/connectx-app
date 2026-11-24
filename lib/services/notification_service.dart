@@ -25,45 +25,65 @@ class NotificationService {
 
   static Future<void> initialize() async {
     final messaging = FirebaseMessaging.instance;
-    await messaging.requestPermission(alert: true, badge: true, sound: true);
+    try {
+      await messaging.requestPermission(alert: true, badge: true, sound: true);
+    } catch (_) {
+      // Do not prevent sign-in if notification permission is unavailable.
+    }
+
     const androidSettings = AndroidInitializationSettings('@mipmap/logo');
     const settings = InitializationSettings(android: androidSettings);
-    await _localNotifications.initialize(settings);
-    await _localNotifications
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(_chatChannel);
+    try {
+      await _localNotifications.initialize(settings);
+      await _localNotifications
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(_chatChannel);
+    } catch (_) {
+      // Chat and authentication remain usable if local notifications fail.
+    }
 
     FirebaseMessaging.onBackgroundMessage(connectXBackgroundMessageHandler);
 
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      await _saveToken(user.uid, await messaging.getToken());
+      try {
+        await _saveToken(user.uid, await messaging.getToken());
+      } catch (_) {
+        // Token registration can retry when FCM refreshes the token.
+      }
     }
+
     _tokenSubscription?.cancel();
     _tokenSubscription = messaging.onTokenRefresh.listen((token) {
       final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid != null) _saveToken(uid, token);
+      if (uid != null) {
+        _saveToken(uid, token).catchError((_) {});
+      }
     });
 
     _foregroundSubscription?.cancel();
     _foregroundSubscription = FirebaseMessaging.onMessage.listen((message) async {
       final notification = message.notification;
       if (notification == null) return;
-      await _localNotifications.show(
-        message.hashCode,
-        notification.title ?? 'ConnectX',
-        notification.body ?? 'New message',
-        NotificationDetails(
-          android: AndroidNotificationDetails(
-            _chatChannel.id,
-            _chatChannel.name,
-            channelDescription: _chatChannel.description,
-            importance: Importance.high,
-            priority: Priority.high,
+      try {
+        await _localNotifications.show(
+          message.hashCode,
+          notification.title ?? 'ConnectX',
+          notification.body ?? 'New message',
+          NotificationDetails(
+            android: AndroidNotificationDetails(
+              _chatChannel.id,
+              _chatChannel.name,
+              channelDescription: _chatChannel.description,
+              importance: Importance.high,
+              priority: Priority.high,
+            ),
           ),
-        ),
-      );
+        );
+      } catch (_) {
+        // Ignore display failures; do not interrupt the active chat.
+      }
     });
   }
 
