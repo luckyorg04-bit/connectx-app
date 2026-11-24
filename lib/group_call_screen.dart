@@ -66,7 +66,10 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       }
       await _prepareMedia();
       if (!isCreator) {
-        await _callRef.update({\n          'activeUids': FieldValue.arrayUnion([_uid]),\n          'participants': FieldValue.arrayUnion([_uid]),\n        });
+        await _callRef.update({
+          'activeUids': FieldValue.arrayUnion([_uid]),
+          'participants': FieldValue.arrayUnion([_uid]),
+        });
       }
       _callSubscription = _callRef.snapshots().listen((snapshot) {
         final data = snapshot.data();
