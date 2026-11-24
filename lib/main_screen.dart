@@ -634,6 +634,24 @@ class _UpdatesTab extends StatelessWidget {
       ]))));
   }
 
+  Future<void> _showViewers(BuildContext context, QueryDocumentSnapshot<Map<String, dynamic>> doc) async {
+    final views = await doc.reference.collection('views').get();
+    final rows = await Future.wait(views.docs.map((view) async {
+      final uid = view.id;
+      final name = await FirebaseDatabase.instance.ref('Users').child(uid).child('name').get();
+      return name.value?.toString() ?? 'ConnectX user';
+    }));
+    if (!context.mounted) return;
+    await showDialog<void>(context: context, builder: (c) => AlertDialog(
+      title: Text('Seen by ${rows.length}'),
+      content: SizedBox(width: double.maxFinite, child: rows.isEmpty
+        ? const Text('No views yet.')
+        : ListView(shrinkWrap: true, children: rows.map((name) =>
+            ListTile(leading: const Icon(Icons.person_outline), title: Text(name))).toList())),
+      actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('Close'))],
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser!.uid;
@@ -659,7 +677,16 @@ class _UpdatesTab extends StatelessWidget {
                   builder: (_, v) => Text('Seen by ${v.data?.docs.length ?? 0} · 24-hour status'))
               : Text((data['statusText'] ?? data['fileName'] ?? 'Media status').toString(), maxLines: 1, overflow: TextOverflow.ellipsis),
             onTap: () => _view(context, d, uid),
-            trailing: own ? IconButton(icon: const Icon(Icons.delete_outline), onPressed: () => d.reference.delete()) : null,
+            trailing: own ? PopupMenuButton<String>(
+              onSelected: (value) {
+                if (value == 'views') _showViewers(context, d);
+                if (value == 'delete') d.reference.delete();
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'views', child: Text('View seen list')),
+                PopupMenuItem(value: 'delete', child: Text('Delete status')),
+              ],
+            ) : null,
           );
         }
         return ListView(padding: const EdgeInsets.fromLTRB(16,12,16,90), children: [
