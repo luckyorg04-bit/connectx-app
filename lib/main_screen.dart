@@ -622,16 +622,27 @@ class _UpdatesTab extends StatelessWidget {
     }
     if (!context.mounted) return;
     final type = (data['mediaType'] ?? 'text').toString();
+    var statusMediaUrl = data['mediaUrl']?.toString();
+    if (statusMediaUrl != null && (type == 'image' || type == 'video')) {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      final uri = Uri.tryParse(statusMediaUrl);
+      if (token != null && uri != null) {
+        statusMediaUrl = uri.replace(queryParameters: {
+          ...uri.queryParameters,
+          'auth': token,
+        }).toString();
+      }
+    }
     await showDialog<void>(context: context, builder: (c) => Dialog(
       child: Padding(padding: const EdgeInsets.all(16), child: Column(mainAxisSize: MainAxisSize.min, children: [
         Row(children: [Expanded(child: Text((data['userName'] ?? 'ConnectX user').toString(), style: const TextStyle(fontWeight: FontWeight.bold))),
           IconButton(onPressed: () => Navigator.pop(c), icon: const Icon(Icons.close))]),
-        if (type == 'image' && data['mediaUrl'] != null)
-          Image.network(data['mediaUrl'].toString(), fit: BoxFit.contain,
+        if (type == 'image' && statusMediaUrl != null)
+          Image.network(statusMediaUrl!, fit: BoxFit.contain,
             errorBuilder: (_, __, ___) => const Text('Unable to load photo'))
-        else if (type == 'video' && data['mediaUrl'] != null)
+        else if (type == 'video' && statusMediaUrl != null)
           ListTile(leading: const Icon(Icons.play_circle), title: Text((data['fileName'] ?? 'Video status').toString()),
-            onTap: () { final uri = Uri.tryParse(data['mediaUrl'].toString()); if (uri != null) launchUrl(uri, mode: LaunchMode.externalApplication); })
+            onTap: () { final uri = Uri.tryParse(statusMediaUrl!); if (uri != null) launchUrl(uri, mode: LaunchMode.externalApplication); })
         else
           Padding(padding: const EdgeInsets.all(24), child: SelectableText((data['statusText'] ?? '').toString(), style: const TextStyle(fontSize: 20))),
         if (data['ownerUid'] == uid)
