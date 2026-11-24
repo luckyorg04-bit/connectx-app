@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'services/rtc_config.dart';
 
 class CallScreen extends StatefulWidget {
   const CallScreen({Key? key}) : super(key: key);
@@ -55,12 +56,7 @@ class _CallScreenState extends State<CallScreen> {
     try {
       await _localRenderer.initialize();
       await _remoteRenderer.initialize();
-      final config = {
-        'iceServers': [
-          {'urls': 'stun:stun.l.google.com:19302'},
-          {'urls': 'stun:stun1.l.google.com:19302'},
-        ],
-      };
+      final config = await RtcConfig.load();
       _peer = await createPeerConnection(config);
       _peer!.onIceCandidate = (candidate) async {
         if (candidate.candidate == null) return;
