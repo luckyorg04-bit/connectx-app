@@ -25,21 +25,30 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
   int messageAmount = 25, maxAmount = 500;
   bool isLoadingMore = false;
   int currentPage = 1;
+  bool _initialized = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_initialized) {
+      user = ModalRoute.of(context)!.settings.arguments as User1;
+      _initialized = true;
+      getMaxAmount();
+      checkChatExists(user!.key);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
-
-    user = ModalRoute.of(context)!.settings.arguments as User1;
     CollectionReference messages =
     FirebaseFirestore.instance.collection('messages').doc(assignUsers(FirebaseAuth.instance.currentUser
     !.uid, user!.key)).collection("chats");
 
-    getMaxAmount();
-
-    checkChatExists(user!.key);
-
     return Scaffold(
+      backgroundColor: Theme.of(context).brightness == Brightness.dark
+          ? const Color(0xFF0B141A)
+          : const Color(0xFFEFEAE2),
       appBar: AppBar(
         automaticallyImplyLeading: false,
         title: Row(
@@ -201,12 +210,12 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
     doesChatExist = val;
   }
 
-  getMaxAmount() async {
-    QuerySnapshot snapshot = await FirebaseFirestore.instance
+  Future<void> getMaxAmount() async {
+    final snapshot = await FirebaseFirestore.instance
         .collection('messages')
         .doc(assignUsers(FirebaseAuth.instance.currentUser!.uid, user!.key))
         .collection("chats").get();
-    maxAmount = snapshot.docs.length;
+    if (mounted) setState(() => maxAmount = snapshot.docs.length);
   }
 
   @override void initState() {
@@ -229,6 +238,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
   }
 
   @override void dispose() {
+    textFieldController.dispose();
     scrollController.dispose();
     super.dispose();
   }
