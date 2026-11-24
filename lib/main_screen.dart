@@ -45,6 +45,13 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       appBar: AppBar(
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
         automaticallyImplyLeading: false,
+        leading: _showProfile
+            ? IconButton(
+                tooltip: 'Back',
+                icon: const Icon(Icons.arrow_back_rounded),
+                onPressed: () => setState(() => _showProfile = false),
+              )
+            : null,
         actions: [
           if (_showProfile) ...[
             IconButton(
