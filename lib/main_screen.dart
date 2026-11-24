@@ -656,7 +656,9 @@ class _UpdatesTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser!.uid;
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance.collection('statuses').where('audienceUids', arrayContains: uid).snapshots(),
+      stream: FirebaseFirestore.instance.collection('statuses')
+        .where('audienceUids', arrayContains: uid)
+        .where('expiresAt', isGreaterThan: Timestamp.now()).snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) return Center(child: Text('Unable to load updates: ${snapshot.error}'));
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
