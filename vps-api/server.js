@@ -115,16 +115,18 @@ app.get('/media/:filename', async (req, res) => {
       }
       const viewer = await admin.auth().verifyIdToken(authToken);
       const participants = conversationId.split(',');
-      if (!participants.includes(viewer.uid) || viewer.uid === meta.ownerUid) {
+      if (!participants.includes(viewer.uid)) {
         return res.status(403).json({ success: false, error: 'Not allowed to open this one-time attachment' });
       }
-      const viewedBy = Array.isArray(meta.viewedBy) ? meta.viewedBy : [];
-      if (viewedBy.includes(viewer.uid)) {
-        return res.status(410).json({ success: false, error: 'This one-time attachment has already been opened' });
+      if (viewer.uid !== meta.ownerUid) {
+        const viewedBy = Array.isArray(meta.viewedBy) ? meta.viewedBy : [];
+        if (viewedBy.includes(viewer.uid)) {
+          return res.status(410).json({ success: false, error: 'This one-time attachment has already been opened' });
+        }
+        viewedBy.push(viewer.uid);
+        meta.viewedBy = viewedBy;
+        fs.writeFileSync(metaFile, JSON.stringify(meta), { mode: 0o600 });
       }
-      viewedBy.push(viewer.uid);
-      meta.viewedBy = viewedBy;
-      fs.writeFileSync(metaFile, JSON.stringify(meta), { mode: 0o600 });
     }
     res.setHeader('Content-Type', meta.mimeType || 'application/octet-stream');
     res.setHeader('Content-Disposition', 'inline; filename="' + String(meta.originalName || 'attachment').replace(/["\\\r\n]/g, '_') + '"');
