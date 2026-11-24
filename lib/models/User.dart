@@ -5,6 +5,7 @@ class User1 {
   final String username;
   final String key;
   final String fcmToken;
+  final String photoUrl;
   final bool online;
   final dynamic lastSeen;
   bool? isNameBold;
@@ -16,6 +17,7 @@ class User1 {
     required this.lastSeen,
     required this.key,
     required this.fcmToken,
+    this.photoUrl = '',
     this.isNameBold,
   });
 
@@ -27,6 +29,7 @@ class User1 {
       'online': online,
       'lastSeen': lastSeen,
       "fcmToken": fcmToken,
+      "photoUrl": photoUrl,
     };
   }
 
@@ -37,7 +40,8 @@ class User1 {
       key: json['key'],
       online: json['online'],
       lastSeen: json['lastSeen'],
-      fcmToken: json['fcmToken']
+      fcmToken: json['fcmToken'] ?? '',
+      photoUrl: json['photoUrl'] ?? '',
     );
   }
 
@@ -46,7 +50,8 @@ class User1 {
       name: snapshot.child("name").value.toString(),
       username: snapshot.child("username").value.toString(),
       key: snapshot.child("key").value.toString(),
-      fcmToken: snapshot.child("fcmToken").value.toString(),
+      fcmToken: snapshot.child("fcmToken").value?.toString() ?? "",
+      photoUrl: snapshot.child("photoUrl").value?.toString() ?? "",
       online: snapshot.child("online").value as bool,
       lastSeen: snapshot.child("lastSeen").value as int,
     );
