@@ -43,7 +43,7 @@ async function migrate() {
       name: String(publicOld.name ?? legacyValue.name ?? 'ConnectX User'),
       username: String(publicOld.username ?? legacyValue.username ?? ('user_' + uid.slice(0, 8))),
       key: uid,
-      online: publicOld.online ?? (legacyValue.online === true),
+      online: publicOld.online === true || legacyValue.online === true,
       lastSeen: Number.isFinite(Number(publicOld.lastSeen ?? legacyValue.lastSeen)) ? Number(publicOld.lastSeen ?? legacyValue.lastSeen) : Date.now(),
       bio: String(publicOld.bio ?? legacyValue.bio ?? legacyValue.about ?? 'Hey there! I am using ConnectX'),
       photoUrl: String(publicOld.photoUrl ?? legacyValue.photoUrl ?? '')
