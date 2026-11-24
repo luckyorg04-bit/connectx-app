@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import 'services/rtc_config.dart';
 
@@ -93,6 +94,16 @@ class _CallScreenState extends State<CallScreen> {
   }
 
   Future<void> _prepareMedia() async {
+    final microphonePermission = await Permission.microphone.request();
+    if (!microphonePermission.isGranted) {
+      throw Exception('Microphone permission is required. Allow microphone access in Android app settings.');
+    }
+    if (_isVideo) {
+      final cameraPermission = await Permission.camera.request();
+      if (!cameraPermission.isGranted) {
+        throw Exception('Camera permission is required for video calls. Allow camera access in Android app settings.');
+      }
+    }
     final constraints = {
       'audio': true,
       'video': _isVideo ? {
@@ -103,6 +114,12 @@ class _CallScreenState extends State<CallScreen> {
     };
     _localStream = await navigator.mediaDevices.getUserMedia(constraints);
     _localRenderer.srcObject = _localStream;
+    try {
+      await Helper.setSpeakerphoneOn(true);
+      _speakerOn = true;
+    } catch (error) {
+      debugPrint('ConnectX speakerphone initialization failed: $error');
+    }
     for (final track in _localStream!.getTracks()) {
       await _peer!.addTrack(track, _localStream!);
     }
@@ -131,7 +148,11 @@ class _CallScreenState extends State<CallScreen> {
       });
     } catch (error) {
       if (mounted) setState(() => _error = 'Call could not start: $error');
-      await _finishCall('failed');
+      try {
+        await _callRef.update({'status': 'failed', 'endedAt': FieldValue.serverTimestamp()});
+      } catch (updateError) {
+        debugPrint('ConnectX failed-call status update failed: $updateError');
+      }
     } finally {
       if (mounted) setState(() => _connecting = false);
     }
@@ -183,6 +204,7 @@ class _CallScreenState extends State<CallScreen> {
         if (mounted) setState(() => _accepted = true);
       }
     }
+    if (status == 'failed' && _error != null) return;
     if (status == 'declined' || status == 'busy' || status == 'ended' || status == 'failed' || status == 'missed' || status == 'cancelled') {
       FlutterRingtonePlayer.stop();
       if (!_leaving && mounted && ModalRoute.of(context)?.isCurrent == true) {
