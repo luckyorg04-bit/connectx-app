@@ -633,6 +633,8 @@ class _UpdatesTab extends StatelessWidget {
           Text('Recent updates', style: Theme.of(context).textTheme.titleSmall),
           if (others.isEmpty) const _SectionEmptyState(icon: Icons.circle_outlined, title: 'No recent updates', description: 'Statuses from your contacts appear here.')
           else ...others.map((d) => statusTile(d, false)),
+          const Divider(height: 28),
+          const _ChannelsPanel(),
         ]);
       });
   }
@@ -641,43 +643,141 @@ class _UpdatesTab extends StatelessWidget {
 class _CommunitiesTab extends StatelessWidget {
   const _CommunitiesTab();
 
+  Future<void> _create(BuildContext context) async {
+    final name = TextEditingController(), description = TextEditingController();
+    final ok = await showDialog<bool>(context: context, builder: (c) => AlertDialog(
+      title: const Text('Create community'),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextField(controller: name, decoration: const InputDecoration(labelText: 'Community name')),
+        TextField(controller: description, decoration: const InputDecoration(labelText: 'Description')),
+      ]),
+      actions: [TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Create'))],
+    ));
+    final title = name.text.trim(), about = description.text.trim();
+    name.dispose(); description.dispose();
+    if (ok != true || title.isEmpty) return;
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    await FirebaseFirestore.instance.collection('communities').add({
+      'name': title, 'description': about, 'ownerUid': uid, 'memberUids': [uid],
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
-      children: [
-        Container(
-          height: 170,
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.primaryContainer,
-            borderRadius: BorderRadius.circular(22),
-          ),
-          child: Icon(Icons.groups_rounded,
-              size: 76, color: Theme.of(context).colorScheme.onPrimaryContainer),
-        ),
-        const SizedBox(height: 24),
-        Text('Bring groups together',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
-        const SizedBox(height: 10),
-        Text(
-          'Organize related groups in one place. Share announcements and keep community conversations connected.',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                height: 1.5,
-              ),
-        ),
-        const SizedBox(height: 24),
-        FilledButton.icon(
-          onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Community creation will be enabled in the next feature stage.')),
-          ),
-          icon: const Icon(Icons.add_rounded),
-          label: const Text('Start a community'),
-        ),
-      ],
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance.collection('communities').orderBy('createdAt', descending: true).snapshots(),
+      builder: (context, snap) {
+        if (snap.hasError) return Center(child: Text('Unable to load communities: ${snap.error}'));
+        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+        return ListView(padding: const EdgeInsets.all(16), children: [
+          Text('Communities', style: Theme.of(context).textTheme.headlineSmall),
+          const Text('Create or join communities and bring related groups together.'),
+          const SizedBox(height: 12),
+          FilledButton.icon(onPressed: () => _create(context), icon: const Icon(Icons.add), label: const Text('Create community')),
+          ...snap.data!.docs.map((doc) {
+            final data = doc.data();
+            final members = List<String>.from(data['memberUids'] ?? []);
+            final joined = members.contains(uid);
+            return ListTile(
+              leading: const CircleAvatar(child: Icon(Icons.groups)),
+              title: Text((data['name'] ?? 'Community').toString()),
+              subtitle: Text('${data['description'] ?? ''} · ${members.length} members'),
+              trailing: joined ? const Icon(Icons.check_circle) : TextButton(
+                onPressed: () => doc.reference.update({'memberUids': FieldValue.arrayUnion([uid])}),
+                child: const Text('Join')),
+            );
+          }),
+        ]);
+      },
     );
+  }
+}
+
+class _ChannelsPanel extends StatelessWidget {
+  const _ChannelsPanel();
+
+  Future<void> _create(BuildContext context) async {
+    final name = TextEditingController(), description = TextEditingController();
+    final ok = await showDialog<bool>(context: context, builder: (c) => AlertDialog(
+      title: const Text('Create channel'),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextField(controller: name, decoration: const InputDecoration(labelText: 'Channel name')),
+        TextField(controller: description, decoration: const InputDecoration(labelText: 'Description')),
+      ]),
+      actions: [TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Create'))],
+    ));
+    final title = name.text.trim(), about = description.text.trim();
+    name.dispose(); description.dispose();
+    if (ok != true || title.isEmpty) return;
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    await FirebaseFirestore.instance.collection('channels').add({
+      'name': title, 'description': about, 'ownerUid': uid, 'memberUids': [uid],
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> _open(BuildContext context, QueryDocumentSnapshot<Map<String, dynamic>> doc) async {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final data = doc.data();
+    await doc.reference.update({'memberUids': FieldValue.arrayUnion([uid])});
+    if (!context.mounted) return;
+    final controller = TextEditingController();
+    await showModalBottomSheet<void>(context: context, isScrollControlled: true,
+      builder: (c) => SafeArea(child: SizedBox(height: MediaQuery.of(c).size.height * .75,
+        child: Column(children: [
+          ListTile(title: Text((data['name'] ?? 'Channel').toString()),
+            subtitle: Text((data['description'] ?? '').toString())),
+          Expanded(child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: doc.reference.collection('posts').orderBy('createdAt', descending: true).snapshots(),
+            builder: (context, snap) {
+              if (snap.hasError) return Center(child: Text('Unable to load posts: ${snap.error}'));
+              if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+              return ListView(children: snap.data!.docs.map((post) => ListTile(
+                title: Text((post.data()['text'] ?? '').toString()),
+                subtitle: Text((post.data()['authorName'] ?? 'Channel admin').toString()),
+              )).toList());
+            })),
+          if (data['ownerUid'] == uid)
+            Padding(padding: const EdgeInsets.all(8), child: Row(children: [
+              Expanded(child: TextField(controller: controller, decoration: const InputDecoration(hintText: 'Announcement'))),
+              IconButton(icon: const Icon(Icons.send), onPressed: () async {
+                final text = controller.text.trim(); if (text.isEmpty) return;
+                await doc.reference.collection('posts').add({'text': text, 'authorUid': uid,
+                  'authorName': FirebaseAuth.instance.currentUser?.displayName ?? 'Admin',
+                  'createdAt': FieldValue.serverTimestamp()});
+                controller.clear();
+              }),
+            ])),
+        ]))));
+    controller.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text('Channels', style: Theme.of(context).textTheme.titleLarge),
+        TextButton.icon(onPressed: () => _create(context), icon: const Icon(Icons.add), label: const Text('Create')),
+      ]),
+      StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: FirebaseFirestore.instance.collection('channels').orderBy('createdAt', descending: true).snapshots(),
+        builder: (context, snap) {
+          if (snap.hasError) return Text('Unable to load channels: ${snap.error}');
+          if (!snap.hasData) return const LinearProgressIndicator();
+          if (snap.data!.docs.isEmpty) return const Text('No channels available yet.');
+          return Column(children: snap.data!.docs.map((doc) => ListTile(
+            leading: const CircleAvatar(child: Icon(Icons.campaign_outlined)),
+            title: Text((doc.data()['name'] ?? 'Channel').toString()),
+            subtitle: Text('${(doc.data()['memberUids'] as List? ?? []).length} followers'),
+            onTap: () => _open(context, doc),
+          )).toList());
+        },
+      ),
+    ]);
   }
 }
 
