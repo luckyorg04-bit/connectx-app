@@ -18,6 +18,7 @@ class _CallScreenState extends State<CallScreen> {
   MediaStream? _localStream;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _callSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _candidateSubscription;
+  Timer? _ringTimeoutTimer;
   String _callId = '';
   String _peerName = 'ConnectX user';
   String _peerUid = '';
@@ -116,6 +117,9 @@ class _CallScreenState extends State<CallScreen> {
       await _peer!.setLocalDescription(offer);
       await _callRef.update({'offer': {'sdp': offer.sdp, 'type': offer.type}});
       _listenCandidates('calleeCandidates');
+      _ringTimeoutTimer = Timer(const Duration(seconds: 45), () {
+        if (!_accepted && mounted) _finishCall('missed');
+      });
     } catch (error) {
       if (mounted) setState(() => _error = 'Call could not start: $error');
       await _finishCall('failed');
@@ -161,6 +165,7 @@ class _CallScreenState extends State<CallScreen> {
     if (_isCaller && !_remoteDescriptionSet && data['answer'] is Map) {
       final answer = Map<String, dynamic>.from(data['answer']);
       if (answer['sdp'] != null) {
+        _ringTimeoutTimer?.cancel();
         await _peer?.setRemoteDescription(RTCSessionDescription(answer['sdp'], answer['type']));
         _remoteDescriptionSet = true;
         if (mounted) setState(() => _accepted = true);
@@ -234,6 +239,7 @@ class _CallScreenState extends State<CallScreen> {
 
   @override
   void dispose() {
+    _ringTimeoutTimer?.cancel();
     _callSubscription?.cancel();
     _candidateSubscription?.cancel();
     _peer?.close();
