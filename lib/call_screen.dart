@@ -106,6 +106,7 @@ class _CallScreenState extends State<CallScreen> {
       await _callRef.set({
         'callerUid': _uid,
         'calleeUid': _peerUid,
+        'participants': [_uid, _peerUid],
         'callerName': FirebaseAuth.instance.currentUser?.displayName ?? 'ConnectX user',
         'calleeName': _peerName,
         'type': _isVideo ? 'video' : 'voice',
