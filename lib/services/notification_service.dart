@@ -170,9 +170,7 @@ class NotificationService {
 
   static Future<void> _saveToken(String uid, String? token) async {
     if (token == null || token.isEmpty) return;
-    await ConnectXDatabase.instance.ref('Users').child(uid).update({
-      'fcmToken': token,
-    });
+    await ConnectXDatabase.instance.ref('PrivateTokens').child(uid).set(token);
   }
 
   static Future<void> dispose() async {
