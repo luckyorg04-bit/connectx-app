@@ -16,7 +16,7 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser!;
-    final userRef = ConnectXDatabase.instance.ref('Users').child(user.uid);
+    final userRef = ConnectXDatabase.instance.ref('PublicUsers').child(user.uid);
     return StreamBuilder<DatabaseEvent>(
       stream: userRef.onValue,
       builder: (context, snapshot) {
