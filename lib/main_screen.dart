@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'package:Chat/models/chat.dart';
-import 'package:Chat/utils/user_list.dart';
+import 'package:connectx/models/chat.dart';
+import 'package:connectx/utils/user_list.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'main.dart';
-import 'models/User.dart';
+import 'models/user.dart';
 import 'profile_screen.dart';
 
 List<User1> users = [];
