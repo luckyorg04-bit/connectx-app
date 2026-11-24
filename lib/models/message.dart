@@ -11,6 +11,14 @@ class Message {
   final bool isEdited;
   final bool isForwarded;
   final Map<String, dynamic> reactions;
+  final String type;
+  final String? mediaUrl;
+  final String? fileName;
+  final int? durationMs;
+  final double? latitude;
+  final double? longitude;
+  final String? contactName;
+  final String? contactPhone;
 
   Message({
     required this.message,
@@ -23,6 +31,14 @@ class Message {
     this.isEdited = false,
     this.isForwarded = false,
     this.reactions = const {},
+    this.type = 'text',
+    this.mediaUrl,
+    this.fileName,
+    this.durationMs,
+    this.latitude,
+    this.longitude,
+    this.contactName,
+    this.contactPhone,
   });
 
   factory Message.fromJson(Map<String, dynamic> json) {
@@ -37,6 +53,14 @@ class Message {
       isEdited: json['isEdited'] == true,
       isForwarded: json['isForwarded'] == true,
       reactions: Map<String, dynamic>.from(json['reactions'] ?? const {}),
+      type: (json['type'] ?? 'text').toString(),
+      mediaUrl: json['mediaUrl']?.toString(),
+      fileName: json['fileName']?.toString(),
+      durationMs: (json['durationMs'] as num?)?.toInt(),
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
+      contactName: json['contactName']?.toString(),
+      contactPhone: json['contactPhone']?.toString(),
     );
   }
 
@@ -51,6 +75,14 @@ class Message {
     'isEdited': isEdited,
     'isForwarded': isForwarded,
     'reactions': reactions,
+    'type': type,
+    'mediaUrl': mediaUrl,
+    'fileName': fileName,
+    'durationMs': durationMs,
+    'latitude': latitude,
+    'longitude': longitude,
+    'contactName': contactName,
+    'contactPhone': contactPhone,
   };
 
   static Message fromSnapshot(DocumentSnapshot object) {
