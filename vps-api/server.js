@@ -120,7 +120,20 @@ async function tokenFor(uid) {
   const snap = await rtdb.ref('Users/' + uid + '/fcmToken').get();
   return snap.val();
 }
+async function notificationEnabled(uid, category) {
+  try {
+    const snap = await rtdb.ref('Users/' + uid + '/notificationSettings').get();
+    const prefs = snap.val() || {};
+    const key = category === 'direct_message' ? 'messages'
+      : category === 'group_message' ? 'groups'
+      : category === 'incoming_call' ? 'calls' : null;
+    return !key || prefs[key] !== false;
+  } catch (_) {
+    return true;
+  }
+}
 async function sendDirect(uid, title, body, data) {
+  if (!await notificationEnabled(uid, String(data.type || ''))) return;
   const token = await tokenFor(uid);
   if (!token) return;
   try {
@@ -143,7 +156,7 @@ async function sendGroup(groupId, messageId, message) {
   const sender = await rtdb.ref('Users/' + senderUid).get();
   const senderName = sender.child('name').val() || 'A member';
   const uids = (Array.isArray(group.memberUids) ? group.memberUids : []).filter(uid => uid !== senderUid);
-  const rows = (await Promise.all(uids.map(async uid => ({ uid, token: await tokenFor(uid) })))).filter(x => x.token);
+  const rows = (await Promise.all(uids.map(async uid => ({ uid, token: await tokenFor(uid), enabled: await notificationEnabled(uid, 'group_message') })))).filter(x => x.token && x.enabled);
   for (let i = 0; i < rows.length; i += 500) {
     const batch = rows.slice(i, i + 500);
     const result = await admin.messaging().sendEachForMulticast({
