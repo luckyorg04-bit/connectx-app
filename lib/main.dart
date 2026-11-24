@@ -9,6 +9,7 @@ import 'new_chat_screen.dart';
 import 'group_chat_screen.dart';
 import 'services/notification_service.dart';
 import 'call_screen.dart';
+import 'app_navigator.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,6 +33,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     _user = user;
     return MaterialApp(
+      navigatorKey: appNavigatorKey,
       debugShowCheckedModeBanner: false,
       title: 'ConnectX',
       theme: _buildTheme(Brightness.light),
