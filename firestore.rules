@@ -46,6 +46,16 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions'])
           && request.resource.data.reactions is map
         )
+        ||
+        (
+          resource.data.type == 'poll'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pollVotes'])
+          && request.resource.data.pollVotes is map
+          && request.resource.data.pollVotes.diff(resource.data.pollVotes).affectedKeys().hasOnly([request.auth.uid])
+          && request.resource.data.pollVotes[request.auth.uid] is int
+          && request.resource.data.pollVotes[request.auth.uid] >= 0
+          && request.resource.data.pollVotes[request.auth.uid] < resource.data.pollOptions.size()
+        )
       );
 
       allow delete: if isParticipant(conversationId)
