@@ -141,7 +141,7 @@ class ChatMessage extends StatelessWidget {
   }
 
   Uri? getUri(String text) {
-    final urlRegex = RegExp(r'(https?://[^\\s]+)');
+    final urlRegex = RegExp(r'(https?://[^\s]+)');
     final match = urlRegex.firstMatch(text);
     if (match == null) return null;
     return Uri.tryParse(match.group(0)!);
