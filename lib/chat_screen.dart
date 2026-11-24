@@ -648,11 +648,12 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
             title: const Text('Reply'),
             onTap: () => Navigator.pop(context, 'reply'),
           ),
-          ListTile(
-            leading: const Icon(Icons.forward_rounded),
-            title: const Text('Forward'),
-            onTap: () => Navigator.pop(context, 'forward'),
-          ),
+          if (!message.isViewOnce)
+            ListTile(
+              leading: const Icon(Icons.forward_rounded),
+              title: const Text('Forward'),
+              onTap: () => Navigator.pop(context, 'forward'),
+            ),
           ListTile(
             leading: const Icon(Icons.star_border_rounded),
             title: const Text('Star message'),
@@ -703,6 +704,12 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
   }
 
   Future<void> _forwardMessage(Message message) async {
+    if (message.isViewOnce) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('View-once media cannot be forwarded.')),
+      );
+      return;
+    }
     final candidates = users.where((item) => item.key != _uid && item.key != user!.key).toList();
     if (candidates.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No other contacts available to forward this message.')));
