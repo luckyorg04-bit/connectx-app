@@ -258,7 +258,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           stream: FirebaseFirestore.instance.collection('groupCalls')
             .where('groupId', isEqualTo: _groupId)
             .where('groupMemberUids', arrayContains: uid)
-            .where('status', isEqualTo: 'active').snapshots(),
+            .where('status', isEqualTo: 'active')
+            .where('expiresAt', isGreaterThan: Timestamp.now()).snapshots(),
           builder: (context, calls) {
             if (!calls.hasData || calls.data!.docs.isEmpty) return const SizedBox.shrink();
             final activeCall = calls.data!.docs.first;
