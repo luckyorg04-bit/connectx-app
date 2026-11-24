@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import 'services/rtc_config.dart';
 
 class CallScreen extends StatefulWidget {
@@ -76,6 +77,13 @@ class _CallScreenState extends State<CallScreen> {
         }
       };
       _callSubscription = _callRef.snapshots().listen(_handleCallUpdate);
+      if (!_isCaller) {
+        try {
+          await FlutterRingtonePlayer().playRingtone(looping: true);
+        } catch (error) {
+          debugPrint('ConnectX incoming ringtone unavailable: $error');
+        }
+      }
       if (_isCaller) await _startOutgoingCall();
     } catch (error) {
       if (mounted) setState(() => _error = 'Could not initialize call: $error');
@@ -149,6 +157,7 @@ class _CallScreenState extends State<CallScreen> {
         'acceptedAt': FieldValue.serverTimestamp(),
       });
       _listenCandidates('callerCandidates');
+      await FlutterRingtonePlayer().stop();
       if (mounted) setState(() => _accepted = true);
     } catch (error) {
       if (mounted) setState(() => _error = 'Could not answer call: $error');
@@ -165,12 +174,14 @@ class _CallScreenState extends State<CallScreen> {
       final answer = Map<String, dynamic>.from(data['answer']);
       if (answer['sdp'] != null) {
         _ringTimeoutTimer?.cancel();
+    FlutterRingtonePlayer().stop();
         await _peer?.setRemoteDescription(RTCSessionDescription(answer['sdp'], answer['type']));
         _remoteDescriptionSet = true;
         if (mounted) setState(() => _accepted = true);
       }
     }
     if (status == 'declined' || status == 'ended' || status == 'failed' || status == 'missed' || status == 'cancelled') {
+      FlutterRingtonePlayer().stop();
       if (!_leaving && mounted && ModalRoute.of(context)?.isCurrent == true) {
         _leaving = true;
         Navigator.of(context).pop();
@@ -215,6 +226,7 @@ class _CallScreenState extends State<CallScreen> {
   Future<void> _finishCall(String status) async {
     if (_leaving) return;
     _leaving = true;
+    await FlutterRingtonePlayer().stop();
     try {
       if (_isCaller) {
         await _callRef.update({'status': status, 'endedAt': FieldValue.serverTimestamp()});
