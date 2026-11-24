@@ -21,6 +21,7 @@ if (serviceAccount.project_id !== PROJECT_ID) throw new Error('Wrong Firebase pr
 admin.initializeApp({ credential: admin.credential.cert(serviceAccount), databaseURL: DATABASE_URL });
 const db = admin.firestore();
 const rtdb = admin.database();
+console.log('Firebase Admin initialized for project ' + PROJECT_ID);
 const signingKey = crypto.createHash('sha256').update(serviceAccount.private_key).digest();
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
@@ -162,7 +163,7 @@ async function sendGroup(groupId, messageId, message) {
 function startListeners() {
   let directInitial = true;
   db.collectionGroup('chats').onSnapshot(snapshot => {
-    if (directInitial) { directInitial = false; return; }
+    if (directInitial) { directInitial = false; console.log('Direct Firestore listener ready; initial documents:', snapshot.size); return; }
     for (const change of snapshot.docChanges()) {
       if (change.type !== 'added') continue;
       const p = change.doc.ref.path.split('/');
@@ -183,7 +184,7 @@ function startListeners() {
 
   let groupInitial = true;
   db.collectionGroup('messages').onSnapshot(snapshot => {
-    if (groupInitial) { groupInitial = false; return; }
+    if (groupInitial) { groupInitial = false; console.log('Group Firestore listener ready; initial documents:', snapshot.size); return; }
     for (const change of snapshot.docChanges()) {
       if (change.type !== 'added') continue;
       const p = change.doc.ref.path.split('/');
@@ -199,5 +200,6 @@ app.use((err, _req, res, _next) => {
 });
 app.listen(PORT, '0.0.0.0', () => {
   console.log('ConnectX API listening on ' + PORT);
+  console.log('Starting Firestore notification listeners...');
   startListeners();
 });
