@@ -43,6 +43,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
   final Record _recorder = Record();
   final ImagePicker _imagePicker = ImagePicker();
   StreamSubscription<DatabaseEvent>? _typingSubscription;
+  late Stream<QuerySnapshot<Map<String, dynamic>>> _messageStream;
 
   String get _uid => FirebaseAuth.instance.currentUser!.uid;
   CollectionReference<Map<String, dynamic>> get _messages =>
@@ -55,6 +56,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
     if (!_initialized) {
       user = ModalRoute.of(context)!.settings.arguments as User1;
       _initialized = true;
+      _messageStream = _messages.orderBy('timestamp', descending: true).limit(100).snapshots();
       _listenForTyping();
       _loadDisappearingSetting();
       _expiryRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
@@ -163,10 +165,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
         'reactions': <String, dynamic>{},
         ..._expiryFields(),
       });
-      await FirebaseDatabase.instance.ref('Users').child(_uid).child('chats')
-        .child('personal').child(user!.key).set(ServerValue.timestamp);
-      await FirebaseDatabase.instance.ref('Users').child(user!.key).child('chats')
-        .child('personal').child(_uid).set(ServerValue.timestamp);
+      await _updateChatIndex();
     } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Poll not sent: $error')));
     }
@@ -204,10 +203,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
           'reactions': <String, dynamic>{},
           ..._expiryFields(),
         });
-        await FirebaseDatabase.instance.ref('Users').child(_uid)
-            .child('chats').child('personal').child(user!.key).set(ServerValue.timestamp);
-        await FirebaseDatabase.instance.ref('Users').child(user!.key)
-            .child('chats').child('personal').child(_uid).set(ServerValue.timestamp);
+        await _updateChatIndex();
       }
       textFieldController.clear();
       await _setTyping(false);
@@ -224,6 +220,26 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
     }
   }
 
+
+  // Firestore is the source of truth for message delivery. The RTDB chat index
+  // is secondary navigation metadata and must never turn a saved message into
+  // a reported send failure.
+  Future<void> _updateChatIndex({String? targetUid}) async {
+    final peerUid = targetUid ?? user!.key;
+    final writes = <Future<void>>[
+      FirebaseDatabase.instance.ref('Users').child(_uid)
+          .child('chats').child('personal').child(peerUid).set(ServerValue.timestamp),
+      FirebaseDatabase.instance.ref('Users').child(peerUid)
+          .child('chats').child('personal').child(_uid).set(ServerValue.timestamp),
+    ];
+    for (var i = 0; i < writes.length; i++) {
+      try {
+        await writes[i];
+      } catch (error) {
+        debugPrint('ConnectX chat index update failed (side ${i + 1}): $error');
+      }
+    }
+  }
 
   Future<void> _ensureCanMessage() async {
     final currentBlocked = await FirebaseDatabase.instance.ref('Users')
@@ -268,10 +284,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
       'reactions': <String, dynamic>{},
       ..._expiryFields(),
     });
-    await FirebaseDatabase.instance.ref('Users').child(_uid)
-        .child('chats').child('personal').child(user!.key).set(ServerValue.timestamp);
-    await FirebaseDatabase.instance.ref('Users').child(user!.key)
-        .child('chats').child('personal').child(_uid).set(ServerValue.timestamp);
+    await _updateChatIndex();
   }
 
   Future<void> _uploadBytes({
@@ -689,10 +702,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
       'isEdited': false,
       'reactions': <String, dynamic>{},
     });
-    await FirebaseDatabase.instance.ref('Users').child(_uid).child('chats')
-        .child('personal').child(target.key).set(ServerValue.timestamp);
-    await FirebaseDatabase.instance.ref('Users').child(target.key).child('chats')
-        .child('personal').child(_uid).set(ServerValue.timestamp);
+    await _updateChatIndex(targetUid: target.key);
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Forwarded to ${target.name}')));
   }
 
@@ -748,7 +758,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
       ),
       body: Column(children: [
         Expanded(child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: _messages.orderBy('timestamp', descending: true).limit(100).snapshots(),
+          stream: _messageStream,
           builder: (context, snapshot) {
             if (snapshot.hasError) return Center(child: Text('Could not load messages: ${snapshot.error}'));
             if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
