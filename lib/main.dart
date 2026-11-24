@@ -13,121 +13,29 @@ Future<void> main() async {
   runApp(const MyApp(user: null));
 }
 
-const title = "Chat";
+const title = "ConnectX";
 User1? _user;
 String currentRoute = "";
 
 class MyApp extends StatelessWidget {
-
   final User1? user;
 
-  const MyApp({Key? key,required this.user}) : super(key: key);
+  const MyApp({Key? key, required this.user}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder(
-      future: Future<void>.value(),
-      builder: (context, snapshot) {
-        _user = user;
-
-        if (snapshot.connectionState == ConnectionState.done) {
-          return const Main();
-        } else {
-          return Column();
-        }
-      });
-  }
-}
-
-class Main extends StatefulWidget {
-  const Main({Key? key}) : super(key: key);
-
-  @override
-  State<Main> createState() => _MainState();
-}
-
-class _MainState extends State<Main> {
-
-  ColorScheme lightColorScheme = const ColorScheme(
-    brightness: Brightness.light,
-    primary: Color(0xFF00658B),
-    onPrimary: Color(0xFFFFFFFF),
-    primaryContainer: Color(0xFFC5E7FF),
-    onPrimaryContainer: Color(0xFF001E2D),
-    secondary: Color(0xFF4E616D),
-    onSecondary: Color(0xFFFFFFFF),
-    secondaryContainer: Color(0xFFD1E5F4),
-    onSecondaryContainer: Color(0xFF0A1E28),
-    tertiary: Color(0xFF615A7C),
-    onTertiary: Color(0xFFFFFFFF),
-    tertiaryContainer: Color(0xFFE7DEFF),
-    onTertiaryContainer: Color(0xFF1D1735),
-    error: Color(0xFFBA1A1A),
-    errorContainer: Color(0xFFFFDAD6),
-    onError: Color(0xFFFFFFFF),
-    onErrorContainer: Color(0xFF410002),
-    background: Color(0xFFFBFCFF),
-    onBackground: Color(0xFF191C1E),
-    surface: Color(0xFFFBFCFF),
-    onSurface: Color(0xFF191C1E),
-    surfaceVariant: Color(0xFFDDE3EA),
-    onSurfaceVariant: Color(0xFF41484D),
-    outline: Color(0xFF71787E),
-    onInverseSurface: Color(0xFFF0F1F3),
-    inverseSurface: Color(0xFF2E3133),
-    inversePrimary: Color(0xFF7ED0FF),
-    shadow: Color(0xFF000000),
-    surfaceTint: Color(0xFF00658B),
-    outlineVariant: Color(0xFFC1C7CD),
-    scrim: Color(0xFF000000),
-  );
-
-  ColorScheme darkColorScheme = const ColorScheme(
-    brightness: Brightness.dark,
-    primary: Color(0xFF7ED0FF),
-    onPrimary: Color(0xFF00344A),
-    primaryContainer: Color(0xFF004C6A),
-    onPrimaryContainer: Color(0xFFC5E7FF),
-    secondary: Color(0xFFB6C9D8),
-    onSecondary: Color(0xFF20333E),
-    secondaryContainer: Color(0xFF374955),
-    onSecondaryContainer: Color(0xFFD1E5F4),
-    tertiary: Color(0xFFCBC1E9),
-    onTertiary: Color(0xFF322C4C),
-    tertiaryContainer: Color(0xFF494263),
-    onTertiaryContainer: Color(0xFFE7DEFF),
-    error: Color(0xFFFFB4AB),
-    errorContainer: Color(0xFF93000A),
-    onError: Color(0xFF690005),
-    onErrorContainer: Color(0xFFFFDAD6),
-    background: Color(0xFF000000),// FF191C1E
-    onBackground: Color(0xFFE1E2E5),
-    surface: Color(0xFF000000), // FF191C1E
-    onSurface: Color(0xFFE1E2E5),
-    surfaceVariant: Color(0xFF41484D),
-    onSurfaceVariant: Color(0xFFC1C7CD),
-    outline: Color(0xFF8B9297),
-    onInverseSurface: Color(0xFF191C1E),
-    inverseSurface: Color(0xFFE1E2E5),
-    inversePrimary: Color(0xFF00658B),
-    shadow: Color(0xFF000000),
-    surfaceTint: Color(0xFF7ED0FF),
-    outlineVariant: Color(0xFF41484D),
-    scrim: Color(0xFF000000),
-  );
-
-  @override
-  Widget build(BuildContext context) {
-
-    currentRoute = FirebaseAuth.instance.currentUser!= null?'/main':'/login';
-
+    _user = user;
     return MaterialApp(
-      title: 'Chat',
-      theme: ThemeData(useMaterial3: true, colorScheme: lightColorScheme),
-      darkTheme: ThemeData(useMaterial3: true, colorScheme: darkColorScheme),
-
-      initialRoute: _user != null? "/chat":
-      FirebaseAuth.instance.currentUser!= null?'/main':'/login',
+      debugShowCheckedModeBanner: false,
+      title: 'ConnectX',
+      theme: _buildTheme(Brightness.light),
+      darkTheme: _buildTheme(Brightness.dark),
+      themeMode: ThemeMode.system,
+      initialRoute: _user != null
+          ? "/chat"
+          : FirebaseAuth.instance.currentUser != null
+              ? '/main'
+              : '/login',
       routes: {
         '/login': (context) => const AuthPage(),
         '/main': (context) => const MainScreen(),
@@ -135,22 +43,63 @@ class _MainState extends State<Main> {
         "/main/new": (context) => const NewChatScreen(),
       },
       onGenerateInitialRoutes: (String initialRouteName) {
-        if(initialRouteName == "/chat"){
-          return [MaterialPageRoute(
-            settings: RouteSettings(name: "/chat", arguments: _user),
-            builder: (BuildContext context) => const ChatScreen(),
-          )];
-        }else{
-          return [MaterialPageRoute(
+        if (initialRouteName == "/chat") {
+          return [
+            MaterialPageRoute(
+              settings: RouteSettings(name: "/chat", arguments: _user),
+              builder: (BuildContext context) => const ChatScreen(),
+            )
+          ];
+        }
+        return [
+          MaterialPageRoute(
             settings: RouteSettings(name: initialRouteName),
             builder: (BuildContext context) => initialRouteName == "/main"
                 ? const MainScreen()
-            : const AuthPage(),
-          )];
-        }
+                : const AuthPage(),
+          )
+        ];
       },
     );
   }
+}
 
-
+ThemeData _buildTheme(Brightness brightness) {
+  const primary = Color(0xFF0AA5A8);
+  final isDark = brightness == Brightness.dark;
+  final scheme = ColorScheme.fromSeed(
+    seedColor: primary,
+    brightness: brightness,
+    primary: primary,
+    surface: isDark ? const Color(0xFF202C33) : Colors.white,
+    background: isDark ? const Color(0xFF111B21) : Colors.white,
+  );
+  return ThemeData(
+    useMaterial3: true,
+    brightness: brightness,
+    colorScheme: scheme,
+    scaffoldBackgroundColor: isDark ? const Color(0xFF111B21) : const Color(0xFFFFFFFF),
+    appBarTheme: AppBarTheme(
+      backgroundColor: isDark ? const Color(0xFF1F2C34) : const Color(0xFF087F83),
+      foregroundColor: Colors.white,
+      elevation: 0,
+      centerTitle: false,
+    ),
+    floatingActionButtonTheme: const FloatingActionButtonThemeData(
+      backgroundColor: primary,
+      foregroundColor: Colors.white,
+      elevation: 6,
+    ),
+    dividerColor: isDark ? const Color(0xFF222D34) : const Color(0xFFE9EDEF),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: isDark ? const Color(0xFF202C33) : const Color(0xFFF0F2F5),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: primary, width: 1.4),
+      ),
+    ),
+  );
 }
