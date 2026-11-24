@@ -140,8 +140,8 @@ app.post('/api/upload', authenticate, upload.single('file'), (req, res) => {
   return res.status(201).json({ success: true, fileName: originalName, storedName: req.file.filename, mimeType, size: req.file.size, url });
 });
 
-// Signed capability URL: anyone with the complete URL can access the file.
-// Keep media URLs inside the intended conversation.
+// Direct-chat attachments use signed capability URLs; status media additionally
+// requires an authenticated viewer included in the saved status audience.
 app.get('/media/:filename', async (req, res) => {
   const filename = path.basename(req.params.filename);
   const file = path.join(UPLOAD_DIR, filename);
