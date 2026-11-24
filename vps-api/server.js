@@ -194,6 +194,20 @@ async function sendGroup(groupId, messageId, message) {
   }
 }
 
+async function cleanupExpiredMessages() {
+  try {
+    const expired = await db.collectionGroup('chats')
+      .where('expiresAt', '<=', Date.now()).limit(400).get();
+    if (expired.empty) return;
+    const batch = db.batch();
+    expired.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+    console.log('Deleted expired chat messages:', expired.size);
+  } catch (e) {
+    console.error('Expired-message cleanup error:', e.message);
+  }
+}
+
 function startListeners() {
   let directInitial = true;
   db.collectionGroup('chats').onSnapshot(snapshot => {
@@ -258,4 +272,6 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('ConnectX API listening on ' + PORT);
   console.log('Starting Firestore notification listeners...');
   startListeners();
+  cleanupExpiredMessages();
+  setInterval(cleanupExpiredMessages, 60 * 60 * 1000);
 });
