@@ -1,0 +1,81 @@
+import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
+final FlutterLocalNotificationsPlugin _localNotifications =
+    FlutterLocalNotificationsPlugin();
+
+const AndroidNotificationChannel _chatChannel = AndroidNotificationChannel(
+  'connectx_chat_messages',
+  'ConnectX messages',
+  description: 'Notifications for new ConnectX messages',
+  importance: Importance.high,
+);
+
+@pragma('vm:entry-point')
+Future<void> connectXBackgroundMessageHandler(RemoteMessage message) async {
+  // Android displays notification payloads automatically in the background.
+}
+
+class NotificationService {
+  static StreamSubscription<String>? _tokenSubscription;
+  static StreamSubscription<RemoteMessage>? _foregroundSubscription;
+
+  static Future<void> initialize() async {
+    final messaging = FirebaseMessaging.instance;
+    await messaging.requestPermission(alert: true, badge: true, sound: true);
+    const androidSettings = AndroidInitializationSettings('@mipmap/logo');
+    const settings = InitializationSettings(android: androidSettings);
+    await _localNotifications.initialize(settings);
+    await _localNotifications
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(_chatChannel);
+
+    FirebaseMessaging.onBackgroundMessage(connectXBackgroundMessageHandler);
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      await _saveToken(user.uid, await messaging.getToken());
+    }
+    _tokenSubscription?.cancel();
+    _tokenSubscription = messaging.onTokenRefresh.listen((token) {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) _saveToken(uid, token);
+    });
+
+    _foregroundSubscription?.cancel();
+    _foregroundSubscription = FirebaseMessaging.onMessage.listen((message) async {
+      final notification = message.notification;
+      if (notification == null) return;
+      await _localNotifications.show(
+        message.hashCode,
+        notification.title ?? 'ConnectX',
+        notification.body ?? 'New message',
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            _chatChannel.id,
+            _chatChannel.name,
+            channelDescription: _chatChannel.description,
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+        ),
+      );
+    });
+  }
+
+  static Future<void> _saveToken(String uid, String? token) async {
+    if (token == null || token.isEmpty) return;
+    await FirebaseDatabase.instance.ref('Users').child(uid).update({
+      'fcmToken': token,
+    });
+  }
+
+  static Future<void> dispose() async {
+    await _tokenSubscription?.cancel();
+    await _foregroundSubscription?.cancel();
+  }
+}
