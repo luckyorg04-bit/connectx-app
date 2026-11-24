@@ -60,6 +60,10 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       final callData = call.data()!;
       if (callData['status'] != 'active') throw Exception('This group call has ended.');
       if (!isCreator) {
+        final active = List<String>.from(callData['activeUids'] ?? []);
+        if (!active.contains(_uid) && active.length >= 8) {
+          throw Exception('This group call has reached its 8 participant limit.');
+        }
         await _callRef.update({'activeUids': FieldValue.arrayUnion([_uid])});
       }
       await _prepareMedia();
