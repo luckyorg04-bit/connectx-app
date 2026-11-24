@@ -147,7 +147,7 @@ async function notificationEnabled(uid, category) {
     const prefs = snap.val() || {};
     const key = category === 'direct_message' ? 'messages'
       : category === 'group_message' ? 'groups'
-      : category === 'incoming_call' ? 'calls' : null;
+      : (category === 'incoming_call' || category === 'group_call') ? 'calls' : null;
     return !key || prefs[key] !== false;
   } catch (_) {
     return true;
@@ -189,6 +189,48 @@ async function sendGroup(groupId, messageId, message) {
     const invalid = [];
     result.responses.forEach((r, n) => {
       if (!r.success && r.error && ['messaging/registration-token-not-registered','messaging/invalid-registration-token'].includes(r.error.code)) invalid.push(batch[n].uid);
+    });
+    await Promise.all(invalid.map(uid => rtdb.ref('Users/' + uid + '/fcmToken').remove()));
+  }
+}
+
+async function sendGroupCallInvitation(callId, call) {
+  const groupId = String(call.groupId || '');
+  if (!groupId) return;
+  const groupSnap = await db.collection('groupChats').doc(groupId).get();
+  if (!groupSnap.exists) return;
+  const group = groupSnap.data() || {};
+  const active = new Set(Array.isArray(call.activeUids) ? call.activeUids : []);
+  const memberUids = (Array.isArray(group.memberUids) ? group.memberUids : [])
+    .filter(uid => uid && !active.has(uid));
+  const rows = (await Promise.all(memberUids.map(async uid => ({
+    uid,
+    token: await tokenFor(uid),
+    enabled: await notificationEnabled(uid, 'group_call')
+  })))).filter(row => row.token && row.enabled);
+  for (let i = 0; i < rows.length; i += 500) {
+    const batch = rows.slice(i, i + 500);
+    const result = await admin.messaging().sendEachForMulticast({
+      tokens: batch.map(row => row.token),
+      notification: {
+        title: String(call.groupName || group.name || 'ConnectX group'),
+        body: (call.type === 'video' ? 'Group video call started' : 'Group voice call started') + ' · Tap to join'
+      },
+      data: {
+        type: 'group_call',
+        callId,
+        groupId,
+        groupName: String(call.groupName || group.name || 'Group'),
+        callType: call.type === 'video' ? 'video' : 'voice'
+      },
+      android: { priority: 'high' }
+    });
+    const invalid = [];
+    result.responses.forEach((response, index) => {
+      if (!response.success && response.error &&
+          ['messaging/registration-token-not-registered','messaging/invalid-registration-token'].includes(response.error.code)) {
+        invalid.push(batch[index].uid);
+      }
     });
     await Promise.all(invalid.map(uid => rtdb.ref('Users/' + uid + '/fcmToken').remove()));
   }
@@ -251,6 +293,24 @@ function startListeners() {
       ).catch(e => console.error('Call notification error:', e.message));
     }
   }, e => console.error('Call Firestore listener error:', e.message));
+
+  let groupCallInitial = true;
+  const notifiedGroupCalls = new Set();
+  db.collection('groupCalls').onSnapshot(snapshot => {
+    if (groupCallInitial) {
+      groupCallInitial = false;
+      console.log('Group call notification listener ready; initial documents:', snapshot.size);
+      return;
+    }
+    for (const change of snapshot.docChanges()) {
+      if (change.type !== 'added') continue;
+      const call = change.doc.data() || {};
+      if (call.status !== 'active' || notifiedGroupCalls.has(change.doc.id)) continue;
+      notifiedGroupCalls.add(change.doc.id);
+      sendGroupCallInvitation(change.doc.id, call)
+        .catch(error => console.error('Group call notification error:', error.message));
+    }
+  }, error => console.error('Group call Firestore listener error:', error.message));
 
   let groupInitial = true;
   db.collectionGroup('messages').onSnapshot(snapshot => {
