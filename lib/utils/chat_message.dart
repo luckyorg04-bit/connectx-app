@@ -46,13 +46,36 @@ class _ChatMessageState extends State<ChatMessage> {
     if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
+  Future<void> _openMedia(String value) async {
+    final message = widget.message;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (message.isViewOnce && !widget.isMe && uid != null) {
+      if (message.viewedBy.containsKey(uid)) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('This view-once item has already been opened.')));
+        return;
+      }
+      if (widget.messageRef != null) {
+        try { await widget.messageRef!.update({'viewedBy.$uid': FieldValue.serverTimestamp()}); }
+        catch (_) {}
+      }
+    }
+    await _openUrl(value);
+  }
+
   Widget _mediaContent(Color textColor, Color secondary) {
     final message = widget.message;
     final url = message.mediaUrl ?? '';
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (message.isViewOnce && !widget.isMe && uid != null && message.viewedBy.containsKey(uid)) {
+      return const Text('Opened once');
+    }
     switch (message.type) {
       case 'image':
+        if (message.isViewOnce && !widget.isMe) return TextButton.icon(
+          onPressed: () => _openMedia(url), icon: const Icon(Icons.looks_one), label: const Text('Open photo once'));
         return GestureDetector(
-          onTap: () => _openUrl(url),
+          onTap: () => _openMedia(url),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
@@ -72,7 +95,7 @@ class _ChatMessageState extends State<ChatMessage> {
           leading: const CircleAvatar(child: Icon(Icons.play_arrow_rounded)),
           title: Text(message.fileName ?? 'Video', style: TextStyle(color: textColor)),
           subtitle: Text('Tap to open video', style: TextStyle(color: secondary, fontSize: 11)),
-          onTap: () => _openUrl(url),
+          onTap: () => _openMedia(url),
         );
       case 'document':
         return ListTile(
@@ -81,7 +104,7 @@ class _ChatMessageState extends State<ChatMessage> {
           title: Text(message.fileName ?? 'Document', maxLines: 2,
             overflow: TextOverflow.ellipsis, style: TextStyle(color: textColor)),
           subtitle: Text('Tap to open document', style: TextStyle(color: secondary, fontSize: 11)),
-          onTap: () => _openUrl(url),
+          onTap: () => _openMedia(url),
         );
       case 'sticker':
         return Padding(padding: const EdgeInsets.symmetric(vertical: 4),
@@ -141,7 +164,8 @@ class _ChatMessageState extends State<ChatMessage> {
                 await _audioPlayer.pause();
                 if (mounted) setState(() => _audioPlaying = false);
               } else {
-                await _audioPlayer.play(UrlSource(url));
+                if (message.isViewOnce && !widget.isMe) await _openMedia(url);
+              await _audioPlayer.play(UrlSource(url));
                 if (mounted) setState(() => _audioPlaying = true);
                 _audioPlayer.onPlayerComplete.listen((_) {
                   if (mounted) setState(() => _audioPlaying = false);
