@@ -4,6 +4,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'services/notification_service.dart';
 
 class AuthPage extends StatefulWidget {
   const AuthPage({Key? key}) : super(key: key);
@@ -306,6 +307,7 @@ class AuthPageState extends State<AuthPage> {
   }
 
   Future<void> _openMain() async {
+    await NotificationService.initialize();
     currentRoute = '/main';
     if (!mounted) return;
     await Navigator.of(context).pushNamedAndRemoveUntil('/main', (route) => false);
