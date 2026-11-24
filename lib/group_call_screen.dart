@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'services/rtc_config.dart';
 
 class GroupCallScreen extends StatefulWidget {
   const GroupCallScreen({Key? key}) : super(key: key);
@@ -114,12 +115,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     final isOfferer = _uid.compareTo(peerUid) < 0;
     final renderer = RTCVideoRenderer();
     await renderer.initialize();
-    final peer = await createPeerConnection({
-      'iceServers': [
-        {'urls': 'stun:stun.l.google.com:19302'},
-        {'urls': 'stun:stun1.l.google.com:19302'},
-      ],
-    });
+    final peer = await createPeerConnection(await RtcConfig.load());
     _peers[peerUid] = peer;
     _remoteRenderers[peerUid] = renderer;
     for (final track in _localStream!.getTracks()) {
