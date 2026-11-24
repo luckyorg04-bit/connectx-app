@@ -307,6 +307,24 @@ async function cleanupExpiredMessages() {
   }
 }
 
+async function cleanupExpiredStatuses() {
+  try {
+    const expired = await db.collection('statuses')
+      .where('expiresAt', '<=', admin.firestore.Timestamp.now())
+      .limit(200).get();
+    for (const status of expired.docs) {
+      const views = await status.ref.collection('views').limit(400).get();
+      const batch = db.batch();
+      views.docs.forEach(view => batch.delete(view.ref));
+      batch.delete(status.ref);
+      await batch.commit();
+    }
+    if (!expired.empty) console.log('Deleted expired statuses:', expired.size);
+  } catch (error) {
+    console.error('Expired status cleanup error:', error.message);
+  }
+}
+
 async function cleanupExpiredStatusMedia() {
   try {
     for (const name of fs.readdirSync(UPLOAD_DIR)) {
@@ -410,7 +428,9 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('Starting Firestore notification listeners...');
   startListeners();
   cleanupExpiredMessages();
+  cleanupExpiredStatuses();
   cleanupExpiredStatusMedia();
   setInterval(cleanupExpiredMessages, 60 * 60 * 1000);
+  setInterval(cleanupExpiredStatuses, 60 * 60 * 1000);
   setInterval(cleanupExpiredStatusMedia, 60 * 60 * 1000);
 });
