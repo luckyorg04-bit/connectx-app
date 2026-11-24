@@ -1,9 +1,6 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:permission_handler/permission_handler.dart';
-
 import '../chat_screen.dart';
 import '../models/message.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -26,100 +23,128 @@ class ChatMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final messageContent = message.message;
-    final timestamp = DateFormat.MMMMEEEEd()
-        .format(DateTime.fromMillisecondsSinceEpoch(message.timestamp));
-
-    if(!message.isRead && message.sender != FirebaseAuth.instance.currentUser!.uid){
-      FirebaseFirestore.instance
-          .collection("messages")
-          .doc(assignUsers(
-            FirebaseAuth.instance.currentUser!.uid,
-            message.sender
-          ))
-          .collection("chats")
-          .doc(message.messageId)
-          .update(Message(
-          message: messageContent,
-          isRead: true,
-          timestamp: message.timestamp,
-          sender: message.sender
-      ).toJson());
-    }
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bubbleColor = isMe
+        ? (isDark ? const Color(0xFF005C4B) : const Color(0xFFD9FDD3))
+        : (isDark ? const Color(0xFF202C33) : Colors.white);
+    final textColor = isDark ? const Color(0xFFE9EDEF) : const Color(0xFF111B21);
+    final secondaryColor = isDark ? const Color(0xFFB7C4CC) : const Color(0xFF667781);
+    final time = DateFormat('h:mm a').format(
+      DateTime.fromMillisecondsSinceEpoch(message.timestamp),
+    );
 
     return Column(
-      crossAxisAlignment:
-      isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       children: [
         if (isNewDay(isFirstMessage, previousMessage, message.timestamp))
-          Row(mainAxisAlignment: MainAxisAlignment.center,children: [
-            Text(
-              timestamp,
-              style: Theme.of(context).textTheme.labelSmall!.copyWith(
-                fontSize: 12,
-                color: Colors.grey[700],
-                fontWeight: FontWeight.w500
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF26343C) : const Color(0xFFE7F0F5),
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 3,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
               ),
-              textAlign: isMe?TextAlign.right:TextAlign.left,
-            )]),
-        InkWell(onTap: () async {
-            var status = await Permission.storage.status;
-            if (!status.isGranted) {
-              status = await Permission.storage.request();
-              if (!status.isGranted) {
-                return;
-              }
-            }
-            Uri? uri = getUri(messageContent);
-            if (uri!= null && await canLaunchUrl(uri)) {
-              await launchUrl(uri);
-            }
-          }, child: Container(
-            margin: const EdgeInsets.symmetric(vertical: 0.5, horizontal: 4),
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-            constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width - 48),
-            decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            color: isMe ?
-            MediaQuery.of(context).platformBrightness == Brightness.light
-                ? const Color(0xFF89CFF0)
-                : const Color(0xFF4475CD)
-              : MediaQuery.of(context).platformBrightness == Brightness.light
-                ? const Color(0xFFAFDCEC)
-                : const Color(0xFF6495ED)
-        ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 2),
-                Text(
-                    messageContent,
-                    style: TextStyle(color: Theme.of(context).colorScheme.onBackground)
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                child: Text(
+                  _dateLabel(message.timestamp),
+                  style: TextStyle(fontSize: 12, color: secondaryColor, fontWeight: FontWeight.w500),
                 ),
-                const SizedBox(height: 2),
-              ]
-      )
-        )),
-        if(isLastMessage && isMe && message.isRead)
-          Row(mainAxisAlignment: MainAxisAlignment.end,children: [
-            Text(
-              "Seen",
-              style: Theme.of(context).textTheme.labelSmall!.copyWith(
-                  fontSize: 12,
-                  color: Colors.grey[500],
-                  fontWeight: FontWeight.w400
               ),
-              textAlign: TextAlign.right,
-            ),const SizedBox(width: 8,)]),
-      ]);
+            ),
+          ),
+        Align(
+          alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+          child: GestureDetector(
+            onTap: () => _openLink(message.message),
+            child: Container(
+              margin: EdgeInsets.only(
+                left: isMe ? 54 : 8,
+                right: isMe ? 8 : 54,
+                top: 2,
+                bottom: 2,
+              ),
+              padding: const EdgeInsets.fromLTRB(10, 7, 8, 5),
+              constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.82),
+              decoration: BoxDecoration(
+                color: bubbleColor,
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(8),
+                  topRight: const Radius.circular(8),
+                  bottomLeft: Radius.circular(isMe ? 8 : 2),
+                  bottomRight: Radius.circular(isMe ? 2 : 8),
+                ),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(isDark ? 0.05 : 0.035), blurRadius: 1),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Flexible(
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: Text(
+                        message.message,
+                        style: TextStyle(color: textColor, fontSize: 16, height: 1.28),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 1),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(time, style: TextStyle(fontSize: 10, color: secondaryColor)),
+                        if (isMe) ...[
+                          const SizedBox(width: 3),
+                          Icon(
+                            message.isRead ? Icons.done_all_rounded : Icons.done_rounded,
+                            size: 15,
+                            color: message.isRead ? const Color(0xFF53BDEB) : secondaryColor,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
-  Uri? getUri(String text) {
-    RegExp urlRegex = RegExp(r'(https?://[^\s]+)');
-    Match? match = urlRegex.firstMatch(text);
-    if (match != null) {
-      String url = match.group(0)!;
-      return Uri.parse(url);
+
+  String _dateLabel(int timestamp) {
+    final date = DateTime.fromMillisecondsSinceEpoch(timestamp);
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final messageDay = DateTime(date.year, date.month, date.day);
+    if (messageDay == today) return 'Today';
+    if (messageDay == today.subtract(const Duration(days: 1))) return 'Yesterday';
+    return DateFormat('MMMM d, y').format(date);
+  }
+
+  Future<void> _openLink(String text) async {
+    final uri = getUri(text);
+    if (uri != null && await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
-    return null;
+  }
+
+  Uri? getUri(String text) {
+    final urlRegex = RegExp(r'(https?://[^\\s]+)');
+    final match = urlRegex.firstMatch(text);
+    if (match == null) return null;
+    return Uri.tryParse(match.group(0)!);
   }
 }
