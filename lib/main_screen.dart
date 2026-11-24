@@ -1097,7 +1097,9 @@ class _CallsTab extends StatelessWidget {
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
                 ...groupCalls.map((doc) {
                   final data = doc.data();
-                  final active = data['status'] == 'active';
+                  final expiry = data['expiresAt'];
+                  final active = data['status'] == 'active'
+                    && expiry is Timestamp && expiry.toDate().isAfter(DateTime.now());
                   final type = data['type'] == 'video' ? 'Video' : 'Voice';
                   final activeUids = List<String>.from(data['activeUids'] ?? []);
                   return ListTile(
