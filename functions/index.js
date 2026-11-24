@@ -38,6 +38,16 @@ exports.notifyDirectMessage = functions
     const recipientUid = participants.find(uid => uid !== message.sender);
     if (!recipientUid) return null;
 
+    // Keep both chat lists in sync using trusted Admin SDK writes. Mobile
+    // clients are intentionally not allowed to write another user's profile.
+    const indexTimestamp = Number(message.timestamp) || Date.now();
+    await Promise.all([
+      admin.database().ref('Users/' + message.sender + '/chats/personal/' + recipientUid)
+        .set(indexTimestamp),
+      admin.database().ref('Users/' + recipientUid + '/chats/personal/' + message.sender)
+        .set(indexTimestamp)
+    ]);
+
     const senderSnapshot = await admin.database()
       .ref('Users/' + message.sender).once('value');
     const senderName = senderSnapshot.child('name').val() || 'New message';
