@@ -38,6 +38,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
   bool _remoteTyping = false;
   bool _recording = false;
   int _disappearingDurationMs = 0;
+  bool _sendViewOnce = false;
   Timer? _expiryRefreshTimer;
   final Record _recorder = Record();
   final ImagePicker _imagePicker = ImagePicker();
@@ -244,6 +245,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
     double? longitude,
     String? contactName,
     String? contactPhone,
+    bool isViewOnce = false,
   }) async {
     await _ensureCanMessage();
     await _messages.add({
@@ -261,6 +263,8 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
       'sender': _uid,
       'isEdited': false,
       'isForwarded': false,
+      'isViewOnce': isViewOnce,
+      'viewedBy': <String, dynamic>{},
       'reactions': <String, dynamic>{},
       ..._expiryFields(),
     });
@@ -297,6 +301,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
         text: fileName,
         mediaUrl: url,
         fileName: fileName,
+        isViewOnce: _sendViewOnce,
       );
     } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
@@ -804,6 +809,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
                 if (value == 'poll') _createPoll();
                 if (value == 'sticker') _sendSticker();
                 if (value == 'gif') _pickGif();
+                if (value == 'view_once') setState(() => _sendViewOnce = !_sendViewOnce);
               },
               itemBuilder: (context) => const [
                 PopupMenuItem(value: 'image', child: ListTile(leading: Icon(Icons.photo), title: Text('Photo'))),
@@ -814,6 +820,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
                 PopupMenuItem(value: 'poll', child: ListTile(leading: Icon(Icons.poll_outlined), title: Text('Poll'))),
                 PopupMenuItem(value: 'sticker', child: ListTile(leading: Icon(Icons.emoji_emotions_outlined), title: Text('Sticker'))),
                 PopupMenuItem(value: 'gif', child: ListTile(leading: Icon(Icons.gif_box_outlined), title: Text('GIF'))),
+                PopupMenuItem(value: 'view_once', child: ListTile(leading: Icon(Icons.looks_one_outlined), title: Text('Toggle view once'))),
               ],
             ),
             Expanded(child: TextField(
@@ -824,7 +831,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
               onChanged: (value) => _setTyping(value.trim().isNotEmpty),
               onSubmitted: (_) => _sendMessage(),
               decoration: InputDecoration(
-                hintText: _recording ? 'Recording voice note…' : 'Message',
+                hintText: _recording ? 'Recording voice note…' : _sendViewOnce ? 'View-once media mode' : 'Message',
                 filled: true,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(26), borderSide: BorderSide.none),
