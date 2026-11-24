@@ -150,6 +150,74 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     }
   }
 
+  Future<void> _createPoll() async {
+    final question = TextEditingController();
+    final options = [TextEditingController(), TextEditingController()];
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Create group poll'),
+          content: SizedBox(width: double.maxFinite, child: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(controller: question, maxLength: 180,
+                decoration: const InputDecoration(labelText: 'Question')),
+              ...options.asMap().entries.map((entry) => TextField(
+                controller: entry.value, maxLength: 80,
+                decoration: InputDecoration(labelText: 'Option ${entry.key + 1}'))),
+              if (options.length < 6)
+                TextButton.icon(
+                  onPressed: () => setDialogState(() => options.add(TextEditingController())),
+                  icon: const Icon(Icons.add), label: const Text('Add option')),
+            ]),
+          )),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Share poll')),
+          ],
+        ),
+      ),
+    );
+    final title = question.text.trim();
+    final choices = options.map((item) => item.text.trim()).where((item) => item.isNotEmpty).toList();
+    question.dispose();
+    for (final item in options) { item.dispose(); }
+    if (confirmed != true || title.isEmpty || choices.length < 2) return;
+    try {
+      await _messages.add({
+        'text': title, 'type': 'poll', 'pollOptions': choices,
+        'pollVotes': <String, dynamic>{},
+        'senderUid': FirebaseAuth.instance.currentUser!.uid,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Poll not sent: $error')),
+      );
+    }
+  }
+
+  Future<void> _sendSticker() async {
+    const stickers = ['😀','😂','🥰','😍','🤔','😎','😭','🔥','🎉','❤️','👍','🙏','💯','🤝','🚀','🌟','🎂','☕','🌈','🐱','🐶','🌻','⚽','🎮'];
+    final sticker = await showModalBottomSheet<String>(context: context,
+      builder: (c) => SafeArea(child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: GridView.count(
+          shrinkWrap: true, crossAxisCount: 4,
+          children: stickers.map((value) => InkWell(
+            onTap: () => Navigator.pop(c, value),
+            child: Center(child: Text(value, style: const TextStyle(fontSize: 34))),
+          )).toList(),
+        ),
+      )));
+    if (sticker == null) return;
+    await _messages.add({
+      'text': sticker, 'type': 'sticker',
+      'senderUid': FirebaseAuth.instance.currentUser!.uid,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   Future<void> _send() async {
     final text = _controller.text.trim();
     if (text.isEmpty || _sending) return;
@@ -224,9 +292,13 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                 reverse: true,
                 itemCount: snapshot.data!.docs.length,
                 itemBuilder: (context, index) {
-                  final data = snapshot.data!.docs[index].data();
+                  final doc = snapshot.data!.docs[index];
+                  final data = doc.data();
                   final mine = data['senderUid'] == uid;
                   final created = data['createdAt'] as Timestamp?;
+                  final type = (data['type'] ?? 'text').toString();
+                  final pollOptions = List<String>.from(data['pollOptions'] ?? []);
+                  final pollVotes = Map<String, dynamic>.from(data['pollVotes'] ?? {});
                   return Align(
                     alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
                     child: Container(
@@ -238,8 +310,45 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                        Text((data['text'] ?? '').toString(),
-                          style: const TextStyle(color: Color(0xFF111B21), fontSize: 16)),
+                        if (type == 'poll') ...[
+                          const Row(children: [
+                            Icon(Icons.poll_outlined, size: 17),
+                            SizedBox(width: 5),
+                            Text('GROUP POLL', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                          ]),
+                          Align(alignment: Alignment.centerLeft,
+                            child: Text((data['text'] ?? '').toString(),
+                              style: const TextStyle(color: Color(0xFF111B21), fontSize: 16, fontWeight: FontWeight.w600))),
+                          ...pollOptions.asMap().entries.map((option) {
+                            final count = pollVotes.values.where((value) => value == option.key).length;
+                            final selected = pollVotes[uid] == option.key;
+                            return InkWell(
+                              onTap: () => doc.reference.update({'pollVotes.$uid': option.key}).catchError((_) {}),
+                              child: Container(
+                                width: 230,
+                                margin: const EdgeInsets.only(top: 6),
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: selected ? Theme.of(context).colorScheme.primary : Colors.black26),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(children: [
+                                  Expanded(child: Text(option.value)),
+                                  Text('$count'),
+                                  if (selected) const Icon(Icons.check_circle, size: 16),
+                                ]),
+                              ),
+                            );
+                          }),
+                          Align(alignment: Alignment.centerLeft,
+                            child: Text('${pollVotes.length} vote(s)', style: const TextStyle(fontSize: 10))),
+                        ] else if (type == 'sticker')
+                          Align(alignment: Alignment.centerLeft,
+                            child: Text((data['text'] ?? '').toString(), style: const TextStyle(fontSize: 48)))
+                        else
+                          Align(alignment: Alignment.centerLeft,
+                            child: Text((data['text'] ?? '').toString(),
+                              style: const TextStyle(color: Color(0xFF111B21), fontSize: 16))),
                         if (created != null)
                           Text(TimeOfDay.fromDateTime(created.toDate()).format(context),
                             style: const TextStyle(fontSize: 10, color: Colors.black54)),
@@ -255,6 +364,20 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           child: Padding(
             padding: const EdgeInsets.all(8),
             child: Row(children: [
+              PopupMenuButton<String>(
+                padding: EdgeInsets.zero,
+                icon: const Icon(Icons.add_circle_outline),
+                onSelected: (value) {
+                  if (value == 'poll') _createPoll();
+                  if (value == 'sticker') _sendSticker();
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(value: 'poll', child: ListTile(
+                    leading: Icon(Icons.poll_outlined), title: Text('Poll'))),
+                  PopupMenuItem(value: 'sticker', child: ListTile(
+                    leading: Icon(Icons.emoji_emotions_outlined), title: Text('Sticker'))),
+                ],
+              ),
               Expanded(child: TextField(
                 controller: _controller,
                 minLines: 1,
