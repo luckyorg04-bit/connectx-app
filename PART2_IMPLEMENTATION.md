@@ -21,7 +21,7 @@ This file tracks implementation work separately from final device testing.
 
 ## Infrastructure work still required
 
-1. Run the controlled deployment script from the VPS: `bash deploy_part2.sh`. It deploys Firestore rules/indexes, updates only the existing `connectx-api` container in place, installs Coturn and stores private TURN configuration. The script does not run Flutter tests or build an APK.
+1. Run the controlled deployment script from the VPS: `curl -fsSL https://raw.githubusercontent.com/luckyorg04-bit/connectx-app/master/deploy_part2.sh -o /root/deploy_part2.sh && bash /root/deploy_part2.sh`. It deploys Firestore rules/indexes, updates only the existing `connectx-api` container in place, installs Coturn and stores private TURN configuration. The script does not run Flutter tests or build an APK.
 2. In Hostinger Firewall, allow TCP/UDP 3478 and UDP 49160–49200 as described in `vps-api/TURN_SETUP.md`.
 3. Only after implementation and infrastructure are complete: run the final Flutter analysis, Android build, and device/network verification; then deliver the final APK.
 
