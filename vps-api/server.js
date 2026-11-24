@@ -23,6 +23,8 @@ const db = admin.firestore();
 const rtdb = admin.database();
 console.log('Firebase Admin initialized for project ' + PROJECT_ID);
 const signingKey = crypto.createHash('sha256').update(serviceAccount.private_key).digest();
+// Serialize one-time opens inside this API process to prevent simultaneous reuse.
+const viewOnceLocks = new Set();
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 app.set('trust proxy', 1);
@@ -165,7 +167,13 @@ app.get('/media/:filename', async (req, res) => {
         return res.status(403).json({ success: false, error: 'You are not allowed to view this status' });
       }
     }
+    let viewOnceLockAcquired = false;
     if (meta.viewOnce === true) {
+      if (viewOnceLocks.has(filename)) {
+        return res.status(409).json({ success: false, error: 'This one-time attachment is already being opened' });
+      }
+      viewOnceLocks.add(filename);
+      viewOnceLockAcquired = true;
       const authToken = String(req.query.auth || '');
       if (req.query.viewOnce !== '1' || !authToken) {
         return res.status(403).json({ success: false, error: 'This attachment requires one-time authenticated access' });
@@ -182,7 +190,9 @@ app.get('/media/:filename', async (req, res) => {
         }
         viewedBy.push(viewer.uid);
         meta.viewedBy = viewedBy;
-        fs.writeFileSync(metaFile, JSON.stringify(meta), { mode: 0o600 });
+        const tempMetaFile = metaFile + '.' + process.pid + '.tmp';
+        fs.writeFileSync(tempMetaFile, JSON.stringify(meta), { mode: 0o600 });
+        fs.renameSync(tempMetaFile, metaFile);
       }
     }
     res.setHeader('Content-Type', meta.mimeType || 'application/octet-stream');
@@ -191,6 +201,10 @@ app.get('/media/:filename', async (req, res) => {
     return res.sendFile(file);
   } catch (_) {
     return res.status(400).json({ success: false, error: 'Invalid media metadata' });
+  } finally {
+    if (typeof viewOnceLockAcquired !== 'undefined' && viewOnceLockAcquired) {
+      viewOnceLocks.delete(filename);
+    }
   }
 });
 
