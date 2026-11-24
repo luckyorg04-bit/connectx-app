@@ -175,7 +175,7 @@ app.get('/media/:filename', async (req, res) => {
     }
     res.setHeader('Content-Type', meta.mimeType || 'application/octet-stream');
     res.setHeader('Content-Disposition', 'inline; filename="' + String(meta.originalName || 'attachment').replace(/["\\\r\n]/g, '_') + '"');
-    res.setHeader('Cache-Control', meta.viewOnce ? 'no-store' : 'private, max-age=3600');
+    res.setHeader('Cache-Control', meta.viewOnce || meta.resourceType === 'status' ? 'no-store' : 'private, max-age=3600');
     return res.sendFile(file);
   } catch (_) {
     return res.status(400).json({ success: false, error: 'Invalid media metadata' });
@@ -295,6 +295,26 @@ async function cleanupExpiredMessages() {
   }
 }
 
+async function cleanupExpiredStatusMedia() {
+  try {
+    for (const name of fs.readdirSync(UPLOAD_DIR)) {
+      if (!name.endsWith('.meta.json')) continue;
+      const metaPath = path.join(UPLOAD_DIR, name);
+      try {
+        const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+        if (meta.resourceType !== 'status' || Number(meta.expiresAt || 0) > Date.now()) continue;
+        const mediaPath = metaPath.slice(0, -'.meta.json'.length);
+        fs.unlink(mediaPath, () => {});
+        fs.unlink(metaPath, () => {});
+      } catch (error) {
+        console.error('Status media cleanup metadata error:', error.message);
+      }
+    }
+  } catch (error) {
+    console.error('Status media cleanup error:', error.message);
+  }
+}
+
 function startListeners() {
   let directInitial = true;
   db.collectionGroup('chats').onSnapshot(snapshot => {
@@ -378,5 +398,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('Starting Firestore notification listeners...');
   startListeners();
   cleanupExpiredMessages();
+  cleanupExpiredStatusMedia();
   setInterval(cleanupExpiredMessages, 60 * 60 * 1000);
+  setInterval(cleanupExpiredStatusMedia, 60 * 60 * 1000);
 });
