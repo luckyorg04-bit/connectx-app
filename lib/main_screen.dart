@@ -929,15 +929,35 @@ class _ChannelsPanel extends StatelessWidget {
   Future<void> _open(BuildContext context, QueryDocumentSnapshot<Map<String, dynamic>> doc) async {
     final uid = FirebaseAuth.instance.currentUser!.uid;
     final data = doc.data();
-    await doc.reference.update({'memberUids': FieldValue.arrayUnion([uid])});
     if (!context.mounted) return;
     final controller = TextEditingController();
     await showModalBottomSheet<void>(context: context, isScrollControlled: true,
       builder: (c) => SafeArea(child: SizedBox(height: MediaQuery.of(c).size.height * .75,
         child: Column(children: [
-          ListTile(title: Text((data['name'] ?? 'Channel').toString()),
-            subtitle: Text((data['description'] ?? '').toString())),
-          Expanded(child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          ListTile(
+            title: Text((data['name'] ?? 'Channel').toString()),
+            subtitle: Text((data['description'] ?? '').toString()),
+            trailing: data['ownerUid'] == uid ? const Chip(label: Text('Owner')) :
+              OutlinedButton(
+                onPressed: () async {
+                  final members = List<String>.from(data['memberUids'] ?? []);
+                  final follows = members.contains(uid);
+                  try {
+                    await doc.reference.update({'memberUids': follows
+                      ? FieldValue.arrayRemove([uid])
+                      : FieldValue.arrayUnion([uid])});
+                    if (c.mounted) Navigator.pop(c);
+                  } catch (error) {
+                    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Could not update channel membership: $error')),
+                    );
+                  }
+                },
+                child: Text(List<String>.from(data['memberUids'] ?? []).contains(uid) ? 'Unfollow' : 'Follow'),
+              ),
+          ),
+          Expanded(child: List<String>.from(data['memberUids'] ?? []).contains(uid) || data['ownerUid'] == uid
+            ? StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
             stream: doc.reference.collection('posts').orderBy('createdAt', descending: true).snapshots(),
             builder: (context, snap) {
               if (snap.hasError) return Center(child: Text('Unable to load posts: ${snap.error}'));
@@ -946,7 +966,8 @@ class _ChannelsPanel extends StatelessWidget {
                 title: Text((post.data()['text'] ?? '').toString()),
                 subtitle: Text((post.data()['authorName'] ?? 'Channel admin').toString()),
               )).toList());
-            })),
+            })
+            : const Center(child: Text('Follow this channel to view its posts.'))),
           if (data['ownerUid'] == uid)
             Padding(padding: const EdgeInsets.all(8), child: Row(children: [
               Expanded(child: TextField(controller: controller, decoration: const InputDecoration(hintText: 'Announcement'))),
