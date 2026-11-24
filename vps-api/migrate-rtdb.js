@@ -50,11 +50,12 @@ async function migrate() {
     };
 
     const privateProfile = { ...privateOld };
-    if (privateProfile.chats == null && legacyValue.chats != null) privateProfile.chats = legacyValue.chats;
-    if (privateProfile.chatMeta == null && legacyValue.chatMeta != null) privateProfile.chatMeta = legacyValue.chatMeta;
-    if (privateProfile.notificationSettings == null && legacyValue.notificationSettings != null) {
-      privateProfile.notificationSettings = legacyValue.notificationSettings;
-    }
+    privateProfile.chats = { ...(legacyValue.chats || {}), ...(privateOld.chats || {}) };
+    privateProfile.chatMeta = { ...(legacyValue.chatMeta || {}), ...(privateOld.chatMeta || {}) };
+    privateProfile.notificationSettings = {
+      ...(legacyValue.notificationSettings || {}),
+      ...(privateOld.notificationSettings || {})
+    };
 
     const blockList = { ...(legacyValue.blockedUsers || {}), ...(blocksExisting || {}) };
     const typing = { ...(legacyValue.typing || {}), ...(typingExisting || {}) };
