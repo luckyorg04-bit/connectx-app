@@ -307,6 +307,25 @@ async function cleanupExpiredMessages() {
   }
 }
 
+async function cleanupExpiredGroupCalls() {
+  try {
+    const expired = await db.collection('groupCalls')
+      .where('status', '==', 'active')
+      .where('expiresAt', '<=', admin.firestore.Timestamp.now())
+      .limit(100).get();
+    if (expired.empty) return;
+    const batch = db.batch();
+    expired.docs.forEach(doc => batch.update(doc.ref, {
+      status: 'ended',
+      endedAt: admin.firestore.FieldValue.serverTimestamp()
+    }));
+    await batch.commit();
+    console.log('Ended expired group calls:', expired.size);
+  } catch (error) {
+    console.error('Expired group call cleanup error:', error.message);
+  }
+}
+
 async function cleanupExpiredStatuses() {
   try {
     const expired = await db.collection('statuses')
@@ -428,9 +447,11 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('Starting Firestore notification listeners...');
   startListeners();
   cleanupExpiredMessages();
+  cleanupExpiredGroupCalls();
   cleanupExpiredStatuses();
   cleanupExpiredStatusMedia();
   setInterval(cleanupExpiredMessages, 60 * 60 * 1000);
+  setInterval(cleanupExpiredGroupCalls, 5 * 60 * 1000);
   setInterval(cleanupExpiredStatuses, 60 * 60 * 1000);
   setInterval(cleanupExpiredStatusMedia, 60 * 60 * 1000);
 });
