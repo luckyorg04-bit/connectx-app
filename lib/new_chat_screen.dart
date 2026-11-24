@@ -39,7 +39,7 @@ class _ChatScreenState extends State<NewChatScreen> {
               return;
             }
 
-            DatabaseReference usersRef = ConnectXDatabase.instance.ref("Users");
+            DatabaseReference usersRef = ConnectXDatabase.instance.ref("PublicUsers");
             DatabaseEvent event = await usersRef.orderByChild('username')
                 .startAt(text).endAt('$text\uf8ff').once();
             for (var snapshot in event.snapshot.children) {
