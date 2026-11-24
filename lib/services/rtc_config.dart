@@ -8,51 +8,72 @@ class RtcConfig {
   static DateTime? _cachedAt;
   static const String _endpoint = 'https://connecttx.duckdns.org/api/turn-credentials';
 
-  static Future<Map<String, dynamic>> load() async {
+  static bool _containsTurnServer(List<dynamic> servers) {
+    return servers.whereType<Map>().any((entry) {
+      final urls = entry['urls'];
+      final hasTurnUrl = urls is String
+          ? urls.startsWith('turn:') || urls.startsWith('turns:')
+          : urls is List && urls.whereType<String>().any(
+              (url) => url.startsWith('turn:') || url.startsWith('turns:'));
+      return hasTurnUrl &&
+          entry['username'] is String &&
+          (entry['username'] as String).isNotEmpty &&
+          entry['credential'] is String &&
+          (entry['credential'] as String).isNotEmpty;
+    });
+  }
+
+  static Future<Map<String, dynamic>> load({bool forceRefresh = false}) async {
     final cachedAt = _cachedAt;
-    if (_cachedConfig != null && cachedAt != null &&
+    if (!forceRefresh &&
+        _cachedConfig != null &&
+        cachedAt != null &&
         DateTime.now().difference(cachedAt) < const Duration(minutes: 45)) {
       return _cachedConfig!;
     }
-    final iceServers = <Map<String, dynamic>>[
-      {'urls': 'stun:stun.l.google.com:19302'},
-      {'urls': 'stun:stun1.l.google.com:19302'},
-    ];
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw StateError('Sign in is required to retrieve secure TURN credentials.');
+    }
+
     try {
-      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      final token = await user.getIdToken(true);
       if (token == null || token.isEmpty) {
-        debugPrint('ConnectX TURN credentials unavailable: user is not authenticated; using STUN only.');
-        return {'iceServers': iceServers};
+        throw StateError('Firebase authentication token is unavailable.');
       }
       final response = await http.get(
         Uri.parse(_endpoint),
         headers: {'Authorization': 'Bearer $token'},
-      ).timeout(const Duration(seconds: 5));
+      ).timeout(const Duration(seconds: 10));
+
       if (response.statusCode != 200) {
-        debugPrint('ConnectX TURN endpoint returned HTTP ${response.statusCode}; using STUN only.');
-        return {'iceServers': iceServers};
+        throw StateError('TURN credential service returned HTTP ${response.statusCode}.');
       }
+
       final body = jsonDecode(response.body);
       final configured = body is Map ? body['iceServers'] : null;
-      if (configured is List && configured.isNotEmpty) {
-        iceServers.addAll(configured.whereType<Map>().map(
-          (entry) => Map<String, dynamic>.from(entry),
-        ));
-        final hasTurn = configured.whereType<Map>().any((entry) {
-          final urls = entry['urls'];
-          if (urls is String) return urls.startsWith('turn:') || urls.startsWith('turns:');
-          if (urls is List) return urls.whereType<String>().any((url) => url.startsWith('turn:') || url.startsWith('turns:'));
-          return false;
-        });
-        if (!hasTurn) debugPrint('ConnectX TURN endpoint returned no TURN relay URL; calls may fail across mobile networks.');
-      } else {
-        debugPrint('ConnectX TURN endpoint returned no iceServers; using STUN only.');
+      if (configured is! List || configured.isEmpty || !_containsTurnServer(configured)) {
+        throw StateError('TURN service returned no valid authenticated relay server.');
       }
+
+      final iceServers = <Map<String, dynamic>>[
+        {'urls': 'stun:stun.l.google.com:19302'},
+        {'urls': 'stun:stun1.l.google.com:19302'},
+        ...configured.whereType<Map>().map(
+          (entry) => Map<String, dynamic>.from(entry),
+        ),
+      ];
+
+      _cachedConfig = {'iceServers': iceServers};
+      _cachedAt = DateTime.now();
+      debugPrint('ConnectX RTC: authenticated TURN relay configuration loaded.');
+      return _cachedConfig!;
     } catch (error) {
-      debugPrint('ConnectX TURN credential request failed: $error; using STUN only.');
+      _cachedConfig = null;
+      _cachedAt = null;
+      debugPrint('ConnectX RTC TURN configuration failed: $error');
+      rethrow;
     }
-    _cachedConfig = {'iceServers': iceServers};
-    _cachedAt = DateTime.now();
-    return _cachedConfig!;
   }
 }
