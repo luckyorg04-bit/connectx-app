@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import 'services/rtc_config.dart';
 
@@ -31,6 +32,7 @@ class _CallScreenState extends State<CallScreen> {
   bool _accepted = false;
   bool _muted = false;
   bool _cameraOff = false;
+  bool _speakerOn = false;
   bool _remoteDescriptionSet = false;
   final List<RTCIceCandidate> _pendingRemoteCandidates = <RTCIceCandidate>[];
   bool _leaving = false;
@@ -92,6 +94,16 @@ class _CallScreenState extends State<CallScreen> {
   }
 
   Future<void> _prepareMedia() async {
+    final microphonePermission = await Permission.microphone.request();
+    if (!microphonePermission.isGranted) {
+      throw Exception('Microphone permission is required. Allow microphone access in Android app settings.');
+    }
+    if (_isVideo) {
+      final cameraPermission = await Permission.camera.request();
+      if (!cameraPermission.isGranted) {
+        throw Exception('Camera permission is required for video calls. Allow camera access in Android app settings.');
+      }
+    }
     final constraints = {
       'audio': true,
       'video': _isVideo ? {
@@ -102,6 +114,12 @@ class _CallScreenState extends State<CallScreen> {
     };
     _localStream = await navigator.mediaDevices.getUserMedia(constraints);
     _localRenderer.srcObject = _localStream;
+    try {
+      await Helper.setSpeakerphoneOn(_isVideo);
+      _speakerOn = _isVideo;
+    } catch (error) {
+      debugPrint('ConnectX speakerphone initialization failed: $error');
+    }
     for (final track in _localStream!.getTracks()) {
       await _peer!.addTrack(track, _localStream!);
     }
@@ -130,7 +148,11 @@ class _CallScreenState extends State<CallScreen> {
       });
     } catch (error) {
       if (mounted) setState(() => _error = 'Call could not start: $error');
-      await _finishCall('failed');
+      try {
+        await _callRef.update({'status': 'failed', 'endedAt': FieldValue.serverTimestamp()});
+      } catch (updateError) {
+        debugPrint('ConnectX failed-call status update failed: $updateError');
+      }
     } finally {
       if (mounted) setState(() => _connecting = false);
     }
@@ -162,6 +184,12 @@ class _CallScreenState extends State<CallScreen> {
       if (mounted) setState(() => _accepted = true);
     } catch (error) {
       if (mounted) setState(() => _error = 'Could not answer call: $error');
+      try {
+        await _callRef.update({'status': 'declined', 'endedAt': FieldValue.serverTimestamp()});
+      } catch (updateError) {
+        debugPrint('ConnectX answer-failure status update failed: $updateError');
+      }
+      await FlutterRingtonePlayer.stop();
     } finally {
       if (mounted) setState(() => _connecting = false);
     }
@@ -182,7 +210,8 @@ class _CallScreenState extends State<CallScreen> {
         if (mounted) setState(() => _accepted = true);
       }
     }
-    if (status == 'declined' || status == 'ended' || status == 'failed' || status == 'missed' || status == 'cancelled') {
+    if (status == 'failed' && _error != null) return;
+    if (status == 'declined' || status == 'busy' || status == 'ended' || status == 'failed' || status == 'missed' || status == 'cancelled') {
       FlutterRingtonePlayer.stop();
       if (!_leaving && mounted && ModalRoute.of(context)?.isCurrent == true) {
         _leaving = true;
@@ -242,17 +271,26 @@ class _CallScreenState extends State<CallScreen> {
     if (mounted) setState(() {});
   }
 
+  Future<void> _toggleSpeaker() async {
+    final next = !_speakerOn;
+    try {
+      await Helper.setSpeakerphoneOn(next);
+      _speakerOn = next;
+      if (mounted) setState(() {});
+    } catch (error) {
+      if (mounted) setState(() => _error = 'Could not change audio output: $error');
+    }
+  }
+
   Future<void> _finishCall(String status) async {
     if (_leaving) return;
     _leaving = true;
     await FlutterRingtonePlayer.stop();
     try {
-      if (_isCaller) {
-        await _callRef.update({'status': status, 'endedAt': FieldValue.serverTimestamp()});
-      } else {
-        await _callRef.update({'status': status, 'endedAt': FieldValue.serverTimestamp()});
-      }
-    } catch (_) {}
+      await _callRef.update({'status': status, 'endedAt': FieldValue.serverTimestamp()});
+    } catch (error) {
+      debugPrint('ConnectX call status update failed ($status): $error');
+    }
     if (mounted && Navigator.of(context).canPop()) Navigator.of(context).pop();
   }
 
@@ -307,16 +345,25 @@ class _CallScreenState extends State<CallScreen> {
             if (_accepted || _isCaller)
               CircleAvatar(backgroundColor: _muted ? Colors.red : Colors.white24,
                 child: IconButton(onPressed: _toggleMute, icon: Icon(_muted ? Icons.mic_off : Icons.mic, color: Colors.white))),
+            if (_accepted)
+              CircleAvatar(backgroundColor: _speakerOn ? Colors.white24 : Colors.red,
+                child: IconButton(onPressed: _toggleSpeaker,
+                  icon: Icon(_speakerOn ? Icons.volume_up : Icons.hearing, color: Colors.white))),
             if (_isVideo && (_accepted || _isCaller))
               CircleAvatar(backgroundColor: _cameraOff ? Colors.red : Colors.white24,
                 child: IconButton(onPressed: _toggleCamera, icon: Icon(_cameraOff ? Icons.videocam_off : Icons.videocam, color: Colors.white))),
-            if (!_isCaller && !_accepted)
+            if (!_isCaller && !_accepted) ...[
+              CircleAvatar(backgroundColor: Colors.red, radius: 29,
+                child: IconButton(onPressed: _connecting ? null : () => _finishCall('declined'),
+                  icon: const Icon(Icons.call_end, color: Colors.white))),
               CircleAvatar(backgroundColor: Colors.green, radius: 29,
                 child: IconButton(onPressed: _connecting ? null : _acceptCall,
                   icon: const Icon(Icons.call, color: Colors.white))),
-            CircleAvatar(backgroundColor: Colors.red, radius: 29,
-              child: IconButton(onPressed: () => _finishCall(_isCaller && !_accepted ? 'cancelled' : 'ended'),
-                icon: const Icon(Icons.call_end, color: Colors.white))),
+            ],
+            if (_isCaller || _accepted)
+              CircleAvatar(backgroundColor: Colors.red, radius: 29,
+                child: IconButton(onPressed: () => _finishCall(_isCaller && !_accepted ? 'cancelled' : 'ended'),
+                  icon: const Icon(Icons.call_end, color: Colors.white))),
           ],
         )),
       ]))),
