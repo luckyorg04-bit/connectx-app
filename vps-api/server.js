@@ -99,10 +99,28 @@ app.post('/api/upload', authenticate, upload.single('file'), (req, res) => {
     fs.unlink(req.file.path, () => {});
     return res.status(403).json({ success: false, error: 'Not a participant in this conversation' });
   }
+  const resourceType = String(req.body.resourceType || 'message');
+  if (!['message', 'status'].includes(resourceType)) {
+    fs.unlink(req.file.path, () => {});
+    return res.status(400).json({ success: false, error: 'Unsupported media resource type' });
+  }
+  let audienceUids = [];
+  if (resourceType === 'status') {
+    try { audienceUids = JSON.parse(String(req.body.audienceUids || '[]')); } catch (_) { audienceUids = null; }
+    if (!Array.isArray(audienceUids) || !audienceUids.includes(req.user.uid) ||
+        audienceUids.length > 500 || audienceUids.some(uid => typeof uid !== 'string' || uid.length > 128)) {
+      fs.unlink(req.file.path, () => {});
+      return res.status(400).json({ success: false, error: 'A valid status audience is required' });
+    }
+  }
   const originalName = path.basename(req.file.originalname || 'attachment');
   const mimeType = types[path.extname(req.file.filename).toLowerCase()];
-  const meta = { conversationId, ownerUid: req.user.uid, originalName, mimeType, size: req.file.size,
-    viewOnce: req.body.viewOnce === 'true', viewedBy: [] };
+  const meta = {
+    conversationId, ownerUid: req.user.uid, originalName, mimeType, size: req.file.size,
+    resourceType, audienceUids,
+    expiresAt: resourceType === 'status' ? Date.now() + 24 * 60 * 60 * 1000 : null,
+    viewOnce: req.body.viewOnce === 'true', viewedBy: []
+  };
   fs.writeFileSync(req.file.path + '.meta.json', JSON.stringify(meta), { mode: 0o600 });
   const token = sign(req.file.filename, conversationId);
   const url = 'https://connecttx.duckdns.org/media/' + encodeURIComponent(req.file.filename) +
@@ -122,6 +140,18 @@ app.get('/media/:filename', async (req, res) => {
     const conversationId = String(req.query.conversationId || '');
     if (meta.conversationId !== conversationId || !equalHex(req.query.token, sign(filename, conversationId))) {
       return res.status(403).json({ success: false, error: 'Invalid media link' });
+    }
+    if (meta.resourceType === 'status') {
+      const authToken = String(req.query.auth || '');
+      if (!authToken) return res.status(401).json({ success: false, error: 'Sign-in is required to view this status media' });
+      const viewer = await admin.auth().verifyIdToken(authToken);
+      if (Number(meta.expiresAt || 0) <= Date.now()) {
+        return res.status(410).json({ success: false, error: 'This status has expired' });
+      }
+      const audience = Array.isArray(meta.audienceUids) ? meta.audienceUids : [];
+      if (!audience.includes(viewer.uid)) {
+        return res.status(403).json({ success: false, error: 'You are not allowed to view this status' });
+      }
     }
     if (meta.viewOnce === true) {
       const authToken = String(req.query.auth || '');
