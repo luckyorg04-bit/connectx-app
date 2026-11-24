@@ -44,6 +44,8 @@ class NotificationService {
           final data = Map<String, dynamic>.from(jsonDecode(payload) as Map);
           if (data['type'] == 'direct_message') {
             await openDirectChatFromConversation(data['conversationId']?.toString() ?? '');
+          } else if (data['type'] == 'group_message') {
+            await openGroupChatFromNotification(data['groupId']?.toString() ?? '');
           } else {
             openIncomingCall(data);
           }
@@ -123,6 +125,8 @@ class NotificationService {
                   'isCreator': false,
                   'isGroupCall': true,
                 })
+              : message.data['type'] == 'group_message'
+                ? jsonEncode({'type': 'group_message', 'groupId': message.data['groupId'] ?? ''})
               : message.data['type'] == 'direct_message'
                 ? jsonEncode({
                     'type': 'direct_message',
@@ -144,6 +148,10 @@ class NotificationService {
   static void _handleOpenedMessage(RemoteMessage message) {
     if (message.data['type'] == 'direct_message') {
       openDirectChatFromConversation(message.data['conversationId']?.toString() ?? '');
+      return;
+    }
+    if (message.data['type'] == 'group_message') {
+      openGroupChatFromNotification(message.data['groupId']?.toString() ?? '');
       return;
     }
     if (message.data['type'] == 'group_call') {
