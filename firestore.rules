@@ -387,6 +387,10 @@ service cloud.firestore {
       }
     }
 
+    match /appConfig/{configId} {
+      allow read, write: if false;
+    }
+
     match /reports/{reportId} {
       allow create: if signedIn()
         && request.resource.data.reporterUid == request.auth.uid
