@@ -282,10 +282,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
         'memberUids': members,
         'createdAt': FieldValue.serverTimestamp(),
       });
-      for (final memberUid in members) {
-        await FirebaseDatabase.instance.ref('Users').child(memberUid)
-            .child('groups').child(doc.id).set(true);
-      }
       if (mounted) {
         setState(() => _chatFilter = 'Groups');
         ScaffoldMessenger.of(context).showSnackBar(
@@ -446,42 +442,30 @@ class _GroupsList extends StatelessWidget {
         ),
       ),
       Expanded(
-        child: StreamBuilder<DatabaseEvent>(
-          stream: FirebaseDatabase.instance.ref('Users').child(uid).child('groups').onValue,
+        child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance.collection('groupChats')
+              .where('memberUids', arrayContains: uid).snapshots(),
           builder: (context, snapshot) {
-            if (snapshot.hasError) return const Center(child: Text('Unable to load groups.'));
-            if (!snapshot.hasData || snapshot.data!.snapshot.value == null) {
-              return const _SectionEmptyState(
-                icon: Icons.groups_outlined,
-                title: 'No group chats yet',
-                description: 'Create a group to start a group conversation.',
-              );
-            }
-            final value = snapshot.data!.snapshot.value;
-            if (value is! Map) return const Center(child: Text('No group chats yet.'));
-            final ids = value.keys.map((key) => key.toString()).toList();
-            if (ids.isEmpty) return const Center(child: Text('No group chats yet.'));
+            if (snapshot.hasError) return Center(child: Text('Unable to load groups: ${snapshot.error}'));
+            if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+            final groups = snapshot.data!.docs;
+            if (groups.isEmpty) return const _SectionEmptyState(
+              icon: Icons.groups_outlined,
+              title: 'No group chats yet',
+              description: 'Create a group to start a group conversation.',
+            );
             return ListView.builder(
-              itemCount: ids.length,
+              itemCount: groups.length,
               itemBuilder: (context, index) {
-                final id = ids[index];
-                return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                  future: FirebaseFirestore.instance.collection('groupChats').doc(id).get(),
-                  builder: (context, groupSnapshot) {
-                    if (!groupSnapshot.hasData || !groupSnapshot.data!.exists) {
-                      return const SizedBox.shrink();
-                    }
-                    final data = groupSnapshot.data!.data() ?? {};
-                    final name = (data['name'] ?? 'Group').toString();
-                    final count = (data['memberUids'] as List?)?.length ?? 0;
-                    return ListTile(
-                      leading: const CircleAvatar(child: Icon(Icons.groups_rounded)),
-                      title: Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                      subtitle: Text('$count members'),
-                      onTap: () => Navigator.of(context).pushNamed('/group',
-                        arguments: {'groupId': id, 'name': name}),
-                    );
-                  },
+                final group = groups[index].data();
+                final name = (group['name'] ?? 'Group').toString();
+                final count = (group['memberUids'] as List?)?.length ?? 0;
+                return ListTile(
+                  leading: const CircleAvatar(child: Icon(Icons.groups_rounded)),
+                  title: Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  subtitle: Text('$count members'),
+                  onTap: () => Navigator.of(context).pushNamed('/group',
+                    arguments: {'groupId': groups[index].id, 'name': name}),
                 );
               },
             );
