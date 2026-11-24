@@ -45,6 +45,14 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
       }
     });
     WidgetsBinding.instance.addObserver(this);
+    // These lists are process-wide; clear stale data and listeners when a
+    // different authenticated session opens the main screen.
+    for (final subscription in subscriptions) {
+      subscription.cancel();
+    }
+    subscriptions.clear();
+    users.clear();
+    chats.clear();
     final uid = FirebaseAuth.instance.currentUser!.uid;
     final userRef = FirebaseDatabase.instance.ref("Users").child(uid);
     userRef.onDisconnect().update({
@@ -517,7 +525,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
 
   void getData() {
     final uid = FirebaseAuth.instance.currentUser!.uid;
-    FirebaseDatabase.instance.ref("Users").child(uid).child("chats")
+    subscriptions.add(FirebaseDatabase.instance.ref("Users").child(uid).child("chats")
         .child("personal").orderByValue().limitToLast(30).onValue.listen((event) {
       for (final snapshot in event.snapshot.children) {
         final chatId = snapshot.key;
@@ -550,7 +558,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
         }
       }
       chats.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-    });
+    }));
   }
 
   @override
