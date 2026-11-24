@@ -1,0 +1,17 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /chat_media/{conversationId}/{fileName} {
+      function signedIn() {
+        return request.auth != null;
+      }
+      function isParticipant() {
+        return signedIn() && request.auth.uid in conversationId.split(',');
+      }
+      allow read: if isParticipant();
+      allow write: if isParticipant()
+        && request.resource.size < 25 * 1024 * 1024;
+    }
+  }
+}
