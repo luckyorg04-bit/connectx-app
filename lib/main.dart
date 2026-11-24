@@ -6,10 +6,15 @@ import 'chat_screen.dart';
 import 'login.dart';
 import 'main_screen.dart';
 import 'new_chat_screen.dart';
+import 'group_chat_screen.dart';
+import 'services/notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+  if (FirebaseAuth.instance.currentUser != null) {
+    await NotificationService.initialize();
+  }
   runApp(const MyApp(user: null));
 }
 
@@ -40,6 +45,7 @@ class MyApp extends StatelessWidget {
         '/login': (context) => const AuthPage(),
         '/main': (context) => const MainScreen(),
         '/chat': (context) => const ChatScreen(),
+        '/group': (context) => const GroupChatScreen(),
         "/main/new": (context) => const NewChatScreen(),
       },
       onGenerateInitialRoutes: (String initialRouteName) {
