@@ -114,7 +114,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
               IconButton(
                 tooltip: 'Create status',
                 icon: const Icon(Icons.camera_alt_outlined),
-                onPressed: () => _showComingSoon('Create status'),
+                onPressed: () => _UpdatesTab()._create(context),
               ),
             PopupMenuButton<String>(
               tooltip: 'More options',
@@ -172,13 +172,13 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
                 )
               : _selectedTab == 1
                   ? FloatingActionButton(
-                      onPressed: () => _showComingSoon('Create status'),
+                      onPressed: () => _UpdatesTab()._create(context),
                       shape: const CircleBorder(),
                       child: const Icon(Icons.camera_alt_rounded),
                     )
                   : _selectedTab == 2
                       ? FloatingActionButton.extended(
-                          onPressed: () => _showComingSoon('Create community'),
+                          onPressed: () => _CommunitiesTab()._create(context),
                           icon: const Icon(Icons.groups_rounded),
                           label: const Text('New community'),
                         )
