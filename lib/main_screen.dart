@@ -13,6 +13,7 @@ import 'main.dart';
 import 'app_navigator.dart';
 import 'models/user.dart';
 import 'profile_screen.dart';
+import 'services/notification_service.dart';
 
 List<User1> users = [];
 List<Chat> chats = [];
@@ -416,6 +417,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
     if (uid != null) {
       await FirebaseDatabase.instance.ref("Users").child(uid).child("online").set(false);
     }
+    await NotificationService.dispose();
     await FirebaseAuth.instance.signOut();
     currentRoute = "/login";
     if (!mounted) return;
