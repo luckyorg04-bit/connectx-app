@@ -125,7 +125,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
                 } else if (value == 'new_group') {
                   _createGroup();
                 } else if (value == 'settings') {
-                  _showComingSoon('Settings');
+                  _openNotificationSettings();
                 }
               },
               itemBuilder: (context) => const [
@@ -305,6 +305,37 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Could not create group: $error')),
       );
+    }
+  }
+
+  Future<void> _openNotificationSettings() async {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final ref = FirebaseDatabase.instance.ref('Users').child(uid).child('notificationSettings');
+    final snap = await ref.get();
+    final saved = Map<String, dynamic>.from(snap.value is Map ? snap.value as Map : {});
+    bool messages = saved['messages'] != false;
+    bool groups = saved['groups'] != false;
+    bool calls = saved['calls'] != false;
+    final confirmed = await showDialog<bool>(context: context, builder: (dialogContext) =>
+      StatefulBuilder(builder: (context, setDialogState) => AlertDialog(
+        title: const Text('Notification settings'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          SwitchListTile(title: const Text('Direct messages'), value: messages,
+            onChanged: (v) => setDialogState(() => messages = v)),
+          SwitchListTile(title: const Text('Group messages'), value: groups,
+            onChanged: (v) => setDialogState(() => groups = v)),
+          SwitchListTile(title: const Text('Voice and video calls'), value: calls,
+            onChanged: (v) => setDialogState(() => calls = v)),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Save')),
+        ],
+      )));
+    if (confirmed == true) {
+      await ref.set({'messages': messages, 'groups': groups, 'calls': calls});
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Notification preferences saved.')));
     }
   }
 
