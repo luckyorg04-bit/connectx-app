@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../chat_screen.dart';
 import '../models/message.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+final Set<String> _readReceiptAttempts = <String>{};
 
 class ChatMessage extends StatelessWidget {
   final Message message;
@@ -31,6 +35,23 @@ class ChatMessage extends StatelessWidget {
     final time = DateFormat('h:mm a').format(
       DateTime.fromMillisecondsSinceEpoch(message.timestamp),
     );
+
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    final messageId = message.messageId;
+    if (!isMe && !message.isRead && currentUid != null &&
+        messageId != null && _readReceiptAttempts.add(messageId)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        FirebaseFirestore.instance
+            .collection('messages')
+            .doc(assignUsers(currentUid, message.sender))
+            .collection('chats')
+            .doc(messageId)
+            .update({'isRead': true})
+            .catchError((_) {
+              // Firestore rules must allow the receiver to update isRead.
+            });
+      });
+    }
 
     return Column(
       children: [
