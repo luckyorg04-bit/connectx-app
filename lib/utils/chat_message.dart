@@ -48,29 +48,33 @@ class _ChatMessageState extends State<ChatMessage> {
 
   Future<String?> _prepareMediaUrl(String value) async {
     final message = widget.message;
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (!message.isViewOnce || widget.isMe) return value;
-    if (uid == null || message.viewedBy.containsKey(uid)) {
+    if (!message.isViewOnce) return value;
+    final user = FirebaseAuth.instance.currentUser;
+    final uid = user?.uid;
+    if (uid == null) return null;
+    if (!widget.isMe && message.viewedBy.containsKey(uid)) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('This view-once item has already been opened.')));
       return null;
     }
-    if (widget.messageRef == null) return null;
-    try {
-      await widget.messageRef!.update({'viewedBy.$uid': FieldValue.serverTimestamp()});
-      final token = await FirebaseAuth.instance.currentUser!.getIdToken();
-      if (token == null || token.isEmpty) return null;
-      final uri = Uri.parse(value);
-      return uri.replace(queryParameters: {
-        ...uri.queryParameters,
-        'viewOnce': '1',
-        'auth': token,
-      }).toString();
-    } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('This view-once item is no longer available.')));
-      return null;
+    if (!widget.isMe) {
+      if (widget.messageRef == null) return null;
+      try {
+        await widget.messageRef!.update({'viewedBy.$uid': FieldValue.serverTimestamp()});
+      } catch (_) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('This view-once item is no longer available.')));
+        return null;
+      }
     }
+    final token = await user!.getIdToken();
+    if (token == null || token.isEmpty) return null;
+    final uri = Uri.parse(value);
+    return uri.replace(queryParameters: {
+      ...uri.queryParameters,
+      'viewOnce': '1',
+      'auth': token,
+    }).toString();
   }
 
   Future<void> _openMedia(String value) async {
