@@ -493,15 +493,27 @@ class _UpdatesTab extends StatelessWidget {
         ListTile(leading: const Icon(Icons.videocam), title: const Text('Video status'), onTap: () => Navigator.pop(c, 'video')),
       ])));
     if (kind == null) return;
-    final audience = <String>{uid, ...users.where((u) => u.key != uid).map((u) => u.key)};
-    final privacy = await showDialog<bool>(context: context, builder: (c) => AlertDialog(
-      title: const Text('Status privacy'),
-      content: const Text('Share this status with your ConnectX chat contacts?'),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
-        FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Contacts')),
-      ]));
-    if (privacy != true) return;
+    final audience = await showDialog<List<String>>(context: context, builder: (dialogContext) {
+      final selected = <String>{uid, ...users.where((u) => u.key != uid).map((u) => u.key)};
+      return StatefulBuilder(builder: (context, setDialogState) => AlertDialog(
+        title: const Text('Status privacy'),
+        content: SizedBox(width: double.maxFinite, height: 340, child: Column(children: [
+          const Text('Select the contacts who can view this status.'),
+          Expanded(child: ListView(children: users.where((u) => u.key != uid).map((person) =>
+            CheckboxListTile(dense: true, value: selected.contains(person.key),
+              title: Text(person.name), subtitle: Text('@${person.username}'),
+              onChanged: (value) => setDialogState(() {
+                if (value == true) selected.add(person.key); else selected.remove(person.key);
+              }),
+            )).toList())),
+        ])),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, selected.toList()), child: const Text('Done')),
+        ],
+      ));
+    });
+    if (audience == null) return;
     String text = '';
     String? url, fileName;
     if (kind == 'text') {
