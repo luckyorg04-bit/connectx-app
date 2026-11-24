@@ -37,3 +37,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+dependency_overrides:
+  collection: 1.17.1
