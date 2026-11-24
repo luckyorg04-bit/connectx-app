@@ -179,7 +179,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
   }
 
   Widget _buildChatsTab() {
-    const filters = ['All', 'Unread', 'Favorites', 'Groups'];
+    const filters = ['All', 'Unread', 'Favorites', 'Groups', 'Archived'];
     return Column(
       children: [
         SizedBox(
@@ -201,31 +201,25 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
           ),
         ),
         Expanded(
-          child: _chatFilter == 'All'
-              ? users.isEmpty
-                  ? _SectionEmptyState(
+          child: _chatFilter == 'Groups'
+              ? const _SectionEmptyState(
+                  icon: Icons.groups_outlined,
+                  title: 'No group chats yet',
+                  description: 'Group conversations will be added in Part 2.',
+                )
+              : users.isEmpty && _chatFilter == 'All'
+                  ? const _SectionEmptyState(
                       icon: Icons.chat_bubble_outline_rounded,
                       title: 'No chats yet',
                       description: 'Start a conversation with someone on ConnectX.',
                     )
-                  : UserList(users: users, key: userListKey, wantChats: true)
-              : _SectionEmptyState(
-                  icon: _chatFilter == 'Unread'
-                      ? Icons.mark_chat_unread_outlined
-                      : _chatFilter == 'Favorites'
-                          ? Icons.star_border_rounded
-                          : Icons.groups_outlined,
-                  title: _chatFilter == 'Unread'
-                      ? 'No unread chats'
-                      : _chatFilter == 'Favorites'
-                          ? 'Your favorite chats will appear here'
-                          : 'Your group chats will appear here',
-                  description: _chatFilter == 'Unread'
-                      ? 'Unread conversations will be listed here.'
-                      : _chatFilter == 'Favorites'
-                          ? 'Star or favorite a conversation to find it quickly.'
-                          : 'Create or join a group to start chatting with multiple people.',
-                ),
+                  : UserList(
+                      users: users,
+                      key: userListKey,
+                      wantChats: true,
+                      filter: _chatFilter,
+                    )
+
         ),
       ],
     );
