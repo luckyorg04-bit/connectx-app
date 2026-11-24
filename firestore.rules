@@ -104,8 +104,27 @@ service cloud.firestore {
         allow read: if isGroupMember(groupId);
         allow create: if isGroupMember(groupId)
           && request.resource.data.senderUid == request.auth.uid
-          && request.resource.data.text is string;
-        allow update, delete: if false;
+          && request.resource.data.text is string
+          && request.resource.data.text.size() <= 5000
+          && (!('type' in request.resource.data) || request.resource.data.type in ['text', 'poll', 'sticker'])
+          && (
+            request.resource.data.type != 'poll'
+            || (
+              request.resource.data.pollOptions is list
+              && request.resource.data.pollOptions.size() >= 2
+              && request.resource.data.pollOptions.size() <= 6
+              && request.resource.data.pollVotes is map
+            )
+          );
+        allow update: if isGroupMember(groupId)
+          && resource.data.type == 'poll'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pollVotes'])
+          && request.resource.data.pollVotes is map
+          && request.resource.data.pollVotes.diff(resource.data.pollVotes).affectedKeys().hasOnly([request.auth.uid])
+          && request.resource.data.pollVotes[request.auth.uid] is int
+          && request.resource.data.pollVotes[request.auth.uid] >= 0
+          && request.resource.data.pollVotes[request.auth.uid] < resource.data.pollOptions.size();
+        allow delete: if false;
       }
     }
 
