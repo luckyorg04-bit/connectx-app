@@ -149,6 +149,7 @@ app.get('/media/:filename', async (req, res) => {
   const file = path.join(UPLOAD_DIR, filename);
   const metaFile = file + '.meta.json';
   if (!fs.existsSync(file) || !fs.existsSync(metaFile)) return res.status(404).json({ success: false, error: 'File not found' });
+  let viewOnceLockAcquired = false;
   try {
     const meta = JSON.parse(fs.readFileSync(metaFile, 'utf8'));
     const conversationId = String(req.query.conversationId || '');
@@ -167,7 +168,6 @@ app.get('/media/:filename', async (req, res) => {
         return res.status(403).json({ success: false, error: 'You are not allowed to view this status' });
       }
     }
-    let viewOnceLockAcquired = false;
     if (meta.viewOnce === true) {
       if (viewOnceLocks.has(filename)) {
         return res.status(409).json({ success: false, error: 'This one-time attachment is already being opened' });
@@ -202,7 +202,7 @@ app.get('/media/:filename', async (req, res) => {
   } catch (_) {
     return res.status(400).json({ success: false, error: 'Invalid media metadata' });
   } finally {
-    if (typeof viewOnceLockAcquired !== 'undefined' && viewOnceLockAcquired) {
+    if (viewOnceLockAcquired) {
       viewOnceLocks.delete(filename);
     }
   }
