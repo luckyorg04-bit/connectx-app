@@ -24,6 +24,7 @@ class ProfileScreen extends StatelessWidget {
             user.displayName ?? 'ConnectX User';
         final username = data?.child('username').value?.toString() ?? '';
         final about = data?.child('about').value?.toString() ?? 'Available on ConnectX';
+        final photoUrl = data?.child('photoUrl').value?.toString() ?? user.photoURL ?? '';
         return ListView(
           padding: const EdgeInsets.fromLTRB(20, 28, 20, 32),
           children: [
@@ -33,14 +34,17 @@ class ProfileScreen extends StatelessWidget {
                   CircleAvatar(
                     radius: 58,
                     backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                    child: Text(
-                      _initials(name),
-                      style: TextStyle(
-                        fontSize: 36,
-                        fontWeight: FontWeight.w700,
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                      ),
-                    ),
+                    backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+                    child: photoUrl.isEmpty
+                        ? Text(
+                            _initials(name),
+                            style: TextStyle(
+                              fontSize: 36,
+                              fontWeight: FontWeight.w700,
+                              color: Theme.of(context).colorScheme.onPrimaryContainer,
+                            ),
+                          )
+                        : null,
                   ),
                   const SizedBox(height: 18),
                   Text(name, style: Theme.of(context).textTheme.headlineSmall?.copyWith(
