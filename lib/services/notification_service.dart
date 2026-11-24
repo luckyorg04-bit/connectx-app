@@ -80,6 +80,16 @@ class NotificationService {
 
     _foregroundSubscription?.cancel();
     _foregroundSubscription = FirebaseMessaging.onMessage.listen((message) async {
+      if (message.data['type'] == 'incoming_call') {
+        openIncomingCall({
+          'callId': message.data['callId'],
+          'peerUid': message.data['callerUid'],
+          'peerName': message.data['callerName'] ?? 'ConnectX user',
+          'isCaller': false,
+          'isVideo': message.data['callType'] == 'video',
+        });
+        return;
+      }
       final notification = message.notification;
       if (notification == null) return;
       try {
