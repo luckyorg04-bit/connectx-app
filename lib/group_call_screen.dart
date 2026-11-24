@@ -60,6 +60,9 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       if (!call.exists) throw Exception('This group call is no longer available.');
       final callData = call.data()!;
       if (callData['status'] != 'active') throw Exception('This group call has ended.');
+      if (isCreator && callData['createdBy'] != _uid) {
+        throw Exception('Only the call creator can initialize this call as host.');
+      }
       final active = List<String>.from(callData['activeUids'] ?? []);
       if (!isCreator && !active.contains(_uid) && active.length >= 8) {
         throw Exception('This group call has reached its 8 participant limit.');
