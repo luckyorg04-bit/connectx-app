@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import '../app_navigator.dart';
 
 final FlutterLocalNotificationsPlugin _localNotifications =
     FlutterLocalNotificationsPlugin();
@@ -22,6 +24,7 @@ Future<void> connectXBackgroundMessageHandler(RemoteMessage message) async {
 class NotificationService {
   static StreamSubscription<String>? _tokenSubscription;
   static StreamSubscription<RemoteMessage>? _foregroundSubscription;
+  static StreamSubscription<RemoteMessage>? _openedSubscription;
 
   static Future<void> initialize() async {
     final messaging = FirebaseMessaging.instance;
@@ -34,7 +37,10 @@ class NotificationService {
     const androidSettings = AndroidInitializationSettings('@mipmap/logo');
     const settings = InitializationSettings(android: androidSettings);
     try {
-      await _localNotifications.initialize(settings);
+      await _localNotifications.initialize(settings, onSelectNotification: (payload) async {
+        if (payload == null || payload.isEmpty) return;
+        try { openIncomingCall(Map<String, dynamic>.from(jsonDecode(payload) as Map)); } catch (_) {}
+      });
       await _localNotifications
           .resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>()
@@ -80,10 +86,33 @@ class NotificationService {
               priority: Priority.high,
             ),
           ),
+          payload: message.data['type'] == 'incoming_call' ? jsonEncode({
+            'callId': message.data['callId'],
+            'peerUid': message.data['callerUid'],
+            'peerName': message.data['callerName'] ?? 'ConnectX user',
+            'isCaller': false,
+            'isVideo': message.data['callType'] == 'video',
+          }) : null,
         );
       } catch (_) {
         // Ignore display failures; do not interrupt the active chat.
       }
+    });
+
+    _openedSubscription?.cancel();
+    _openedSubscription = FirebaseMessaging.onMessageOpenedApp.listen(_handleOpenedMessage);
+    final initialMessage = await messaging.getInitialMessage();
+    if (initialMessage != null) _handleOpenedMessage(initialMessage);
+  }
+
+  static void _handleOpenedMessage(RemoteMessage message) {
+    if (message.data['type'] != 'incoming_call') return;
+    openIncomingCall({
+      'callId': message.data['callId'],
+      'peerUid': message.data['callerUid'],
+      'peerName': message.data['callerName'] ?? 'ConnectX user',
+      'isCaller': false,
+      'isVideo': message.data['callType'] == 'video',
     });
   }
 
@@ -97,5 +126,6 @@ class NotificationService {
   static Future<void> dispose() async {
     await _tokenSubscription?.cancel();
     await _foregroundSubscription?.cancel();
+    await _openedSubscription?.cancel();
   }
 }
