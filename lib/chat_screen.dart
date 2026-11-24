@@ -37,6 +37,8 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
   Timer? _typingTimer;
   bool _remoteTyping = false;
   bool _recording = false;
+  int _disappearingDurationMs = 0;
+  Timer? _expiryRefreshTimer;
   final Record _recorder = Record();
   final ImagePicker _imagePicker = ImagePicker();
   StreamSubscription<DatabaseEvent>? _typingSubscription;
@@ -53,7 +55,38 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
       user = ModalRoute.of(context)!.settings.arguments as User1;
       _initialized = true;
       _listenForTyping();
+      _loadDisappearingSetting();
+      _expiryRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+        if (mounted) setState(() {});
+      });
     }
+  }
+
+  Future<void> _loadDisappearingSetting() async {
+    final value = await FirebaseDatabase.instance.ref('Users').child(_uid)
+      .child('chatMeta').child(user!.key).child('disappearingDurationMs').get();
+    if (mounted) setState(() => _disappearingDurationMs = (value.value as num?)?.toInt() ?? 0);
+  }
+
+  Future<void> _setDisappearingSetting() async {
+    final selected = await showModalBottomSheet<int>(context: context, builder: (context) => SafeArea(
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const ListTile(title: Text('Disappearing messages', style: TextStyle(fontWeight: FontWeight.w700))),
+        ListTile(title: const Text('Off'), onTap: () => Navigator.pop(context, 0)),
+        ListTile(title: const Text('1 hour'), onTap: () => Navigator.pop(context, 3600000)),
+        ListTile(title: const Text('24 hours'), onTap: () => Navigator.pop(context, 86400000)),
+        ListTile(title: const Text('7 days'), onTap: () => Navigator.pop(context, 604800000)),
+      ]),
+    ));
+    if (selected == null) return;
+    await FirebaseDatabase.instance.ref('Users').child(_uid)
+      .child('chatMeta').child(user!.key).child('disappearingDurationMs').set(selected);
+    if (mounted) setState(() => _disappearingDurationMs = selected);
+  }
+
+  Map<String, dynamic> _expiryFields() {
+    if (_disappearingDurationMs <= 0) return {};
+    return {'expiresAt': DateTime.now().millisecondsSinceEpoch + _disappearingDurationMs};
   }
 
   void _listenForTyping() {
@@ -127,6 +160,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
         'isEdited': false,
         'isForwarded': false,
         'reactions': <String, dynamic>{},
+        ..._expiryFields(),
       });
       await FirebaseDatabase.instance.ref('Users').child(_uid).child('chats')
         .child('personal').child(user!.key).set(ServerValue.timestamp);
@@ -167,6 +201,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
           'isEdited': false,
           'isForwarded': false,
           'reactions': <String, dynamic>{},
+          ..._expiryFields(),
         });
         await FirebaseDatabase.instance.ref('Users').child(_uid)
             .child('chats').child('personal').child(user!.key).set(ServerValue.timestamp);
@@ -227,6 +262,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
       'isEdited': false,
       'isForwarded': false,
       'reactions': <String, dynamic>{},
+      ..._expiryFields(),
     });
     await FirebaseDatabase.instance.ref('Users').child(_uid)
         .child('chats').child('personal').child(user!.key).set(ServerValue.timestamp);
@@ -652,11 +688,13 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
               if (value == 'starred') _showStarredMessages();
               if (value == 'block') _blockOrUnblockUser();
               if (value == 'report') _reportUser();
+              if (value == 'disappearing') _setDisappearingSetting();
             },
             itemBuilder: (context) => const [
               PopupMenuItem(value: 'starred', child: Text('Starred messages')),
               PopupMenuItem(value: 'block', child: Text('Block / unblock user')),
               PopupMenuItem(value: 'report', child: Text('Report user')),
+              PopupMenuItem(value: 'disappearing', child: Text('Disappearing messages')),
             ],
           ),
         ],
@@ -667,7 +705,10 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
           builder: (context, snapshot) {
             if (snapshot.hasError) return Center(child: Text('Could not load messages: ${snapshot.error}'));
             if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-            final docs = snapshot.data!.docs;
+            final docs = snapshot.data!.docs.where((doc) {
+              final expiry = doc.data()['expiresAt'];
+              return expiry == null || (expiry is num && expiry.toInt() > DateTime.now().millisecondsSinceEpoch);
+            }).toList();
             if (docs.isEmpty) return const Center(child: Text('Say hello to start this conversation.'));
             return ListView.builder(
               reverse: true,
@@ -768,6 +809,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
 
   @override
   void dispose() {
+    _expiryRefreshTimer?.cancel();
     _typingTimer?.cancel();
     _typingSubscription?.cancel();
     _recorder.dispose();
