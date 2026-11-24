@@ -23,7 +23,7 @@ class ProfileScreen extends StatelessWidget {
         final name = data?.child('name').value?.toString() ??
             user.displayName ?? 'ConnectX User';
         final username = data?.child('username').value?.toString() ?? '';
-        final about = data?.child('about').value?.toString() ?? 'Available on ConnectX';
+        final bio = data?.child('bio').value?.toString() ?? data?.child('about').value?.toString() ?? '';
         final photoUrl = data?.child('photoUrl').value?.toString() ?? user.photoURL ?? '';
         return ListView(
           padding: const EdgeInsets.fromLTRB(20, 28, 20, 32),
@@ -65,8 +65,8 @@ class ProfileScreen extends StatelessWidget {
             ),
             _ProfileInfoTile(
               icon: Icons.info_outline_rounded,
-              title: 'About',
-              value: about,
+              title: 'Bio',
+              value: bio.isEmpty ? 'No bio added' : bio,
             ),
             _ProfileInfoTile(
               icon: Icons.alternate_email_rounded,
