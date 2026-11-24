@@ -296,6 +296,12 @@ service cloud.firestore {
               && request.resource.data.offer.type == 'offer'
             )
             || (
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['connectedAt'])
+              && resource.data.status == 'accepted'
+              && !('connectedAt' in resource.data)
+              && request.resource.data.connectedAt == request.time
+            )
+            || (
               request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'endedAt'])
               && request.resource.data.status in ['cancelled', 'missed', 'failed', 'ended']
               && resource.data.status in ['ringing', 'accepted']
@@ -315,6 +321,12 @@ service cloud.firestore {
               && request.resource.data.answer.sdp.size() > 0
               && request.resource.data.answer.type == 'answer'
               && request.resource.data.acceptedAt == request.time
+            )
+            || (
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['connectedAt'])
+              && resource.data.status == 'accepted'
+              && !('connectedAt' in resource.data)
+              && request.resource.data.connectedAt == request.time
             )
             || (
               request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'endedAt'])
