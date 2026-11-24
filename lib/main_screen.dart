@@ -786,10 +786,43 @@ class _CallsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const _SectionEmptyState(
-      icon: Icons.call_outlined,
-      title: 'No calls yet',
-      description: 'Your voice and video call history will appear here. Start a call from a chat.',
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance.collection('calls')
+        .where('calleeUid', isEqualTo: uid).snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) return Center(child: Text('Unable to load calls: ${snapshot.error}'));
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        final incoming = snapshot.data!.docs.where((doc) => doc.data()['status'] == 'ringing').toList()
+          ..sort((a,b) {
+            final aa = a.data()['createdAt'], bb = b.data()['createdAt'];
+            return (bb is Timestamp ? bb : Timestamp(0,0)).compareTo(aa is Timestamp ? aa : Timestamp(0,0));
+          });
+        if (incoming.isEmpty) return const _SectionEmptyState(
+          icon: Icons.call_outlined, title: 'No incoming calls',
+          description: 'Incoming voice and video calls will appear here while they are ringing.');
+        return ListView(children: [
+          const Padding(padding: EdgeInsets.all(16), child: Text('Incoming calls',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
+          ...incoming.map((doc) {
+            final data = doc.data();
+            final video = data['type'] == 'video';
+            return ListTile(
+              leading: CircleAvatar(child: Icon(video ? Icons.videocam : Icons.call)),
+              title: Text((data['callerName'] ?? 'ConnectX user').toString()),
+              subtitle: Text(video ? 'Incoming video call' : 'Incoming voice call'),
+              trailing: IconButton(icon: const Icon(Icons.call, color: Colors.green),
+                onPressed: () => Navigator.of(context).pushNamed('/call', arguments: {
+                  'callId': doc.id,
+                  'peerUid': data['callerUid'].toString(),
+                  'peerName': (data['callerName'] ?? 'ConnectX user').toString(),
+                  'isCaller': false,
+                  'isVideo': video,
+                })),
+            );
+          }),
+        ]);
+      },
     );
   }
 }
