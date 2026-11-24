@@ -167,7 +167,7 @@ class AuthPageState extends State<AuthPage> {
                       onPressed: _isLoading || _isGoogleLoading ? null : _continueWithGoogle,
                       icon: _isGoogleLoading
                           ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Icon(Icons.g_mobiledata_rounded, size: 28),
+                          : const Text('G', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Color(0xFF4285F4))),
                       label: const Text('Continue with Google'),
                       style: OutlinedButton.styleFrom(
                         minimumSize: const Size.fromHeight(52),
