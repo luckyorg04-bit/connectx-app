@@ -6,8 +6,8 @@ admin.initializeApp({
 });
 
 async function sendToUser(uid, title, body, data) {
-  const snapshot = await admin.database().ref('Users/' + uid).once('value');
-  const token = snapshot.child('fcmToken').val();
+  const snapshot = await admin.database().ref('PrivateTokens/' + uid).once('value');
+  const token = snapshot.val();
   if (!token) return null;
 
   try {
@@ -22,7 +22,7 @@ async function sendToUser(uid, title, body, data) {
   } catch (error) {
     if (error.code === 'messaging/registration-token-not-registered' ||
         error.code === 'messaging/invalid-registration-token') {
-      await admin.database().ref('Users/' + uid + '/fcmToken').remove();
+      await admin.database().ref('PrivateTokens/' + uid).remove();
       return null;
     }
     throw error;
@@ -42,14 +42,14 @@ exports.notifyDirectMessage = functions
     // clients are intentionally not allowed to write another user's profile.
     const indexTimestamp = Number(message.timestamp) || Date.now();
     await Promise.all([
-      admin.database().ref('Users/' + message.sender + '/chats/personal/' + recipientUid)
+      admin.database().ref('PrivateUsers/' + message.sender + '/chats/personal/' + recipientUid)
         .set(indexTimestamp),
-      admin.database().ref('Users/' + recipientUid + '/chats/personal/' + message.sender)
+      admin.database().ref('PrivateUsers/' + recipientUid + '/chats/personal/' + message.sender)
         .set(indexTimestamp)
     ]);
 
     const senderSnapshot = await admin.database()
-      .ref('Users/' + message.sender).once('value');
+      .ref('PublicUsers/' + message.sender).once('value');
     const senderName = senderSnapshot.child('name').val() || 'New message';
     const body = message.type === 'text'
       ? String(message.message || 'New message')
@@ -80,7 +80,7 @@ exports.notifyGroupMessage = functions
     const memberUids = Array.isArray(group.memberUids) ? group.memberUids : [];
     const senderUid = message.senderUid;
     const senderSnapshot = await admin.database()
-      .ref('Users/' + senderUid).once('value');
+      .ref('PublicUsers/' + senderUid).once('value');
     const senderName = senderSnapshot.child('name').val() || 'A member';
     const title = String(group.name || 'ConnectX group');
     const body = senderName + ': ' + String(message.text || 'New group message');
@@ -88,8 +88,8 @@ exports.notifyGroupMessage = functions
 
     const tokens = [];
     for (const uid of recipients) {
-      const userSnapshot = await admin.database().ref('Users/' + uid).once('value');
-      const token = userSnapshot.child('fcmToken').val();
+      const userSnapshot = await admin.database().ref('PrivateTokens/' + uid).once('value');
+      const token = userSnapshot.val();
       if (token) tokens.push({ uid, token });
     }
     if (!tokens.length) return null;
@@ -113,7 +113,7 @@ exports.notifyGroupMessage = functions
       )) invalid.push(tokens[index].uid);
     });
     await Promise.all(invalid.map(uid =>
-      admin.database().ref('Users/' + uid + '/fcmToken').remove()
+      admin.database().ref('PrivateTokens/' + uid).remove()
     ));
     return null;
   });
