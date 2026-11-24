@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -34,9 +35,19 @@ class ChatMessage extends StatefulWidget {
 class _ChatMessageState extends State<ChatMessage> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   bool _audioPlaying = false;
+  StreamSubscription<void>? _audioCompleteSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _audioCompleteSubscription = _audioPlayer.onPlayerComplete.listen((_) {
+      if (mounted) setState(() => _audioPlaying = false);
+    });
+  }
 
   @override
   void dispose() {
+    _audioCompleteSubscription?.cancel();
     _audioPlayer.dispose();
     super.dispose();
   }
@@ -188,9 +199,6 @@ class _ChatMessageState extends State<ChatMessage> {
               if (playUrl == null) return;
               await _audioPlayer.play(UrlSource(playUrl));
                 if (mounted) setState(() => _audioPlaying = true);
-                _audioPlayer.onPlayerComplete.listen((_) {
-                  if (mounted) setState(() => _audioPlaying = false);
-                });
               }
             },
           ),
