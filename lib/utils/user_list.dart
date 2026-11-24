@@ -2,6 +2,7 @@ import 'package:connectx/main.dart';
 import 'package:connectx/models/message.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../chat_screen.dart';
@@ -10,203 +11,129 @@ import '../models/user.dart';
 class UserList extends StatefulWidget {
   final List<User1> users;
   final bool wantChats;
-
-  const UserList({super.key, required this.users, required this.wantChats});
-
+  final String filter;
+  const UserList({super.key, required this.users, required this.wantChats, this.filter = 'All'});
   @override
   State<UserList> createState() => UserListState();
 }
 
 class UserListState extends State<UserList> {
-  final Map<String, Message?> _latestMessages = {};
-  final Map<String, int> _unreadCounts = {};
+  final Map<String, Message?> _latest = {};
+  final Map<String, int> _unread = {};
+  final Map<String, Map<String, dynamic>> _meta = {};
 
   @override
-  void initState() {
-    super.initState();
-    _refreshPreviews();
-  }
-
+  void initState() { super.initState(); _refresh(); }
   @override
   void didUpdateWidget(covariant UserList oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.wantChats) _refreshPreviews();
+    if (widget.wantChats && oldWidget.users != widget.users) _refresh();
   }
 
-  Future<void> _refreshPreviews() async {
+  Future<void> _refresh() async {
     if (!widget.wantChats) return;
-    final currentUid = FirebaseAuth.instance.currentUser?.uid;
-    if (currentUid == null || widget.users.isEmpty) return;
-
-    final latest = <String, Message?>{};
-    final unread = <String, int>{};
-    await Future.wait(widget.users.map((user) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null || widget.users.isEmpty) return;
+    final latest = <String, Message?>{}, unread = <String, int>{};
+    final metadata = <String, Map<String, dynamic>>{};
+    await Future.wait(widget.users.map((contact) async {
       try {
-        final snapshot = await FirebaseFirestore.instance
-            .collection('messages')
-            .doc(assignUsers(currentUid, user.key))
-            .collection('chats')
-            .orderBy('timestamp', descending: true)
-            .limit(10)
-            .get();
-        final messages = snapshot.docs.map(Message.fromSnapshot).toList();
-        latest[user.key] = messages.isEmpty ? null : messages.first;
-        unread[user.key] = messages.where((message) =>
-            !message.isRead && message.sender != currentUid).length;
-      } catch (_) {
-        latest[user.key] = null;
-        unread[user.key] = 0;
-      }
+        final snap = await FirebaseFirestore.instance.collection('messages')
+          .doc(assignUsers(uid, contact.key)).collection('chats')
+          .orderBy('timestamp', descending: true).limit(10).get();
+        final list = snap.docs.map(Message.fromSnapshot).toList();
+        latest[contact.key] = list.isEmpty ? null : list.first;
+        unread[contact.key] = list.where((m) => !m.isRead && m.sender != uid).length;
+      } catch (_) { latest[contact.key] = null; unread[contact.key] = 0; }
+      try {
+        final value = (await FirebaseDatabase.instance.ref('Users').child(uid)
+          .child('chatMeta').child(contact.key).get()).value;
+        metadata[contact.key] = value is Map ? Map<String, dynamic>.from(value) : {};
+      } catch (_) { metadata[contact.key] = {}; }
     }));
-
     if (!mounted) return;
-    setState(() {
-      _latestMessages
-        ..clear()
-        ..addAll(latest);
-      _unreadCounts
-        ..clear()
-        ..addAll(unread);
-    });
+    setState(() { _latest..clear()..addAll(latest); _unread..clear()..addAll(unread); _meta..clear()..addAll(metadata); });
+  }
+
+  Future<void> _setMeta(User1 contact, String key, bool value) async {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    await FirebaseDatabase.instance.ref('Users').child(uid).child('chatMeta')
+      .child(contact.key).child(key).set(value);
+    if (mounted) setState(() { _meta[contact.key] = {...?_meta[contact.key], key: value}; });
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentUid = FirebaseAuth.instance.currentUser?.uid;
-    return ListView.builder(
-      itemCount: widget.users.length,
-      physics: const ClampingScrollPhysics(),
-      itemBuilder: (context, index) {
-        final user = widget.users[index];
-        if (user.key == currentUid) return const SizedBox.shrink();
-
-        final latest = _latestMessages[user.key];
-        final unread = _unreadCounts[user.key] ?? 0;
-        final preview = latest?.message ??
-            (widget.wantChats ? 'Tap to start chatting' : '@${user.username}');
-        final timestamp = latest == null
-            ? ''
-            : DateFormat('h:mm a').format(
-                DateTime.fromMillisecondsSinceEpoch(latest.timestamp),
-              );
-
-        return InkWell(
-          onTap: () async {
-            currentRoute = '/chat';
-            await Navigator.of(context).pushNamed('/chat', arguments: user);
-            if (mounted) _refreshPreviews();
-          },
-          child: SizedBox(
-            height: 72,
-            child: Row(
-              children: [
-                const SizedBox(width: 12),
-                Stack(
-                  children: [
-                    CircleAvatar(
-                      radius: 25,
-                      backgroundImage:
-                          user.photoUrl.isNotEmpty ? NetworkImage(user.photoUrl) : null,
-                      child: user.photoUrl.isEmpty
-                          ? Text(user.username.isNotEmpty ? user.username.substring(0, 1).toUpperCase() : 'C')
-                          : null,
-                    ),
-                    if (user.online)
-                      Positioned(
-                        right: 0,
-                        bottom: 0,
-                        child: Container(
-                          width: 13,
-                          height: 13,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF25D366),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Theme.of(context).scaffoldBackgroundColor,
-                              width: 2,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        user.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: unread > 0 ? FontWeight.w700 : FontWeight.w600,
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                      Text(
-                        preview,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: unread > 0 ? FontWeight.w600 : FontWeight.w400,
-                          color: unread > 0
-                              ? Theme.of(context).colorScheme.onSurface
-                              : Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (widget.wantChats)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 8, right: 14),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        if (timestamp.isNotEmpty)
-                          Text(
-                            timestamp,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: unread > 0
-                                  ? const Color(0xFF25D366)
-                                  : Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        if (unread > 0) ...[
-                          const SizedBox(height: 5),
-                          Container(
-                            constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            alignment: Alignment.center,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFF25D366),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Text(
-                              unread > 99 ? '99+' : '$unread',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final contacts = widget.users.where((c) {
+      if (c.key == uid) return false;
+      final meta = _meta[c.key] ?? const <String, dynamic>{};
+      if (widget.filter == 'Archived') return meta['archived'] == true;
+      if (meta['archived'] == true) return false;
+      if (widget.filter == 'Unread') return (_unread[c.key] ?? 0) > 0;
+      if (widget.filter == 'Favorites') return meta['favorite'] == true;
+      if (widget.filter == 'Groups') return false;
+      return true;
+    }).toList();
+    contacts.sort((a,b) {
+      final ap = _meta[a.key]?['pinned'] == true, bp = _meta[b.key]?['pinned'] == true;
+      if (ap != bp) return ap ? -1 : 1;
+      return (_latest[b.key]?.timestamp ?? 0).compareTo(_latest[a.key]?.timestamp ?? 0);
+    });
+    if (contacts.isEmpty) {
+      final message = widget.filter == 'Groups' ? 'Group chats will be available in Part 2.'
+        : widget.filter == 'Unread' ? 'No unread conversations.'
+        : widget.filter == 'Favorites' ? 'No favorites yet. Add a chat using its menu.'
+        : widget.filter == 'Archived' ? 'No archived conversations.'
+        : 'No chats yet. Start a conversation.';
+      return Center(child: Padding(padding: const EdgeInsets.all(28),
+        child: Text(message, textAlign: TextAlign.center)));
+    }
+    return ListView.builder(itemCount: contacts.length, physics: const ClampingScrollPhysics(),
+      itemBuilder: (context,index) {
+        final contact = contacts[index], meta = _meta[contacts[index].key] ?? <String,dynamic>{};
+        final last = _latest[contact.key], count = _unread[contact.key] ?? 0;
+        final preview = last?.message ?? (widget.wantChats ? 'Tap to start chatting' : '@${contact.username}');
+        final time = last == null ? '' : DateFormat('h:mm a').format(DateTime.fromMillisecondsSinceEpoch(last.timestamp));
+        return InkWell(onTap: () async {
+          currentRoute='/chat';
+          await Navigator.of(context).pushNamed('/chat', arguments: contact);
+          if (mounted) _refresh();
+        }, child: SizedBox(height:76, child: Row(children:[
+          const SizedBox(width:12),
+          CircleAvatar(radius:25, backgroundImage: contact.photoUrl.isNotEmpty ? NetworkImage(contact.photoUrl) : null,
+            child: contact.photoUrl.isEmpty ? Text(contact.username.isEmpty ? 'C' : contact.username[0].toUpperCase()) : null),
+          const SizedBox(width:12),
+          Expanded(child: Column(mainAxisAlignment:MainAxisAlignment.center,crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Row(children:[
+              Flexible(child:Text(contact.name,maxLines:1,overflow:TextOverflow.ellipsis,
+                style:TextStyle(fontSize:16,fontWeight:count>0?FontWeight.w700:FontWeight.w600))),
+              if(meta['pinned']==true) const Icon(Icons.push_pin,size:13,color:Colors.grey),
+              if(meta['favorite']==true) const Icon(Icons.star,size:13,color:Colors.amber),
+            ]),
+            const SizedBox(height:5),
+            Text(preview,maxLines:1,overflow:TextOverflow.ellipsis,
+              style:TextStyle(fontSize:13,fontWeight:count>0?FontWeight.w600:FontWeight.w400,
+                color:count>0?Theme.of(context).colorScheme.onSurface:Theme.of(context).colorScheme.onSurfaceVariant)),
+          ])),
+          if(widget.wantChats) Column(mainAxisAlignment:MainAxisAlignment.center,crossAxisAlignment:CrossAxisAlignment.end,children:[
+            if(time.isNotEmpty) Text(time,style:TextStyle(fontSize:11,color:count>0?const Color(0xFF25D366):Theme.of(context).colorScheme.onSurfaceVariant)),
+            if(count>0) Container(margin:const EdgeInsets.only(top:5),padding:const EdgeInsets.symmetric(horizontal:6,vertical:2),
+              decoration:const BoxDecoration(color:Color(0xFF25D366),shape:BoxShape.circle),
+              child:Text(count>99?'99+':'$count',style:const TextStyle(color:Colors.white,fontSize:10))),
+          ]),
+          if(widget.wantChats) PopupMenuButton<String>(onSelected:(v){
+            if(v=='favorite') _setMeta(contact,'favorite',meta['favorite']!=true);
+            if(v=='pin') _setMeta(contact,'pinned',meta['pinned']!=true);
+            if(v=='archive') _setMeta(contact,'archived',meta['archived']!=true);
+            if(v=='mute') _setMeta(contact,'muted',meta['muted']!=true);
+          },itemBuilder:(context)=>[
+            PopupMenuItem(value:'favorite',child:Text(meta['favorite']==true?'Remove favorite':'Add to favorites')),
+            PopupMenuItem(value:'pin',child:Text(meta['pinned']==true?'Unpin chat':'Pin chat')),
+            PopupMenuItem(value:'archive',child:Text(meta['archived']==true?'Unarchive chat':'Archive chat')),
+            PopupMenuItem(value:'mute',child:Text(meta['muted']==true?'Unmute chat':'Mute chat')),
+          ]),
+        ])));
+      });
   }
 }
