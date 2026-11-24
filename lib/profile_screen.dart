@@ -58,7 +58,7 @@ class ProfileScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 32),
-            const _ProfileInfoTile(
+            _ProfileInfoTile(
               icon: Icons.person_outline_rounded,
               title: 'Name',
               value: name,
@@ -73,7 +73,7 @@ class ProfileScreen extends StatelessWidget {
               title: 'Email',
               value: user.email ?? 'Not available',
             ),
-            _ProfileInfoTile(
+            const _ProfileInfoTile(
               icon: Icons.verified_user_outlined,
               title: 'Account',
               value: 'ConnectX account',
