@@ -16,6 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'models/user.dart';
 import 'models/message.dart';
+import 'services/database_service.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -43,6 +44,8 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
   final Record _recorder = Record();
   final ImagePicker _imagePicker = ImagePicker();
   StreamSubscription<DatabaseEvent>? _typingSubscription;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _readReceiptSubscription;
+  final Set<String> _readReceiptInFlight = <String>{};
   late Stream<QuerySnapshot<Map<String, dynamic>>> _messageStream;
 
   String get _uid => FirebaseAuth.instance.currentUser!.uid;
@@ -57,6 +60,8 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
       user = ModalRoute.of(context)!.settings.arguments as User1;
       _initialized = true;
       _messageStream = _messages.orderBy('timestamp', descending: true).limit(100).snapshots();
+      _readReceiptSubscription = _messageStream.listen(_markIncomingMessagesRead,
+        onError: (Object error) => debugPrint('ConnectX read receipt listener failed: $error'));
       _listenForTyping();
       _loadDisappearingSetting();
       _expiryRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
@@ -65,8 +70,22 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
     }
   }
 
+  void _markIncomingMessagesRead(QuerySnapshot<Map<String, dynamic>> snapshot) {
+    if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      if (data['sender'] == _uid || data['isRead'] == true) continue;
+      if (!_readReceiptInFlight.add(doc.id)) continue;
+      doc.reference.update({'isRead': true}).catchError((Object error) {
+        debugPrint('ConnectX read receipt update failed: $error');
+      }).whenComplete(() {
+        _readReceiptInFlight.remove(doc.id);
+      });
+    }
+  }
+
   Future<void> _loadDisappearingSetting() async {
-    final value = await FirebaseDatabase.instance.ref('Users').child(_uid)
+    final value = await ConnectXDatabase.instance.ref('PrivateUsers').child(_uid)
       .child('chatMeta').child(user!.key).child('disappearingDurationMs').get();
     if (mounted) setState(() => _disappearingDurationMs = (value.value as num?)?.toInt() ?? 0);
   }
@@ -82,7 +101,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
       ]),
     ));
     if (selected == null) return;
-    await FirebaseDatabase.instance.ref('Users').child(_uid)
+    await ConnectXDatabase.instance.ref('PrivateUsers').child(_uid)
       .child('chatMeta').child(user!.key).child('disappearingDurationMs').set(selected);
     if (mounted) setState(() => _disappearingDurationMs = selected);
   }
@@ -93,16 +112,15 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
   }
 
   void _listenForTyping() {
-    _typingSubscription = FirebaseDatabase.instance.ref('Users')
-        .child(user!.key).child('typing').child(_uid).onValue.listen((event) {
+    _typingSubscription = ConnectXDatabase.instance.ref('Typing')
+        .child(user!.key).child(_uid).onValue.listen((event) {
       if (!mounted) return;
       setState(() => _remoteTyping = event.snapshot.value == true);
     });
   }
 
   Future<void> _setTyping(bool typing) async {
-    final ref = FirebaseDatabase.instance.ref('Users').child(_uid)
-        .child('typing').child(user!.key);
+    final ref = ConnectXDatabase.instance.ref('Typing').child(_uid).child(user!.key);
     try {
       if (typing) {
         await ref.set(true);
@@ -238,7 +256,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
     // A client may only update its own RTDB profile. The trusted VPS
     // Firestore listener updates both participants' chat indexes with Admin SDK.
     try {
-      await FirebaseDatabase.instance.ref('Users').child(_uid)
+      await ConnectXDatabase.instance.ref('PrivateUsers').child(_uid)
           .child('chats').child('personal').child(peerUid)
           .set(ServerValue.timestamp);
     } catch (error) {
@@ -250,8 +268,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
     // Respect an explicit block, but do not let an unavailable RTDB read prevent
     // Firestore messaging. RTDB stores auxiliary block metadata, not messages.
     try {
-      final currentBlocked = await FirebaseDatabase.instance.ref('Users')
-          .child(_uid).child('blockedUsers').child(user!.key).get();
+      final currentBlocked = await ConnectXDatabase.instance.ref('BlockLists').child(_uid).child(user!.key).get();
       if (currentBlocked.value == true) {
         throw Exception('This conversation is blocked. Unblock the user to send messages.');
       }
@@ -261,8 +278,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
       debugPrint('ConnectX local block check unavailable: $error');
     }
     try {
-      final otherBlocked = await FirebaseDatabase.instance.ref('Users')
-          .child(user!.key).child('blockedUsers').child(_uid).get();
+      final otherBlocked = await ConnectXDatabase.instance.ref('BlockLists').child(user!.key).child(_uid).get();
       if (otherBlocked.value == true) {
         throw Exception('This conversation is blocked. The other user has blocked you.');
       }
@@ -500,7 +516,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
 
   Future<void> _toggleStar(Message message) async {
     if (message.messageId == null) return;
-    final ref = FirebaseDatabase.instance.ref('Users').child(_uid)
+    final ref = ConnectXDatabase.instance.ref('PrivateUsers').child(_uid)
         .child('chatMeta').child(user!.key).child('starredMessages')
         .child(message.messageId!);
     final existing = await ref.get();
@@ -526,7 +542,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
   }
 
   Future<void> _showStarredMessages() async {
-    final snap = await FirebaseDatabase.instance.ref('Users').child(_uid)
+    final snap = await ConnectXDatabase.instance.ref('PrivateUsers').child(_uid)
         .child('chatMeta').child(user!.key).child('starredMessages').get();
     if (!snap.exists || snap.value is! Map) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
@@ -560,8 +576,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
   }
 
   Future<void> _blockOrUnblockUser() async {
-    final ref = FirebaseDatabase.instance.ref('Users').child(_uid)
-        .child('blockedUsers').child(user!.key);
+    final ref = ConnectXDatabase.instance.ref('BlockLists').child(_uid).child(user!.key);
     final existing = await ref.get();
     if (existing.value == true) {
       await ref.remove();
@@ -633,11 +648,12 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
             title: const Text('Reply'),
             onTap: () => Navigator.pop(context, 'reply'),
           ),
-          ListTile(
-            leading: const Icon(Icons.forward_rounded),
-            title: const Text('Forward'),
-            onTap: () => Navigator.pop(context, 'forward'),
-          ),
+          if (!message.isViewOnce)
+            ListTile(
+              leading: const Icon(Icons.forward_rounded),
+              title: const Text('Forward'),
+              onTap: () => Navigator.pop(context, 'forward'),
+            ),
           ListTile(
             leading: const Icon(Icons.star_border_rounded),
             title: const Text('Star message'),
@@ -688,6 +704,12 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
   }
 
   Future<void> _forwardMessage(Message message) async {
+    if (message.isViewOnce) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('View-once media cannot be forwarded.')),
+      );
+      return;
+    }
     final candidates = users.where((item) => item.key != _uid && item.key != user!.key).toList();
     if (candidates.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No other contacts available to forward this message.')));
@@ -897,6 +919,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
     _expiryRefreshTimer?.cancel();
     _typingTimer?.cancel();
     _typingSubscription?.cancel();
+    _readReceiptSubscription?.cancel();
     _recorder.dispose();
     _setTyping(false);
     textFieldController.dispose();

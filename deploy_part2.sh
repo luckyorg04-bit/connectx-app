@@ -29,10 +29,18 @@ echo "Persistent media mount verified: $UPLOAD_MOUNT"
 mkdir -p /opt/connectx-firebase-deploy
 cd /opt/connectx-firebase-deploy
 
-echo "=== 1/4 DEPLOY FIRESTORE RULES AND INDEXES ==="
+echo "=== 1/4 MIGRATE RTDB AND DEPLOY FIREBASE RULES/INDEXES ==="
 curl -fsSL "$REPO_RAW/firebase.json" -o firebase.json
 curl -fsSL "$REPO_RAW/firestore.rules" -o firestore.rules
 curl -fsSL "$REPO_RAW/firestore.indexes.json" -o firestore.indexes.json
+curl -fsSL "$REPO_RAW/database.rules.json" -o database.rules.json
+curl -fsSL "$REPO_RAW/vps-api/migrate-rtdb.js" -o migrate-rtdb.js
+
+echo "=== MIGRATE EXISTING REALTIME DATABASE USER DATA ==="
+docker cp migrate-rtdb.js "$API_CONTAINER:/app/migrate-rtdb.js"
+docker exec "$API_CONTAINER" node --check /app/migrate-rtdb.js
+docker exec "$API_CONTAINER" node /app/migrate-rtdb.js
+
 echo "Using an isolated Node.js container for Firebase CLI (host npx is not required)."
 docker run --rm \
   -v "$PWD:/workspace" \
@@ -40,7 +48,7 @@ docker run --rm \
   -e GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/firebase-service-account.json \
   -w /workspace \
   node:20-alpine \
-  sh -lc "npx --yes firebase-tools deploy --non-interactive --only firestore:rules,firestore:indexes --project '$PROJECT_ID'"
+  sh -lc "npx --yes firebase-tools deploy --non-interactive --only database,firestore:rules,firestore:indexes --project '$PROJECT_ID'"
 
 echo "=== 2/4 UPDATE ONLY THE CONNECTX API CONTAINER ==="
 mkdir -p "$API_SOURCE_DIR"
@@ -76,6 +84,8 @@ for attempt in $(seq 1 15); do
   fi
   sleep 2
 done
+echo "=== RECONCILE RTDB DATA AFTER THE API SWITCH ==="
+docker exec "$API_CONTAINER" node /app/migrate-rtdb.js
 docker commit "$API_CONTAINER" "$API_IMAGE" >/dev/null
 echo "ConnectX API source updated; saved image tag: $API_IMAGE"
 

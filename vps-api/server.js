@@ -259,12 +259,12 @@ app.get('/media/:filename', async (req, res) => {
 });
 
 async function tokenFor(uid) {
-  const snap = await rtdb.ref('Users/' + uid + '/fcmToken').get();
+  const snap = await rtdb.ref('PrivateTokens/' + uid).get();
   return snap.val();
 }
 async function notificationEnabled(uid, category) {
   try {
-    const snap = await rtdb.ref('Users/' + uid + '/notificationSettings').get();
+    const snap = await rtdb.ref('PrivateUsers/' + uid + '/notificationSettings').get();
     const prefs = snap.val() || {};
     const key = category === 'direct_message' ? 'messages'
       : category === 'group_message' ? 'groups'
@@ -286,7 +286,7 @@ async function sendDirect(uid, title, body, data) {
     });
   } catch (e) {
     if (['messaging/registration-token-not-registered','messaging/invalid-registration-token'].includes(e.code)) {
-      await rtdb.ref('Users/' + uid + '/fcmToken').remove();
+      await rtdb.ref('PrivateTokens/' + uid).remove();
     } else console.error('Direct FCM error:', e.message);
   }
 }
@@ -295,7 +295,7 @@ async function sendGroup(groupId, messageId, message) {
   if (!groupSnap.exists) return;
   const group = groupSnap.data() || {};
   const senderUid = String(message.senderUid || '');
-  const sender = await rtdb.ref('Users/' + senderUid).get();
+  const sender = await rtdb.ref('PublicUsers/' + senderUid).get();
   const senderName = sender.child('name').val() || 'A member';
   const uids = (Array.isArray(group.memberUids) ? group.memberUids : []).filter(uid => uid !== senderUid);
   const rows = (await Promise.all(uids.map(async uid => ({ uid, token: await tokenFor(uid), enabled: await notificationEnabled(uid, 'group_message') })))).filter(x => x.token && x.enabled);
@@ -311,7 +311,7 @@ async function sendGroup(groupId, messageId, message) {
     result.responses.forEach((r, n) => {
       if (!r.success && r.error && ['messaging/registration-token-not-registered','messaging/invalid-registration-token'].includes(r.error.code)) invalid.push(batch[n].uid);
     });
-    await Promise.all(invalid.map(uid => rtdb.ref('Users/' + uid + '/fcmToken').remove()));
+    await Promise.all(invalid.map(uid => rtdb.ref('PrivateTokens/' + uid).remove()));
   }
 }
 
@@ -353,7 +353,7 @@ async function sendGroupCallInvitation(callId, call) {
         invalid.push(batch[index].uid);
       }
     });
-    await Promise.all(invalid.map(uid => rtdb.ref('Users/' + uid + '/fcmToken').remove()));
+    await Promise.all(invalid.map(uid => rtdb.ref('PrivateTokens/' + uid).remove()));
   }
 }
 
@@ -444,15 +444,15 @@ function startListeners() {
       // Use Admin SDK to publish the conversation index for both participants.
       const indexTimestamp = Number(msg.timestamp) || Date.now();
       const updateIndexes = Promise.all([
-        rtdb.ref('Users/' + msg.sender + '/chats/personal/' + recipient)
+        rtdb.ref('PrivateUsers/' + msg.sender + '/chats/personal/' + recipient)
           .set(indexTimestamp),
-        rtdb.ref('Users/' + recipient + '/chats/personal/' + msg.sender)
+        rtdb.ref('PrivateUsers/' + recipient + '/chats/personal/' + msg.sender)
           .set(indexTimestamp)
       ]).catch(error => {
         console.error('Direct chat index update failed:', error.message);
       });
 
-      updateIndexes.then(() => rtdb.ref('Users/' + msg.sender).get()).then(sender => {
+      updateIndexes.then(() => rtdb.ref('PublicUsers/' + msg.sender).get()).then(sender => {
         const title = sender.child('name').val() || 'New message';
         const body = msg.type === 'text' ? String(msg.message || 'New message').slice(0,180)
           : msg.type === 'image' ? 'Photo' : msg.type === 'video' ? 'Video'

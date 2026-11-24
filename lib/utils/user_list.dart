@@ -3,11 +3,11 @@ import 'package:connectx/main.dart';
 import 'package:connectx/models/message.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../chat_screen.dart';
 import '../models/user.dart';
+import '../services/database_service.dart';
 
 class UserList extends StatefulWidget {
   final List<User1> users;
@@ -56,8 +56,7 @@ class UserListState extends State<UserList> {
     final metadata = <String, Map<String, dynamic>>{};
     final blocked = <String>{};
     try {
-      final blockedSnapshot = await FirebaseDatabase.instance.ref('Users')
-          .child(uid).child('blockedUsers').get();
+      final blockedSnapshot = await ConnectXDatabase.instance.ref('BlockLists').child(uid).get();
       if (blockedSnapshot.value is Map) {
         (blockedSnapshot.value as Map).forEach((key, value) {
           if (value == true) blocked.add(key.toString());
@@ -86,7 +85,7 @@ class UserListState extends State<UserList> {
         unread[contact.key] = list.where((m) => !m.isRead && m.sender != uid).length;
       } catch (_) { latest[contact.key] = null; unread[contact.key] = 0; }
       try {
-        final value = (await FirebaseDatabase.instance.ref('Users').child(uid)
+        final value = (await ConnectXDatabase.instance.ref('PrivateUsers').child(uid)
           .child('chatMeta').child(contact.key).get()).value;
         metadata[contact.key] = value is Map ? Map<String, dynamic>.from(value) : {};
       } catch (_) { metadata[contact.key] = {}; }
@@ -126,7 +125,7 @@ class UserListState extends State<UserList> {
 
   Future<void> _setMeta(User1 contact, String key, bool value) async {
     final uid = FirebaseAuth.instance.currentUser!.uid;
-    await FirebaseDatabase.instance.ref('Users').child(uid).child('chatMeta')
+    await ConnectXDatabase.instance.ref('PrivateUsers').child(uid).child('chatMeta')
       .child(contact.key).child(key).set(value);
     if (mounted) setState(() { _meta[contact.key] = {...?_meta[contact.key], key: value}; });
   }

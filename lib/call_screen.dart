@@ -32,6 +32,7 @@ class _CallScreenState extends State<CallScreen> {
   bool _muted = false;
   bool _cameraOff = false;
   bool _remoteDescriptionSet = false;
+  final List<RTCIceCandidate> _pendingRemoteCandidates = <RTCIceCandidate>[];
   bool _leaving = false;
   String? _error;
 
@@ -177,6 +178,7 @@ class _CallScreenState extends State<CallScreen> {
     FlutterRingtonePlayer.stop();
         await _peer?.setRemoteDescription(RTCSessionDescription(answer['sdp'], answer['type']));
         _remoteDescriptionSet = true;
+        await _flushPendingRemoteCandidates();
         if (mounted) setState(() => _accepted = true);
       }
     }
@@ -198,13 +200,30 @@ class _CallScreenState extends State<CallScreen> {
         if (data == null || data['senderUid'] == _uid) continue;
         final candidate = data['candidate'];
         if (candidate == null) continue;
-        _peer?.addCandidate(RTCIceCandidate(
+        final iceCandidate = RTCIceCandidate(
           candidate.toString(),
           data['sdpMid']?.toString(),
           (data['sdpMLineIndex'] as num?)?.toInt(),
-        )).catchError((_) {});
+        );
+        if (_remoteDescriptionSet) {
+          _peer?.addCandidate(iceCandidate).catchError((_) {});
+        } else {
+          _pendingRemoteCandidates.add(iceCandidate);
+        }
       }
     });
+  }
+
+  Future<void> _flushPendingRemoteCandidates() async {
+    final pending = List<RTCIceCandidate>.from(_pendingRemoteCandidates);
+    _pendingRemoteCandidates.clear();
+    for (final candidate in pending) {
+      try {
+        await _peer?.addCandidate(candidate);
+      } catch (error) {
+        debugPrint('ConnectX queued ICE candidate could not be added: $error');
+      }
+    }
   }
 
   Future<void> _toggleMute() async {
