@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
+import 'services/database_service.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({Key? key}) : super(key: key);
@@ -15,7 +16,7 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser!;
-    final userRef = FirebaseDatabase.instance.ref('Users').child(user.uid);
+    final userRef = ConnectXDatabase.instance.ref('Users').child(user.uid);
     return StreamBuilder<DatabaseEvent>(
       stream: userRef.onValue,
       builder: (context, snapshot) {
