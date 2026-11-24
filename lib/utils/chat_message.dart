@@ -46,20 +46,28 @@ class _ChatMessageState extends State<ChatMessage> {
     if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
-  Future<void> _openMedia(String value) async {
+  Future<bool> _markViewOnce() async {
     final message = widget.message;
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (message.isViewOnce && !widget.isMe && uid != null) {
-      if (message.viewedBy.containsKey(uid)) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('This view-once item has already been opened.')));
-        return;
-      }
-      if (widget.messageRef != null) {
-        try { await widget.messageRef!.update({'viewedBy.$uid': FieldValue.serverTimestamp()}); }
-        catch (_) {}
-      }
+    if (!message.isViewOnce || widget.isMe) return true;
+    if (uid == null || message.viewedBy.containsKey(uid)) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This view-once item has already been opened.')));
+      return false;
     }
+    if (widget.messageRef == null) return false;
+    try {
+      await widget.messageRef!.update({'viewedBy.$uid': FieldValue.serverTimestamp()});
+      return true;
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This view-once item is no longer available.')));
+      return false;
+    }
+  }
+
+  Future<void> _openMedia(String value) async {
+    if (!await _markViewOnce()) return;
     await _openUrl(value);
   }
 
@@ -164,7 +172,7 @@ class _ChatMessageState extends State<ChatMessage> {
                 await _audioPlayer.pause();
                 if (mounted) setState(() => _audioPlaying = false);
               } else {
-                if (message.isViewOnce && !widget.isMe) await _openMedia(url);
+                if (!await _markViewOnce()) return;
               await _audioPlayer.play(UrlSource(url));
                 if (mounted) setState(() => _audioPlaying = true);
                 _audioPlayer.onPlayerComplete.listen((_) {
