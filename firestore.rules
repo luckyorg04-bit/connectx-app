@@ -288,6 +288,8 @@ service cloud.firestore {
     match /groupCalls/{callId} {
       function isCallGroupMember() {
         return signedIn()
+          && resource.data.groupMemberUids is list
+          && request.auth.uid in resource.data.groupMemberUids
           && exists(/databases/$(database)/documents/groupChats/$(resource.data.groupId))
           && request.auth.uid in get(/databases/$(database)/documents/groupChats/$(resource.data.groupId)).data.memberUids;
       }
@@ -297,13 +299,16 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.groupId is string
+        && request.resource.data.groupMemberUids is list
         && exists(/databases/$(database)/documents/groupChats/$(request.resource.data.groupId))
-        && request.auth.uid in get(/databases/$(database)/documents/groupChats/$(request.resource.data.groupId)).data.memberUids
+        && request.resource.data.groupMemberUids.size() == get(/databases/$(database)/documents/groupChats/$(request.resource.data.groupId)).data.memberUids.size()
+        && request.resource.data.groupMemberUids.hasAll(get(/databases/$(database)/documents/groupChats/$(request.resource.data.groupId)).data.memberUids)
+        && request.auth.uid in request.resource.data.groupMemberUids
         && request.resource.data.activeUids == [request.auth.uid]
         && request.resource.data.participants == [request.auth.uid]
         && request.resource.data.type in ['voice', 'video']
         && request.resource.data.status == 'active';
-      allow read: if isCallGroupMember();
+      allow read: if isCallGroupMember() || (signedIn() && request.auth.uid in resource.data.participants);
       allow update: if isCallGroupMember() && (
         (
           request.resource.data.activeUids is list
