@@ -86,7 +86,8 @@ app.post('/api/upload', authenticate, upload.single('file'), (req, res) => {
   }
   const originalName = path.basename(req.file.originalname || 'attachment');
   const mimeType = types[path.extname(req.file.filename).toLowerCase()];
-  const meta = { conversationId, ownerUid: req.user.uid, originalName, mimeType, size: req.file.size };
+  const meta = { conversationId, ownerUid: req.user.uid, originalName, mimeType, size: req.file.size,
+    viewOnce: req.body.viewOnce === 'true', viewedBy: [] };
   fs.writeFileSync(req.file.path + '.meta.json', JSON.stringify(meta), { mode: 0o600 });
   const token = sign(req.file.filename, conversationId);
   const url = 'https://connecttx.duckdns.org/media/' + encodeURIComponent(req.file.filename) +
@@ -96,7 +97,7 @@ app.post('/api/upload', authenticate, upload.single('file'), (req, res) => {
 
 // Signed capability URL: anyone with the complete URL can access the file.
 // Keep media URLs inside the intended conversation.
-app.get('/media/:filename', (req, res) => {
+app.get('/media/:filename', async (req, res) => {
   const filename = path.basename(req.params.filename);
   const file = path.join(UPLOAD_DIR, filename);
   const metaFile = file + '.meta.json';
@@ -107,9 +108,27 @@ app.get('/media/:filename', (req, res) => {
     if (meta.conversationId !== conversationId || !equalHex(req.query.token, sign(filename, conversationId))) {
       return res.status(403).json({ success: false, error: 'Invalid media link' });
     }
+    if (meta.viewOnce === true) {
+      const authToken = String(req.query.auth || '');
+      if (req.query.viewOnce !== '1' || !authToken) {
+        return res.status(403).json({ success: false, error: 'This attachment requires one-time authenticated access' });
+      }
+      const viewer = await admin.auth().verifyIdToken(authToken);
+      const participants = conversationId.split(',');
+      if (!participants.includes(viewer.uid) || viewer.uid === meta.ownerUid) {
+        return res.status(403).json({ success: false, error: 'Not allowed to open this one-time attachment' });
+      }
+      const viewedBy = Array.isArray(meta.viewedBy) ? meta.viewedBy : [];
+      if (viewedBy.includes(viewer.uid)) {
+        return res.status(410).json({ success: false, error: 'This one-time attachment has already been opened' });
+      }
+      viewedBy.push(viewer.uid);
+      meta.viewedBy = viewedBy;
+      fs.writeFileSync(metaFile, JSON.stringify(meta), { mode: 0o600 });
+    }
     res.setHeader('Content-Type', meta.mimeType || 'application/octet-stream');
     res.setHeader('Content-Disposition', 'inline; filename="' + String(meta.originalName || 'attachment').replace(/["\\\r\n]/g, '_') + '"');
-    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.setHeader('Cache-Control', meta.viewOnce ? 'no-store' : 'private, max-age=3600');
     return res.sendFile(file);
   } catch (_) {
     return res.status(400).json({ success: false, error: 'Invalid media metadata' });
