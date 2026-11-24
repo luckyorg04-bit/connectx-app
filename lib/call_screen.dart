@@ -24,6 +24,8 @@ class _CallScreenState extends State<CallScreen> {
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _candidateSubscription;
   Timer? _ringTimeoutTimer;
   Timer? _durationTimer;
+  Timer? _iceDisconnectTimer;
+  bool _iceCurrentlyConnected = false;
   DateTime? _connectedAt;
   Duration _elapsed = Duration.zero;
   bool _mediaConnected = false;
@@ -69,12 +71,31 @@ class _CallScreenState extends State<CallScreen> {
       final config = await RtcConfig.load();
       _peer = await createPeerConnection(config);
       _peer!.onIceConnectionState = (state) {
-        if (state == RTCIceConnectionState.RTCIceConnectionStateConnected ||
-            state == RTCIceConnectionState.RTCIceConnectionStateCompleted) {
+        final connected =
+            state == RTCIceConnectionState.RTCIceConnectionStateConnected ||
+            state == RTCIceConnectionState.RTCIceConnectionStateCompleted;
+        if (connected) {
+          _iceCurrentlyConnected = true;
+          _iceDisconnectTimer?.cancel();
+          if (_error == 'Media connection interrupted. Reconnecting…' && mounted) {
+            setState(() => _error = null);
+          }
           _markMediaConnected();
-        } else if (state == RTCIceConnectionState.RTCIceConnectionStateFailed && mounted && !_mediaConnected) {
-          setState(() => _error = 'Could not establish a media connection. Check internet/TURN connectivity and try again.');
+        } else {
+          _iceCurrentlyConnected = false;
+          if (state == RTCIceConnectionState.RTCIceConnectionStateDisconnected) {
+            _iceDisconnectTimer?.cancel();
+            _iceDisconnectTimer = Timer(const Duration(seconds: 8), () {
+              if (mounted && !_leaving && !_iceCurrentlyConnected) {
+                setState(() => _error = 'Media connection interrupted. Reconnecting…');
+              }
+            });
+          } else if (state == RTCIceConnectionState.RTCIceConnectionStateFailed && mounted && !_leaving) {
+            _iceDisconnectTimer?.cancel();
+            setState(() => _error = 'Media connection failed. Check network/TURN connectivity and try again.');
+          }
         }
+        debugPrint('ConnectX ICE connection state: $state');
       };
       _peer!.onAddStream = (stream) {
         _remoteStream = stream;
@@ -411,6 +432,7 @@ class _CallScreenState extends State<CallScreen> {
   void dispose() {
     _ringTimeoutTimer?.cancel();
     _durationTimer?.cancel();
+    _iceDisconnectTimer?.cancel();
     _callSubscription?.cancel();
     _candidateSubscription?.cancel();
     _peer?.close();
