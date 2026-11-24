@@ -584,8 +584,14 @@ class _UpdatesTab extends StatelessWidget {
       final mime = kind == 'video' ? (ext == 'mov' ? 'video/quicktime' : 'video/mp4')
         : (ext == 'png' ? 'image/png' : ext == 'webp' ? 'image/webp' : 'image/jpeg');
       try {
-        url = await ChatStorage.upload(conversationId: '$uid,$uid',
-          fileName: picked.name, bytes: bytes, contentType: mime);
+        url = await ChatStorage.upload(
+          conversationId: '$uid,$uid',
+          fileName: picked.name,
+          bytes: bytes,
+          contentType: mime,
+          resourceType: 'status',
+          audienceUids: audience,
+        );
       } catch (error) {
         if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Upload failed: $error')));
         return;
