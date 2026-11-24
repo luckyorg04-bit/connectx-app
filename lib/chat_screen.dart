@@ -303,6 +303,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
         fileName: fileName,
         isViewOnce: _sendViewOnce,
       );
+      if (mounted && _sendViewOnce) setState(() => _sendViewOnce = false);
     } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Upload failed: $error')),
