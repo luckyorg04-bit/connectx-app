@@ -19,6 +19,13 @@ if [[ ! -s "$SERVICE_ACCOUNT" ]]; then
   exit 1
 fi
 docker inspect "$API_CONTAINER" >/dev/null
+UPLOAD_MOUNT="$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/app/uploads"}}{{.Type}}:{{.Source}}{{end}}{{end}}' "$API_CONTAINER")"
+if [[ -z "$UPLOAD_MOUNT" ]]; then
+  echo "Refusing deployment: /app/uploads is not a persistent Docker mount."
+  echo "Mount /opt/connectx-api/uploads to /app/uploads before deploying, otherwise uploaded media can be lost."
+  exit 1
+fi
+echo "Persistent media mount verified: $UPLOAD_MOUNT"
 mkdir -p /opt/connectx-firebase-deploy
 cd /opt/connectx-firebase-deploy
 
@@ -43,6 +50,12 @@ fi
 curl -fsSL "$REPO_RAW/vps-api/server.js" -o "$API_SOURCE_DIR/server.js.new"
 mv "$API_SOURCE_DIR/server.js.new" "$API_SOURCE_DIR/server.js"
 docker cp "$API_SOURCE_DIR/server.js" "$API_CONTAINER:/app/server.js"
+if ! docker exec "$API_CONTAINER" node --check /app/server.js; then
+  echo "API syntax check failed; restoring the previous server.js."
+  latest_backup="$(ls -1t "$API_SOURCE_DIR"/server.js.part2-backup-* | head -n 1)"
+  docker cp "$latest_backup" "$API_CONTAINER:/app/server.js"
+  exit 1
+fi
 if ! docker restart "$API_CONTAINER"; then
   echo "API restart failed; restoring the previous server.js inside the container."
   latest_backup="$(ls -1t "$API_SOURCE_DIR"/server.js.part2-backup-* | head -n 1)"
@@ -50,6 +63,19 @@ if ! docker restart "$API_CONTAINER"; then
   docker restart "$API_CONTAINER" || true
   exit 1
 fi
+for attempt in $(seq 1 15); do
+  if docker exec "$API_CONTAINER" node -e "require('http').get('http://127.0.0.1:3100/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"; then
+    break
+  fi
+  if [[ "$attempt" -eq 15 ]]; then
+    echo "API health check failed; restoring the previous server.js."
+    latest_backup="$(ls -1t "$API_SOURCE_DIR"/server.js.part2-backup-* | head -n 1)"
+    docker cp "$latest_backup" "$API_CONTAINER:/app/server.js"
+    docker restart "$API_CONTAINER" || true
+    exit 1
+  fi
+  sleep 2
+done
 docker commit "$API_CONTAINER" "$API_IMAGE" >/dev/null
 echo "ConnectX API source updated; saved image tag: $API_IMAGE"
 
