@@ -35,6 +35,16 @@ class MyApp extends StatelessWidget {
     _user = user;
     return MaterialApp(
       navigatorKey: appNavigatorKey,
+      builder: (context, child) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final pending = pendingCallArguments;
+          if (pending != null && FirebaseAuth.instance.currentUser != null) {
+            pendingCallArguments = null;
+            openIncomingCall(pending);
+          }
+        });
+        return child ?? const SizedBox.shrink();
+      },
       debugShowCheckedModeBanner: false,
       title: 'ConnectX',
       theme: _buildTheme(Brightness.light),
