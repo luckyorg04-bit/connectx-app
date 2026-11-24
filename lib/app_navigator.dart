@@ -37,7 +37,10 @@ Future<void> openDirectChat(String peerUid) async {
 Future<void> openDirectChatFromConversation(String conversationId) async {
   final uid = FirebaseAuth.instance.currentUser?.uid;
   if (uid == null || conversationId.isEmpty) return;
-  final peerUid = conversationId.split(',').where((id) => id != uid).firstOrNull;
+  String? peerUid;
+  for (final id in conversationId.split(',')) {
+    if (id.isNotEmpty && id != uid) { peerUid = id; break; }
+  }
   if (peerUid == null || peerUid.isEmpty) return;
   await openDirectChat(peerUid);
 }
