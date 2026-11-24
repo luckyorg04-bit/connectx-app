@@ -457,14 +457,13 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
     if (shouldSave == true && nameController.text.trim().isNotEmpty) {
       try {
         var photoUrl = currentPhotoUrl;
+        var oldPhotoToDelete = '';
         if (pickedPhoto != null) {
           photoUrl = await ProfileStorage.upload(pickedPhoto!);
-          if (currentPhotoUrl.isNotEmpty && currentPhotoUrl != photoUrl) {
-            await ProfileStorage.delete(currentPhotoUrl);
-          }
+          oldPhotoToDelete = currentPhotoUrl;
         } else if (removePhoto) {
-          await ProfileStorage.delete(currentPhotoUrl);
           photoUrl = '';
+          oldPhotoToDelete = currentPhotoUrl;
         }
 
         final name = nameController.text.trim();
@@ -478,6 +477,14 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
         await FirebaseAuth.instance.currentUser?.updatePhotoURL(
           photoUrl.isEmpty ? null : photoUrl,
         );
+        if (oldPhotoToDelete.isNotEmpty && oldPhotoToDelete != photoUrl) {
+          try {
+            await ProfileStorage.delete(oldPhotoToDelete);
+          } catch (error) {
+            // The new profile remains saved; an orphaned old image can be cleaned later.
+            debugPrint('ConnectX old profile photo cleanup failed: $error');
+          }
+        }
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Profile updated')),
