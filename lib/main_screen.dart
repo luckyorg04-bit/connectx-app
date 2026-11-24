@@ -55,7 +55,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
     users.clear();
     chats.clear();
     final uid = FirebaseAuth.instance.currentUser!.uid;
-    final userRef = ConnectXDatabase.instance.ref("Users").child(uid);
+    final userRef = ConnectXDatabase.instance.ref("PublicUsers").child(uid);
     userRef.onDisconnect().update({
       'online': false,
       'lastSeen': ServerValue.timestamp,
@@ -78,7 +78,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
   void didChangeAppLifecycleState(AppLifecycleState state) {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
-    final userRef = ConnectXDatabase.instance.ref('Users').child(uid);
+    final userRef = ConnectXDatabase.instance.ref('PublicUsers').child(uid);
     if (state == AppLifecycleState.resumed) {
       userRef.update({'online': true});
     } else if (state == AppLifecycleState.paused ||
@@ -325,7 +325,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
 
   Future<void> _openNotificationSettings() async {
     final uid = FirebaseAuth.instance.currentUser!.uid;
-    final ref = ConnectXDatabase.instance.ref('Users').child(uid).child('notificationSettings');
+    final ref = ConnectXDatabase.instance.ref('PrivateUsers').child(uid).child('notificationSettings');
     final snap = await ref.get();
     final saved = Map<String, dynamic>.from(snap.value is Map ? snap.value as Map : {});
     bool messages = saved['messages'] != false;
@@ -362,7 +362,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
 
   Future<void> _openEditProfile() async {
     final uid = FirebaseAuth.instance.currentUser!.uid;
-    final ref = ConnectXDatabase.instance.ref("Users").child(uid);
+    final ref = ConnectXDatabase.instance.ref("PublicUsers").child(uid);
     final snapshot = await ref.get();
     if (!mounted) return;
 
@@ -516,7 +516,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
   Future<void> _logout() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid != null) {
-      await ConnectXDatabase.instance.ref("Users").child(uid).child("online").set(false);
+      await ConnectXDatabase.instance.ref("PublicUsers").child(uid).child("online").set(false);
     }
     await NotificationService.dispose();
     await FirebaseAuth.instance.signOut();
@@ -527,7 +527,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
 
   void getData() {
     final uid = FirebaseAuth.instance.currentUser!.uid;
-    subscriptions.add(ConnectXDatabase.instance.ref("Users").child(uid).child("chats")
+    subscriptions.add(ConnectXDatabase.instance.ref("PrivateUsers").child(uid).child("chats")
         .child("personal").orderByValue().limitToLast(30).onValue.listen((event) {
       for (final snapshot in event.snapshot.children) {
         final chatId = snapshot.key;
@@ -537,7 +537,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
         if (existingIndex == -1) {
           final newChat = Chat(timestamp, chatId);
           chats.add(newChat);
-          subscriptions.add(ConnectXDatabase.instance.ref("Users").child(chatId)
+          subscriptions.add(ConnectXDatabase.instance.ref("PublicUsers").child(chatId)
               .onValue.listen((userEvent) {
             final newUser = User1.getFromSnapshot(userEvent.snapshot);
             final index = users.indexWhere((user) => user.key == newUser.key);
@@ -761,7 +761,7 @@ class _UpdatesTab extends StatelessWidget {
     final views = await doc.reference.collection('views').get();
     final rows = await Future.wait(views.docs.map((view) async {
       final uid = view.id;
-      final name = await ConnectXDatabase.instance.ref('Users').child(uid).child('name').get();
+      final name = await ConnectXDatabase.instance.ref('PublicUsers').child(uid).child('name').get();
       return name.value?.toString() ?? 'ConnectX user';
     }));
     if (!context.mounted) return;
