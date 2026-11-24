@@ -285,6 +285,90 @@ service cloud.firestore {
       }
     }
 
+    match /groupCalls/{callId} {
+      function isCallGroupMember() {
+        return signedIn()
+          && exists(/databases/$(database)/documents/groupChats/$(resource.data.groupId))
+          && request.auth.uid in get(/databases/$(database)/documents/groupChats/$(resource.data.groupId)).data.memberUids;
+      }
+      function isActiveCallParticipant() {
+        return signedIn() && request.auth.uid in resource.data.activeUids;
+      }
+      allow create: if signedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.groupId is string
+        && exists(/databases/$(database)/documents/groupChats/$(request.resource.data.groupId))
+        && request.auth.uid in get(/databases/$(database)/documents/groupChats/$(request.resource.data.groupId)).data.memberUids
+        && request.resource.data.activeUids == [request.auth.uid]
+        && request.resource.data.participants == [request.auth.uid]
+        && request.resource.data.type in ['voice', 'video']
+        && request.resource.data.status == 'active';
+      allow read: if isCallGroupMember();
+      allow update: if isCallGroupMember() && (
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['activeUids'])
+          && request.resource.data.activeUids is list
+          && (
+            (
+              request.auth.uid in request.resource.data.activeUids
+              && !(request.auth.uid in resource.data.activeUids)
+              && request.resource.data.activeUids.size() == resource.data.activeUids.size() + 1
+              && request.resource.data.activeUids.hasAll(resource.data.activeUids)
+            )
+            ||
+            (
+              request.auth.uid in resource.data.activeUids
+              && !(request.auth.uid in request.resource.data.activeUids)
+              && request.resource.data.activeUids.size() == resource.data.activeUids.size() - 1
+              && resource.data.activeUids.hasAll(request.resource.data.activeUids)
+            )
+          )
+        )
+        || (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'endedAt'])
+          && resource.data.createdBy == request.auth.uid
+          && request.resource.data.status == 'ended'
+        )
+      );
+      allow delete: if false;
+
+      match /pairs/{pairId} {
+        function activeParticipant(uid) {
+          return uid in get(/databases/$(database)/documents/groupCalls/$(callId)).data.activeUids;
+        }
+        allow read: if signedIn() && activeParticipant(request.auth.uid);
+        allow create: if signedIn()
+          && activeParticipant(request.auth.uid)
+          && request.resource.data.offererUid == request.auth.uid
+          && activeParticipant(request.resource.data.answererUid)
+          && request.resource.data.offer is map;
+        allow update: if signedIn()
+          && activeParticipant(request.auth.uid)
+          && (
+            (
+              resource.data.offererUid == request.auth.uid
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['offer'])
+            )
+            ||
+            (
+              resource.data.answererUid == request.auth.uid
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['answer', 'updatedAt'])
+              && request.resource.data.answer is map
+            )
+          );
+        allow delete: if false;
+
+        match /candidates/{candidateId} {
+          allow read: if signedIn()
+            && request.auth.uid in get(/databases/$(database)/documents/groupCalls/$(callId)).data.activeUids;
+          allow create: if signedIn()
+            && request.resource.data.senderUid == request.auth.uid
+            && request.auth.uid in get(/databases/$(database)/documents/groupCalls/$(callId)).data.activeUids;
+          allow update, delete: if false;
+        }
+      }
+    }
+
     match /reports/{reportId} {
       allow create: if signedIn()
         && request.resource.data.reporterUid == request.auth.uid
