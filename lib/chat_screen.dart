@@ -680,6 +680,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
                   onLongPress: () => _messageActions(message, isMe),
                   child: ChatMessage(
                     message: message,
+                    messageRef: docs[index].reference,
                     isMe: isMe,
                     previousMessage: index + 1 < docs.length
                         ? (docs[index + 1].data()['timestamp'] as num?)?.toInt() : null,
