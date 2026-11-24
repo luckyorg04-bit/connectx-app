@@ -727,7 +727,7 @@ class _UpdatesTab extends StatelessWidget {
         Row(children: [Expanded(child: Text((data['userName'] ?? 'ConnectX user').toString(), style: const TextStyle(fontWeight: FontWeight.bold))),
           IconButton(onPressed: () => Navigator.pop(c), icon: const Icon(Icons.close))]),
         if (type == 'image' && statusMediaUrl != null)
-          Image.network(statusMediaUrl!, fit: BoxFit.contain,
+          Image.network(statusMediaUrl, fit: BoxFit.contain,
             errorBuilder: (_, __, ___) => const Text('Unable to load photo'))
         else if (type == 'video' && statusMediaUrl != null)
           ListTile(leading: const Icon(Icons.play_circle), title: Text((data['fileName'] ?? 'Video status').toString()),
