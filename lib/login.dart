@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'services/notification_service.dart';
+import 'services/database_service.dart';
 
 class AuthPage extends StatefulWidget {
   const AuthPage({Key? key}) : super(key: key);
@@ -254,7 +255,7 @@ class AuthPageState extends State<AuthPage> {
   }
 
   Future<void> _ensureUserProfile(User user, {String? preferredName, String? preferredUsername}) async {
-    final ref = FirebaseDatabase.instance.ref('Users').child(user.uid);
+    final ref = ConnectXDatabase.instance.ref('Users').child(user.uid);
     final existing = await ref.get();
     if (existing.exists) {
       final currentData = existing.value is Map
