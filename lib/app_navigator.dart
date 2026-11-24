@@ -8,6 +8,6 @@ void openIncomingCall(Map<String, dynamic> arguments) {
   if (navigator == null) {
     pendingCallArguments = arguments;
   } else {
-    navigator.pushNamed('/call', arguments: arguments);
+    navigator.pushNamed(arguments['isGroupCall'] == true ? '/group-call' : '/call', arguments: arguments);
   }
 }
