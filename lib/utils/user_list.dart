@@ -2,13 +2,10 @@ import 'package:Chat/main.dart';
 import 'package:Chat/models/message.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../chat_screen.dart';
 import '../models/User.dart';
-
-late String messageOrName;
-FontWeight textWeight = FontWeight.w200;
 
 class UserList extends StatefulWidget {
   final List<User1> users;
@@ -17,146 +14,200 @@ class UserList extends StatefulWidget {
   const UserList({super.key, required this.users, required this.wantChats});
 
   @override
-  State<UserList> createState() => UserListState(users, wantChats);
+  State<UserList> createState() => UserListState();
 }
 
-class UserListState extends State<UserList>{
-  final List<User1> users;
-  final bool wantChats;
+class UserListState extends State<UserList> {
+  final Map<String, Message?> _latestMessages = {};
+  final Map<String, int> _unreadCounts = {};
 
-  UserListState(this.users, this.wantChats);
+  @override
+  void initState() {
+    super.initState();
+    _refreshPreviews();
+  }
+
+  @override
+  void didUpdateWidget(covariant UserList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.wantChats) _refreshPreviews();
+  }
+
+  Future<void> _refreshPreviews() async {
+    if (!widget.wantChats) return;
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUid == null || widget.users.isEmpty) return;
+
+    final latest = <String, Message?>{};
+    final unread = <String, int>{};
+    await Future.wait(widget.users.map((user) async {
+      try {
+        final snapshot = await FirebaseFirestore.instance
+            .collection('messages')
+            .doc(assignUsers(currentUid, user.key))
+            .collection('chats')
+            .orderBy('timestamp', descending: true)
+            .limit(10)
+            .get();
+        final messages = snapshot.docs.map(Message.fromSnapshot).toList();
+        latest[user.key] = messages.isEmpty ? null : messages.first;
+        unread[user.key] = messages.where((message) =>
+            !message.isRead && message.sender != currentUid).length;
+      } catch (_) {
+        latest[user.key] = null;
+        unread[user.key] = 0;
+      }
+    }));
+
+    if (!mounted) return;
+    setState(() {
+      _latestMessages
+        ..clear()
+        ..addAll(latest);
+      _unreadCounts
+        ..clear()
+        ..addAll(unread);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return ListView.builder(
-      itemCount: users.length,
+      itemCount: widget.users.length,
       physics: const ClampingScrollPhysics(),
-      itemBuilder: (BuildContext context, int index) {
+      itemBuilder: (context, index) {
+        final user = widget.users[index];
+        if (user.key == currentUid) return const SizedBox.shrink();
 
-        if(wantChats) getData(users[index]);
+        final latest = _latestMessages[user.key];
+        final unread = _unreadCounts[user.key] ?? 0;
+        final preview = latest?.message ??
+            (widget.wantChats ? 'Tap to start chatting' : '@${user.username}');
+        final timestamp = latest == null
+            ? ''
+            : DateFormat('h:mm a').format(
+                DateTime.fromMillisecondsSinceEpoch(latest.timestamp),
+              );
 
-        messageOrName = users[index].name;
-        if(messageOrName.length > 25){
-          messageOrName = "${messageOrName.substring(0,23)}...";
-        }
-
-        if(users[index].isNameBold != null){
-          if (users[index].isNameBold!){
-            textWeight = FontWeight.w400;
-          }else{
-            textWeight = FontWeight.w200;
-          }
-        }
-
-        return
-          users[index].key!=FirebaseAuth.instance.currentUser!.uid?
-          Column(children: [
-            InkWell(
-                onTap: () async {
-                  currentRoute = "/chat";
-                  await Navigator.of(context).pushNamed('/chat', arguments: users[index]);
-                },
-                child:Container(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(mainAxisSize: MainAxisSize.max,children: [
-                      Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                          child: Stack(children: [
-                            CircleAvatar(
-                              radius: 28,
-                              backgroundImage: users[index].photoUrl.isNotEmpty
-                                  ? NetworkImage(users[index].photoUrl)
-                                  : null,
-                              child: users[index].photoUrl.isEmpty
-                                  ? Text(users[index].username.substring(0, 1).toUpperCase())
-                                  : null,
+        return InkWell(
+          onTap: () async {
+            currentRoute = '/chat';
+            await Navigator.of(context).pushNamed('/chat', arguments: user);
+            if (mounted) _refreshPreviews();
+          },
+          child: SizedBox(
+            height: 72,
+            child: Row(
+              children: [
+                const SizedBox(width: 12),
+                Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 25,
+                      backgroundImage:
+                          user.photoUrl.isNotEmpty ? NetworkImage(user.photoUrl) : null,
+                      child: user.photoUrl.isEmpty
+                          ? Text(user.username.substring(0, 1).toUpperCase())
+                          : null,
+                    ),
+                    if (user.online)
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          width: 13,
+                          height: 13,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF25D366),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Theme.of(context).scaffoldBackgroundColor,
+                              width: 2,
                             ),
-                            users[index].online?Positioned(
-                                bottom: 2,
-                                right: 2,
-                                child: Container(
-                                    width: 12,
-                                    height: 12,
-                                    padding: const EdgeInsets.all(1),
-                                    decoration: BoxDecoration(
-                                      color: Theme.of(context).colorScheme.background,
-                                      shape: BoxShape.circle,
-                                    ),child: Container(
-                                  width: 10,
-                                  height: 10,
-                                  decoration: const BoxDecoration(
-                                    color: Color(0x8822EE44),
-                                    shape: BoxShape.circle,
-                                  ),
-                                )
-                                )
-                            ):const SizedBox(),
-                          ],
-                          )
+                          ),
+                        ),
                       ),
-                      Column(crossAxisAlignment: CrossAxisAlignment.start,children: [
-                        Text(users[index].username,style: const TextStyle(
-                            fontWeight: FontWeight.w400,
-                            fontSize: 16
-                        )),
-                        const SizedBox(height: 4),
-                        Text(messageOrName, style: TextStyle(
-                            fontWeight: textWeight,
-                            fontSize: 14
-                        )),
-                      ])
-                    ]))),
-            Container(
-                width: MediaQuery.of(context).size.width,
-                height: 0.5,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.onInverseSurface,
-                )),
-          ])
-              :const SizedBox();
+                  ],
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        user.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: unread > 0 ? FontWeight.w700 : FontWeight.w600,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        preview,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: unread > 0 ? FontWeight.w600 : FontWeight.w400,
+                          color: unread > 0
+                              ? Theme.of(context).colorScheme.onSurface
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (widget.wantChats)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8, right: 14),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        if (timestamp.isNotEmpty)
+                          Text(
+                            timestamp,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: unread > 0
+                                  ? const Color(0xFF25D366)
+                                  : Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        if (unread > 0) ...[
+                          const SizedBox(height: 5),
+                          Container(
+                            constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            alignment: Alignment.center,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF25D366),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Text(
+                              unread > 99 ? '99+' : '$unread',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
       },
     );
-  }
-
-  getData (User1 user) async {
-    List<Message> messages = [];
-    try {
-      QuerySnapshot snapshots = await FirebaseFirestore.instance
-          .collection('messages')
-          .doc(assignUsers(FirebaseAuth.instance.currentUser!.uid, user.key))
-          .collection("chats").limit(10).orderBy("timestamp", descending: false)
-          .get();
-      messages = snapshots.docs.map((e) {
-        return Message.fromSnapshot(e);
-      }).toList();
-    }catch(e){ if (kDebugMode) print(e);}
-
-    int i = 0;
-    for (Message message in messages){
-      if(!message.isRead
-          && message.sender != FirebaseAuth.instance.currentUser!.uid) i++;
-    }
-    String str = "";
-    if(i==0){
-      if(messages.isNotEmpty) {
-        str = messages.last.message;
-        user.isNameBold = false;
-      }else {
-        str = user.name;
-        user.isNameBold = false;
-      }
-    }else if(i==10){
-      str = "9+ unread messages";
-      user.isNameBold = true;
-    }else{
-      str = "$i unread messages";
-      user.isNameBold = true;
-    }
-    setState(() {
-        users[users.indexWhere((user1) => user1.key == user.key)].name = str;
-        users[users.indexWhere((user1) => user1.key == user.key)]
-            .isNameBold = user.isNameBold;
-    });
   }
 }
