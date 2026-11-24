@@ -42,6 +42,11 @@ class MyApp extends StatelessWidget {
             pendingCallArguments = null;
             openIncomingCall(pending);
           }
+          final pendingChatUid = pendingDirectChatUid;
+          if (pendingChatUid != null && FirebaseAuth.instance.currentUser != null) {
+            pendingDirectChatUid = null;
+            openDirectChat(pendingChatUid);
+          }
         });
         return child ?? const SizedBox.shrink();
       },
