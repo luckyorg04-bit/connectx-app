@@ -313,7 +313,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                       ),
                       child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                         if (type == 'poll') ...[
-                          const Row(children: [
+                          Row(children: [
                             Icon(Icons.poll_outlined, size: 17),
                             SizedBox(width: 5),
                             Text('GROUP POLL', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
