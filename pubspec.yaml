@@ -15,6 +15,7 @@ dependencies:
   firebase_auth: ^4.4.2
   firebase_database: ^10.1.1
   firebase_messaging: ^14.4.1
+  firebase_storage: ^11.1.0
   google_sign_in: ^6.1.5
   http: ^0.13.5
   intl: ^0.17.0
@@ -22,6 +23,12 @@ dependencies:
   elegant_notification: ^1.8.1
   url_launcher: ^6.1.10
   permission_handler: ^10.2.0
+  image_picker: ^0.8.7+5
+  file_picker: ^5.2.10
+  record: ^4.4.4
+  audioplayers: ^4.1.0
+  path_provider: ^2.0.14
+  geolocator: ^9.0.2
 
 dev_dependencies:
   flutter_test:
