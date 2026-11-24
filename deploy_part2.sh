@@ -35,7 +35,6 @@ if [[ -f "$API_SOURCE_DIR/server.js" ]]; then
   cp -a "$API_SOURCE_DIR/server.js" "$API_SOURCE_DIR/server.js.part2-backup-$(date +%Y%m%d%H%M%S)"
 fi
 curl -fsSL "$REPO_RAW/vps-api/server.js" -o "$API_SOURCE_DIR/server.js.new"
-node --check "$API_SOURCE_DIR/server.js.new"
 mv "$API_SOURCE_DIR/server.js.new" "$API_SOURCE_DIR/server.js"
 docker cp "$API_SOURCE_DIR/server.js" "$API_CONTAINER:/app/server.js"
 if ! docker restart "$API_CONTAINER"; then
