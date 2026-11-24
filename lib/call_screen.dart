@@ -62,15 +62,17 @@ class _CallScreenState extends State<CallScreen> {
         ],
       };
       _peer = await createPeerConnection(config);
-      _peer!.onIceCandidate = (candidate) {
+      _peer!.onIceCandidate = (candidate) async {
         if (candidate.candidate == null) return;
         final side = _isCaller ? 'callerCandidates' : 'calleeCandidates';
-        _callRef.collection(side).add({
-          'candidate': candidate.candidate,
-          'sdpMid': candidate.sdpMid,
-          'sdpMLineIndex': candidate.sdpMLineIndex,
-          'senderUid': _uid,
-        }).catchError((_) {});
+        try {
+          await _callRef.collection(side).add({
+            'candidate': candidate.candidate,
+            'sdpMid': candidate.sdpMid,
+            'sdpMLineIndex': candidate.sdpMLineIndex,
+            'senderUid': _uid,
+          });
+        } catch (_) {}
       };
       _peer!.onTrack = (event) {
         if (event.streams.isNotEmpty && mounted) {
@@ -227,16 +229,6 @@ class _CallScreenState extends State<CallScreen> {
     if (mounted && Navigator.of(context).canPop()) Navigator.of(context).pop();
   }
 
-  Future<void> _cleanup() async {
-    await _callSubscription?.cancel();
-    await _candidateSubscription?.cancel();
-    await _peer?.close();
-    await _localStream?.dispose();
-    _localRenderer.srcObject = null;
-    _remoteRenderer.srcObject = null;
-    await _localRenderer.dispose();
-    await _remoteRenderer.dispose();
-  }
 
   @override
   void dispose() {
