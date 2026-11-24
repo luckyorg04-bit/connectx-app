@@ -50,8 +50,27 @@ async function migrate() {
     };
 
     const privateProfile = { ...privateOld };
-    privateProfile.chats = { ...(legacyValue.chats || {}), ...(privateOld.chats || {}) };
-    privateProfile.chatMeta = { ...(legacyValue.chatMeta || {}), ...(privateOld.chatMeta || {}) };
+    const legacyChats = legacyValue.chats || {};
+    const privateChats = privateOld.chats || {};
+    const legacyPersonal = legacyChats.personal || {};
+    const privatePersonal = privateChats.personal || {};
+    const mergedPersonal = { ...legacyPersonal, ...privatePersonal };
+    for (const [peerUid, timestamp] of Object.entries(legacyPersonal)) {
+      mergedPersonal[peerUid] = Math.max(Number(timestamp) || 0, Number(privatePersonal[peerUid]) || 0);
+    }
+    privateProfile.chats = {
+      ...legacyChats,
+      ...privateChats,
+      personal: mergedPersonal
+    };
+
+    const legacyMeta = legacyValue.chatMeta || {};
+    const privateMeta = privateOld.chatMeta || {};
+    const mergedMeta = { ...legacyMeta, ...privateMeta };
+    for (const peerUid of new Set([...Object.keys(legacyMeta), ...Object.keys(privateMeta)])) {
+      mergedMeta[peerUid] = { ...(legacyMeta[peerUid] || {}), ...(privateMeta[peerUid] || {}) };
+    }
+    privateProfile.chatMeta = mergedMeta;
     privateProfile.notificationSettings = {
       ...(legacyValue.notificationSettings || {}),
       ...(privateOld.notificationSettings || {})
