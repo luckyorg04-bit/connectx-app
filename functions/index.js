@@ -117,3 +117,41 @@ exports.notifyGroupMessage = functions
     ));
     return null;
   });
+
+// Send an incoming-call alert only after the caller has published a usable SDP
+// offer. The call document is created before camera/microphone setup; notifying
+// onCreate would let the callee answer before the offer exists.
+exports.notifyIncomingCall = functions
+  .region('asia-south1')
+  .firestore.document('calls/{callId}')
+  .onUpdate(async (change, context) => {
+    const before = change.before.data() || {};
+    const call = change.after.data() || {};
+
+    if (before.status !== 'ringing' ||
+        call.status !== 'ringing' ||
+        (before.offer && before.offer.sdp) ||
+        !call.offer ||
+        typeof call.offer.sdp !== 'string' ||
+        !call.offer.sdp.trim()) {
+      return null;
+    }
+
+    if (!call.calleeUid || !call.callerUid || call.calleeUid === call.callerUid) {
+      console.error('Incoming call notification skipped: invalid participants', context.params.callId);
+      return null;
+    }
+
+    return sendToUser(
+      call.calleeUid,
+      String(call.callerName || 'ConnectX user'),
+      call.type === 'video' ? 'Incoming video call' : 'Incoming voice call',
+      {
+        type: 'incoming_call',
+        callId: context.params.callId,
+        callerUid: call.callerUid,
+        callerName: String(call.callerName || 'ConnectX user'),
+        callType: call.type === 'video' ? 'video' : 'voice'
+      }
+    );
+  });
