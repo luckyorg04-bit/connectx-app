@@ -118,7 +118,6 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
   Future<void> _messageActions(Message message, bool isMe) async {
     final action = await showModalBottomSheet<String>(
       context: context,
-      showDragHandle: true,
       builder: (context) => SafeArea(
         child: Wrap(children: [
           if (isMe) ListTile(
