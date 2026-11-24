@@ -32,7 +32,7 @@ class _CallScreenState extends State<CallScreen> {
   bool _accepted = false;
   bool _muted = false;
   bool _cameraOff = false;
-  bool _speakerOn = true;
+  bool _speakerOn = false;
   bool _remoteDescriptionSet = false;
   final List<RTCIceCandidate> _pendingRemoteCandidates = <RTCIceCandidate>[];
   bool _leaving = false;
@@ -115,8 +115,8 @@ class _CallScreenState extends State<CallScreen> {
     _localStream = await navigator.mediaDevices.getUserMedia(constraints);
     _localRenderer.srcObject = _localStream;
     try {
-      await Helper.setSpeakerphoneOn(true);
-      _speakerOn = true;
+      await Helper.setSpeakerphoneOn(_isVideo);
+      _speakerOn = _isVideo;
     } catch (error) {
       debugPrint('ConnectX speakerphone initialization failed: $error');
     }
@@ -184,6 +184,12 @@ class _CallScreenState extends State<CallScreen> {
       if (mounted) setState(() => _accepted = true);
     } catch (error) {
       if (mounted) setState(() => _error = 'Could not answer call: $error');
+      try {
+        await _callRef.update({'status': 'declined', 'endedAt': FieldValue.serverTimestamp()});
+      } catch (updateError) {
+        debugPrint('ConnectX answer-failure status update failed: $updateError');
+      }
+      await FlutterRingtonePlayer.stop();
     } finally {
       if (mounted) setState(() => _connecting = false);
     }
