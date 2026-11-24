@@ -427,7 +427,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
   void getData() {
     final uid = FirebaseAuth.instance.currentUser!.uid;
     FirebaseDatabase.instance.ref("Users").child(uid).child("chats")
-        .child("personal").limitToFirst(15).onValue.listen((event) {
+        .child("personal").orderByValue().limitToLast(30).onValue.listen((event) {
       for (final snapshot in event.snapshot.children) {
         final chatId = snapshot.key;
         final timestamp = snapshot.value;
