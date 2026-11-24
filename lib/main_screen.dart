@@ -10,6 +10,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'main.dart';
+import 'app_navigator.dart';
 import 'models/user.dart';
 import 'profile_screen.dart';
 
@@ -49,6 +50,13 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
     });
     userRef.update({'online': true});
     getData();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final pending = pendingCallArguments;
+      if (pending != null) {
+        pendingCallArguments = null;
+        appNavigatorKey.currentState?.pushNamed('/call', arguments: pending);
+      }
+    });
   }
 
   @override
