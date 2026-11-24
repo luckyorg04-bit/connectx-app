@@ -183,6 +183,49 @@ service cloud.firestore {
       }
     }
 
+    match /calls/{callId} {
+      allow create: if signedIn()
+        && request.resource.data.callerUid == request.auth.uid
+        && request.resource.data.calleeUid is string
+        && request.resource.data.calleeUid != request.auth.uid
+        && request.resource.data.status == 'ringing'
+        && request.resource.data.type in ['voice', 'video'];
+      allow read: if signedIn()
+        && (resource.data.callerUid == request.auth.uid
+          || resource.data.calleeUid == request.auth.uid);
+      allow update: if signedIn() && (
+        (
+          resource.data.callerUid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['offer', 'status', 'endedAt'])
+        )
+        || (
+          resource.data.calleeUid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['answer', 'status', 'acceptedAt', 'endedAt'])
+        )
+      );
+      allow delete: if false;
+
+      match /callerCandidates/{candidateId} {
+        allow read: if signedIn()
+          && (get(/databases/$(database)/documents/calls/$(callId)).data.callerUid == request.auth.uid
+            || get(/databases/$(database)/documents/calls/$(callId)).data.calleeUid == request.auth.uid);
+        allow create: if signedIn()
+          && get(/databases/$(database)/documents/calls/$(callId)).data.callerUid == request.auth.uid
+          && request.resource.data.senderUid == request.auth.uid;
+        allow update, delete: if false;
+      }
+
+      match /calleeCandidates/{candidateId} {
+        allow read: if signedIn()
+          && (get(/databases/$(database)/documents/calls/$(callId)).data.callerUid == request.auth.uid
+            || get(/databases/$(database)/documents/calls/$(callId)).data.calleeUid == request.auth.uid);
+        allow create: if signedIn()
+          && get(/databases/$(database)/documents/calls/$(callId)).data.calleeUid == request.auth.uid
+          && request.resource.data.senderUid == request.auth.uid;
+        allow update, delete: if false;
+      }
+    }
+
     match /reports/{reportId} {
       allow create: if signedIn()
         && request.resource.data.reporterUid == request.auth.uid
