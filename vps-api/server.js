@@ -29,7 +29,7 @@ fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 app.set('trust proxy', 1);
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-app.use(cors({ origin: true, methods: ['GET', 'POST'], allowedHeaders: ['Authorization', 'Content-Type'] }));
+app.use(cors({ origin: true, methods: ['GET', 'POST', 'DELETE'], allowedHeaders: ['Authorization', 'Content-Type'] }));
 app.use(express.json({ limit: '100kb' }));
 app.use('/api/', rateLimit({ windowMs: 900000, limit: 120, standardHeaders: 'draft-7', legacyHeaders: false }));
 
@@ -140,6 +140,56 @@ app.post('/api/upload', authenticate, upload.single('file'), (req, res) => {
   const url = 'https://connecttx.duckdns.org/media/' + encodeURIComponent(req.file.filename) +
     '?conversationId=' + encodeURIComponent(conversationId) + '&token=' + token;
   return res.status(201).json({ success: true, fileName: originalName, storedName: req.file.filename, mimeType, size: req.file.size, url });
+});
+
+// Profile photos are public profile assets, but only the authenticated owner may replace or delete them.
+app.post('/api/profile-photo', authenticate, upload.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ success: false, error: 'Select a profile photo' });
+  const profileKey = 'profile:' + req.user.uid;
+  const originalName = path.basename(req.file.originalname || 'profile-photo');
+  const mimeType = types[path.extname(req.file.filename).toLowerCase()];
+  const meta = {
+    conversationId: profileKey,
+    ownerUid: req.user.uid,
+    originalName,
+    mimeType,
+    size: req.file.size,
+    resourceType: 'profile',
+    audienceUids: [],
+    expiresAt: null,
+    viewOnce: false,
+    viewedBy: []
+  };
+  try {
+    fs.writeFileSync(req.file.path + '.meta.json', JSON.stringify(meta), { mode: 0o600 });
+    const token = sign(req.file.filename, profileKey);
+    const url = 'https://connecttx.duckdns.org/media/' + encodeURIComponent(req.file.filename) +
+      '?conversationId=' + encodeURIComponent(profileKey) + '&token=' + token;
+    return res.status(201).json({ success: true, url, fileName: originalName });
+  } catch (error) {
+    fs.unlink(req.file.path, () => {});
+    return res.status(500).json({ success: false, error: 'Could not save profile photo' });
+  }
+});
+
+app.delete('/api/profile-photo/:filename', authenticate, (req, res) => {
+  const filename = path.basename(req.params.filename);
+  const file = path.join(UPLOAD_DIR, filename);
+  const metaFile = file + '.meta.json';
+  if (!fs.existsSync(file) || !fs.existsSync(metaFile)) {
+    return res.status(404).json({ success: false, error: 'Profile photo not found' });
+  }
+  try {
+    const meta = JSON.parse(fs.readFileSync(metaFile, 'utf8'));
+    if (meta.resourceType !== 'profile' || meta.ownerUid !== req.user.uid) {
+      return res.status(403).json({ success: false, error: 'You cannot delete this profile photo' });
+    }
+    fs.unlinkSync(file);
+    fs.unlinkSync(metaFile);
+    return res.json({ success: true });
+  } catch (_) {
+    return res.status(400).json({ success: false, error: 'Invalid profile photo metadata' });
+  }
 });
 
 // Direct-chat attachments use signed capability URLs; status media additionally
