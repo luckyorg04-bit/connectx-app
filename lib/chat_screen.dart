@@ -43,6 +43,8 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
   final Record _recorder = Record();
   final ImagePicker _imagePicker = ImagePicker();
   StreamSubscription<DatabaseEvent>? _typingSubscription;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _readReceiptSubscription;
+  final Set<String> _readReceiptInFlight = <String>{};
   late Stream<QuerySnapshot<Map<String, dynamic>>> _messageStream;
 
   String get _uid => FirebaseAuth.instance.currentUser!.uid;
@@ -57,10 +59,26 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
       user = ModalRoute.of(context)!.settings.arguments as User1;
       _initialized = true;
       _messageStream = _messages.orderBy('timestamp', descending: true).limit(100).snapshots();
+      _readReceiptSubscription = _messageStream.listen(_markIncomingMessagesRead,
+        onError: (Object error) => debugPrint('ConnectX read receipt listener failed: $error'));
       _listenForTyping();
       _loadDisappearingSetting();
       _expiryRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
         if (mounted) setState(() {});
+      });
+    }
+  }
+
+  void _markIncomingMessagesRead(QuerySnapshot<Map<String, dynamic>> snapshot) {
+    if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      if (data['sender'] == _uid || data['isRead'] == true) continue;
+      if (!_readReceiptInFlight.add(doc.id)) continue;
+      doc.reference.update({'isRead': true}).catchError((Object error) {
+        debugPrint('ConnectX read receipt update failed: $error');
+      }).whenComplete(() {
+        _readReceiptInFlight.remove(doc.id);
       });
     }
   }
@@ -897,6 +915,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
     _expiryRefreshTimer?.cancel();
     _typingTimer?.cancel();
     _typingSubscription?.cancel();
+    _readReceiptSubscription?.cancel();
     _recorder.dispose();
     _setTyping(false);
     textFieldController.dispose();
