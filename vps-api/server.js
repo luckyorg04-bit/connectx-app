@@ -75,6 +75,21 @@ function equalHex(a, b) {
 }
 
 app.get('/health', (_req, res) => res.json({ success: true, service: 'ConnectX API', status: 'running' }));
+app.get('/api/turn-credentials', authenticate, (req, res) => {
+  const secret = process.env.TURN_SHARED_SECRET || '';
+  const urls = String(process.env.TURN_URLS || '').split(',').map(value => value.trim()).filter(Boolean);
+  if (!secret || urls.length === 0) {
+    return res.status(503).json({ success: false, error: 'TURN service is not configured' });
+  }
+  const expiresAt = Math.floor(Date.now() / 1000) + 3600;
+  const username = expiresAt + ':' + req.user.uid;
+  const credential = crypto.createHmac('sha1', secret).update(username).digest('base64');
+  return res.json({
+    success: true,
+    expiresAt,
+    iceServers: [{ urls, username, credential }]
+  });
+});
 
 app.post('/api/upload', authenticate, upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'Select a file to upload' });
