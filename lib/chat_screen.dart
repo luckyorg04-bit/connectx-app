@@ -62,9 +62,12 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
               color: Theme.of(context).textTheme.bodyLarge?.color,
             ),
             Stack(
-              children: [const CircleAvatar(
+              children: [CircleAvatar(
               radius: 20,
-              backgroundImage: NetworkImage('https://placekitten.com/640/360'),
+              backgroundImage: user!.photoUrl.isNotEmpty ? NetworkImage(user!.photoUrl) : null,
+              child: user!.photoUrl.isEmpty
+                  ? Text(user!.username.substring(0, 1).toUpperCase())
+                  : null,
             ),
                 user!.online?Positioned(
                   bottom: 0,
