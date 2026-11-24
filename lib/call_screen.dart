@@ -19,6 +19,7 @@ class _CallScreenState extends State<CallScreen> {
   final RTCVideoRenderer _remoteRenderer = RTCVideoRenderer();
   RTCPeerConnection? _peer;
   MediaStream? _localStream;
+  MediaStream? _remoteStream;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _callSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _candidateSubscription;
   Timer? _ringTimeoutTimer;
@@ -76,6 +77,7 @@ class _CallScreenState extends State<CallScreen> {
         }
       };
       _peer!.onAddStream = (stream) {
+        _remoteStream = stream;
         if (!mounted) return;
         setState(() => _remoteRenderer.srcObject = stream);
       };
@@ -89,11 +91,30 @@ class _CallScreenState extends State<CallScreen> {
             'sdpMLineIndex': candidate.sdpMLineIndex,
             'senderUid': _uid,
           });
-        } catch (_) {}
+        } catch (error) {
+          debugPrint('ConnectX ICE candidate write failed: $error');
+          if (mounted) setState(() => _error = 'Network candidate could not be sent. Check Firestore call permissions.');
+        }
       };
-      _peer!.onTrack = (event) {
-        if (event.streams.isNotEmpty && mounted) {
-          setState(() => _remoteRenderer.srcObject = event.streams.first);
+      _peer!.onTrack = (event) async {
+        try {
+          // Some Android/WebRTC combinations deliver streamless tracks. Build a
+          // remote MediaStream in that case so audio and video are still attached.
+          MediaStream stream;
+          if (event.streams.isNotEmpty) {
+            stream = event.streams.first;
+            _remoteStream = stream;
+          } else {
+            _remoteStream ??= await createLocalMediaStream('connectx-remote');
+            stream = _remoteStream!;
+            await stream.addTrack(event.track);
+          }
+          if (!mounted) return;
+          setState(() => _remoteRenderer.srcObject = stream);
+          debugPrint('ConnectX remote ${event.track.kind} track attached');
+        } catch (error) {
+          debugPrint('ConnectX remote track attach failed: $error');
+          if (mounted) setState(() => _error = 'Remote media could not be displayed: $error');
         }
       };
       _callSubscription = _callRef.snapshots().listen(_handleCallUpdate);
@@ -319,7 +340,9 @@ class _CallScreenState extends State<CallScreen> {
           (data['sdpMLineIndex'] as num?)?.toInt(),
         );
         if (_remoteDescriptionSet) {
-          _peer?.addCandidate(iceCandidate).catchError((_) {});
+          _peer?.addCandidate(iceCandidate).catchError((error) {
+            debugPrint('ConnectX remote ICE candidate rejected: $error');
+          });
         } else {
           _pendingRemoteCandidates.add(iceCandidate);
         }
@@ -392,6 +415,7 @@ class _CallScreenState extends State<CallScreen> {
     _candidateSubscription?.cancel();
     _peer?.close();
     _localStream?.dispose();
+    _remoteStream?.dispose();
     _localRenderer.dispose();
     _remoteRenderer.dispose();
     super.dispose();
