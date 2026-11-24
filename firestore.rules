@@ -59,6 +59,7 @@ service cloud.firestore {
         (
           resource.data.isViewOnce == true
           && resource.data.sender != request.auth.uid
+          && !resource.data.viewedBy.keys().hasAny([request.auth.uid])
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewedBy'])
           && request.resource.data.viewedBy is map
           && request.resource.data.viewedBy.diff(resource.data.viewedBy).affectedKeys().hasOnly([request.auth.uid])
