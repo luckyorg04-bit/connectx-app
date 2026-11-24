@@ -31,6 +31,8 @@ jobs:
         run: flutter pub get
       - name: Check VPS API syntax
         run: node --check vps-api/server.js
+      - name: Check legacy Cloud Function syntax
+        run: node --check functions/index.js
       - name: Check deployment script syntax
         run: bash -n deploy_part2.sh
       - name: Analyze Flutter project
