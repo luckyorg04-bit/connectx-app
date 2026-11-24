@@ -83,6 +83,9 @@ class _ChatMessageState extends State<ChatMessage> {
           subtitle: Text('Tap to open document', style: TextStyle(color: secondary, fontSize: 11)),
           onTap: () => _openUrl(url),
         );
+      case 'sticker':
+        return Padding(padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Text(message.message, style: const TextStyle(fontSize: 52)));
       case 'poll':
         final uid = FirebaseAuth.instance.currentUser?.uid;
         final votes = message.pollVotes;
