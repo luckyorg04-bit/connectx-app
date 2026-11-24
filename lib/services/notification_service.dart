@@ -87,13 +87,24 @@ class NotificationService {
               priority: Priority.high,
             ),
           ),
-          payload: message.data['type'] == 'incoming_call' ? jsonEncode({
-            'callId': message.data['callId'],
-            'peerUid': message.data['callerUid'],
-            'peerName': message.data['callerName'] ?? 'ConnectX user',
-            'isCaller': false,
-            'isVideo': message.data['callType'] == 'video',
-          }) : null,
+          payload: message.data['type'] == 'incoming_call'
+            ? jsonEncode({
+                'callId': message.data['callId'],
+                'peerUid': message.data['callerUid'],
+                'peerName': message.data['callerName'] ?? 'ConnectX user',
+                'isCaller': false,
+                'isVideo': message.data['callType'] == 'video',
+              })
+            : message.data['type'] == 'group_call'
+              ? jsonEncode({
+                  'callId': message.data['callId'],
+                  'groupId': message.data['groupId'],
+                  'groupName': message.data['groupName'] ?? 'Group',
+                  'callType': message.data['callType'] ?? 'voice',
+                  'isCreator': false,
+                  'isGroupCall': true,
+                })
+              : null,
         );
       } catch (_) {
         // Ignore display failures; do not interrupt the active chat.
@@ -107,6 +118,17 @@ class NotificationService {
   }
 
   static void _handleOpenedMessage(RemoteMessage message) {
+    if (message.data['type'] == 'group_call') {
+      openIncomingCall({
+        'callId': message.data['callId'],
+        'groupId': message.data['groupId'],
+        'groupName': message.data['groupName'] ?? 'Group',
+        'callType': message.data['callType'] ?? 'voice',
+        'isCreator': false,
+        'isGroupCall': true,
+      });
+      return;
+    }
     if (message.data['type'] != 'incoming_call') return;
     openIncomingCall({
       'callId': message.data['callId'],
