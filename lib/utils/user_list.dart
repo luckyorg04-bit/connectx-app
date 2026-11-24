@@ -24,13 +24,28 @@ class UserListState extends State<UserList> {
   final Map<String, Map<String, dynamic>> _meta = {};
   final Set<String> _blockedUsers = <String>{};
   final Map<String, StreamSubscription<QuerySnapshot<Map<String, dynamic>>>> _messageSubscriptions = {};
+  String _lastUserSignature = '';
+
+  String _signature(List<User1> contacts) =>
+      contacts.map((contact) => contact.key).join('|');
 
   @override
-  void initState() { super.initState(); _refresh(); }
+  void initState() {
+    super.initState();
+    _lastUserSignature = _signature(widget.users);
+    _refresh();
+  }
+
   @override
   void didUpdateWidget(covariant UserList oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.wantChats && oldWidget.users != widget.users) _refresh();
+    final nextSignature = _signature(widget.users);
+    // MainScreen mutates its shared users list in place, so list identity
+    // comparisons miss newly-added contacts. Compare stable user IDs instead.
+    if (widget.wantChats && nextSignature != _lastUserSignature) {
+      _lastUserSignature = nextSignature;
+      _refresh();
+    }
   }
 
   Future<void> _refresh() async {
@@ -39,12 +54,26 @@ class UserListState extends State<UserList> {
     if (uid == null || widget.users.isEmpty) return;
     final latest = <String, Message?>{}, unread = <String, int>{};
     final metadata = <String, Map<String, dynamic>>{};
-    final blockedSnapshot = await FirebaseDatabase.instance.ref('Users').child(uid).child('blockedUsers').get();
     final blocked = <String>{};
-    if (blockedSnapshot.value is Map) {
-      (blockedSnapshot.value as Map).forEach((key, value) {
-        if (value == true) blocked.add(key.toString());
-      });
+    try {
+      final blockedSnapshot = await FirebaseDatabase.instance.ref('Users')
+          .child(uid).child('blockedUsers').get();
+      if (blockedSnapshot.value is Map) {
+        (blockedSnapshot.value as Map).forEach((key, value) {
+          if (value == true) blocked.add(key.toString());
+        });
+      }
+    } catch (error) {
+      debugPrint('ConnectX blocked-user metadata unavailable: $error');
+    }
+    final activeIds = widget.users.map((contact) => contact.key).toSet();
+    final staleIds = _messageSubscriptions.keys
+        .where((id) => !activeIds.contains(id)).toList();
+    for (final id in staleIds) {
+      await _messageSubscriptions.remove(id)?.cancel();
+      _latest.remove(id);
+      _unread.remove(id);
+      _meta.remove(id);
     }
     await Future.wait(widget.users.map((contact) async {
       try {
