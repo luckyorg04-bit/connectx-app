@@ -4,7 +4,6 @@ class User1 {
   String name;
   final String username;
   final String key;
-  final String fcmToken;
   final String photoUrl;
   final String bio;
   final bool online;
@@ -17,7 +16,6 @@ class User1 {
     required this.online,
     required this.lastSeen,
     required this.key,
-    required this.fcmToken,
     this.photoUrl = '',
     this.bio = '',
     this.isNameBold,
@@ -30,7 +28,6 @@ class User1 {
       'key': key,
       'online': online,
       'lastSeen': lastSeen,
-      "fcmToken": fcmToken,
       "photoUrl": photoUrl,
       "bio": bio,
     };
@@ -43,7 +40,6 @@ class User1 {
       key: json['key'],
       online: json['online'],
       lastSeen: json['lastSeen'],
-      fcmToken: json['fcmToken'] ?? '',
       photoUrl: json['photoUrl'] ?? '',
       bio: json['bio'] ?? json['about'] ?? '',
     );
@@ -54,7 +50,6 @@ class User1 {
       name: snapshot.child("name").value.toString(),
       username: snapshot.child("username").value.toString(),
       key: snapshot.child("key").value.toString(),
-      fcmToken: snapshot.child("fcmToken").value?.toString() ?? "",
       photoUrl: snapshot.child("photoUrl").value?.toString() ?? "",
       online: snapshot.child("online").value == true,
       lastSeen: (snapshot.child("lastSeen").value as num?)?.toInt() ?? 0,
