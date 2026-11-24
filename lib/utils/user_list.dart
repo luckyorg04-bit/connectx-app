@@ -63,9 +63,14 @@ class UserListState extends State<UserList>{
                       Padding(
                           padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
                           child: Stack(children: [
-                            const CircleAvatar(
+                            CircleAvatar(
                               radius: 28,
-                              backgroundImage: NetworkImage('https://placekitten.com/640/360'),
+                              backgroundImage: users[index].photoUrl.isNotEmpty
+                                  ? NetworkImage(users[index].photoUrl)
+                                  : null,
+                              child: users[index].photoUrl.isEmpty
+                                  ? Text(users[index].username.substring(0, 1).toUpperCase())
+                                  : null,
                             ),
                             users[index].online?Positioned(
                                 bottom: 2,
