@@ -26,8 +26,14 @@ echo "=== 1/4 DEPLOY FIRESTORE RULES AND INDEXES ==="
 curl -fsSL "$REPO_RAW/firebase.json" -o firebase.json
 curl -fsSL "$REPO_RAW/firestore.rules" -o firestore.rules
 curl -fsSL "$REPO_RAW/firestore.indexes.json" -o firestore.indexes.json
-export GOOGLE_APPLICATION_CREDENTIALS="$SERVICE_ACCOUNT"
-npx --yes firebase-tools deploy --only firestore:rules,firestore:indexes --project "$PROJECT_ID"
+echo "Using an isolated Node.js container for Firebase CLI (host npx is not required)."
+docker run --rm \
+  -v "$PWD:/workspace" \
+  -v "$SERVICE_ACCOUNT:/run/secrets/firebase-service-account.json:ro" \
+  -e GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/firebase-service-account.json \
+  -w /workspace \
+  node:20-alpine \
+  sh -lc "npx --yes firebase-tools deploy --non-interactive --only firestore:rules,firestore:indexes --project '$PROJECT_ID'"
 
 echo "=== 2/4 UPDATE ONLY THE CONNECTX API CONTAINER ==="
 mkdir -p "$API_SOURCE_DIR"
