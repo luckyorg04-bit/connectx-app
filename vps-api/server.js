@@ -75,20 +75,32 @@ function equalHex(a, b) {
 }
 
 app.get('/health', (_req, res) => res.json({ success: true, service: 'ConnectX API', status: 'running' }));
-app.get('/api/turn-credentials', authenticate, (req, res) => {
-  const secret = process.env.TURN_SHARED_SECRET || '';
-  const urls = String(process.env.TURN_URLS || '').split(',').map(value => value.trim()).filter(Boolean);
-  if (!secret || urls.length === 0) {
-    return res.status(503).json({ success: false, error: 'TURN service is not configured' });
+app.get('/api/turn-credentials', authenticate, async (req, res) => {
+  try {
+    let config = {};
+    if (!process.env.TURN_SHARED_SECRET || !process.env.TURN_URLS) {
+      const snapshot = await db.collection('appConfig').doc('rtc').get();
+      config = snapshot.exists ? snapshot.data() || {} : {};
+    }
+    const secret = process.env.TURN_SHARED_SECRET || String(config.turnSharedSecret || '');
+    const envUrls = String(process.env.TURN_URLS || '').split(',').map(value => value.trim()).filter(Boolean);
+    const storedUrls = Array.isArray(config.turnUrls) ? config.turnUrls.filter(value => typeof value === 'string') : [];
+    const urls = envUrls.length ? envUrls : storedUrls;
+    if (!secret || urls.length === 0) {
+      return res.status(503).json({ success: false, error: 'TURN service is not configured' });
+    }
+    const expiresAt = Math.floor(Date.now() / 1000) + 3600;
+    const username = expiresAt + ':' + req.user.uid;
+    const credential = crypto.createHmac('sha1', secret).update(username).digest('base64');
+    return res.json({
+      success: true,
+      expiresAt,
+      iceServers: [{ urls, username, credential }]
+    });
+  } catch (error) {
+    console.error('TURN credential error:', error.message);
+    return res.status(503).json({ success: false, error: 'Could not issue TURN credentials' });
   }
-  const expiresAt = Math.floor(Date.now() / 1000) + 3600;
-  const username = expiresAt + ':' + req.user.uid;
-  const credential = crypto.createHmac('sha1', secret).update(username).digest('base64');
-  return res.json({
-    success: true,
-    expiresAt,
-    iceServers: [{ urls, username, credential }]
-  });
 });
 
 app.post('/api/upload', authenticate, upload.single('file'), (req, res) => {
