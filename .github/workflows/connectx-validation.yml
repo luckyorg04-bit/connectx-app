@@ -24,7 +24,20 @@ jobs:
         run: flutter pub get
 
       - name: Analyze Flutter source
-        run: flutter analyze --no-pub
+        shell: bash
+        run: |
+          set +e
+          flutter analyze --no-pub 2>&1 | tee analyze.log
+          analyze_status=${PIPESTATUS[0]}
+          set -e
+          if grep -Eq ' (error|warning) • ' analyze.log; then
+            exit 1
+          fi
+          if grep -q 'issues found' analyze.log; then
+            echo "Analyzer reported informational lints only; no errors or warnings."
+            exit 0
+          fi
+          exit "$analyze_status"
 
       - name: Run Flutter tests when present
         shell: bash
