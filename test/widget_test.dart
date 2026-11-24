@@ -1,18 +1,9 @@
-import 'package:Chat/main.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:connectx/chat_screen.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    await tester.pumpWidget(const MyApp(user: null));
-
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  test('conversation IDs are stable regardless of participant order', () {
+    expect(assignUsers('user-b', 'user-a'), 'user-a,user-b');
+    expect(assignUsers('user-a', 'user-b'), 'user-a,user-b');
   });
 }
