@@ -40,7 +40,7 @@ class _ChatScreenState extends State<NewChatScreen> {
 
             DatabaseReference usersRef = FirebaseDatabase.instance.ref("Users");
             DatabaseEvent event = await usersRef.orderByChild('username')
-                .startAt(text).endAt(text + '\uf8ff').once();
+                .startAt(text).endAt('$text\uf8ff').once();
             for (var snapshot in event.snapshot.children) {
               User1 newUser = User1.getFromSnapshot(snapshot);
               if (!users.any((user) => user.key == newUser.key)) {
