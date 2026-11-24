@@ -768,7 +768,6 @@ class _CommunitiesTab extends StatelessWidget {
     final ref = doc.reference;
     final initial = doc.data();
     final members = List<String>.from(initial['memberUids'] ?? []);
-    final joined = members.contains(uid);
     final controller = TextEditingController();
     await showModalBottomSheet<void>(
       context: context, isScrollControlled: true,
@@ -792,7 +791,7 @@ class _CommunitiesTab extends StatelessWidget {
                 ),
                 Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Row(children: [
                   Expanded(child: OutlinedButton.icon(
-                    onPressed: () async {
+                    onPressed: data['ownerUid'] == uid ? null : () async {
                       try {
                         await ref.update({'memberUids': isMember
                           ? FieldValue.arrayRemove([uid])
@@ -803,8 +802,10 @@ class _CommunitiesTab extends StatelessWidget {
                         );
                       }
                     },
-                    icon: Icon(isMember ? Icons.exit_to_app : Icons.group_add),
-                    label: Text(isMember ? 'Leave community' : 'Join community'),
+                    icon: Icon(data['ownerUid'] == uid ? Icons.verified_user
+                      : isMember ? Icons.exit_to_app : Icons.group_add),
+                    label: Text(data['ownerUid'] == uid ? 'Owner'
+                      : isMember ? 'Leave community' : 'Join community'),
                   )),
                   if (isAdmin) const Padding(
                     padding: EdgeInsets.only(left: 8),
