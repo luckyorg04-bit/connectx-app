@@ -173,7 +173,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
                       : FloatingActionButton(
                           onPressed: () => Navigator.of(context).pushNamed('/main/new'),
                           shape: const CircleBorder(),
-                          child: const Icon(Icons.add_call_rounded),
+                          child: const Icon(Icons.call_rounded),
                         ),
     );
   }
@@ -196,7 +196,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
                 label: Text(filter),
                 selected: selected,
                 onSelected: (_) => setState(() => _chatFilter = filter),
-                showCheckmark: false,
               );
             },
           ),
