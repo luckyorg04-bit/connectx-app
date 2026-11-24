@@ -175,7 +175,10 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     final uid = FirebaseAuth.instance.currentUser!.uid;
     return Scaffold(
       appBar: AppBar(
-        actions: [\n          IconButton(tooltip: 'Start group call', icon: const Icon(Icons.video_call), onPressed: _startGroupCall),\n          IconButton(tooltip: 'Manage group', icon: const Icon(Icons.group_outlined), onPressed: _manageGroup),\n        ],
+        actions: [
+          IconButton(tooltip: 'Start group call', icon: const Icon(Icons.video_call), onPressed: _startGroupCall),
+          IconButton(tooltip: 'Manage group', icon: const Icon(Icons.group_outlined), onPressed: _manageGroup),
+        ],
         title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(_groupName),
           const Text('Group conversation', style: TextStyle(fontSize: 11)),
@@ -184,7 +187,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       body: Column(children: [
         StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
           stream: FirebaseFirestore.instance.collection('groupCalls')
-            .where('groupId', isEqualTo: _groupId)\n            .where('groupMemberUids', arrayContains: uid)\n            .where('status', isEqualTo: 'active').snapshots(),
+            .where('groupId', isEqualTo: _groupId)
+            .where('groupMemberUids', arrayContains: uid)
+            .where('status', isEqualTo: 'active').snapshots(),
           builder: (context, calls) {
             if (!calls.hasData || calls.data!.docs.isEmpty) return const SizedBox.shrink();
             final activeCall = calls.data!.docs.first;
