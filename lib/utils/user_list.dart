@@ -73,7 +73,6 @@ class UserListState extends State<UserList> {
   @override
   Widget build(BuildContext context) {
     final currentUid = FirebaseAuth.instance.currentUser?.uid;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return ListView.builder(
       itemCount: widget.users.length,
       physics: const ClampingScrollPhysics(),
@@ -109,7 +108,7 @@ class UserListState extends State<UserList> {
                       backgroundImage:
                           user.photoUrl.isNotEmpty ? NetworkImage(user.photoUrl) : null,
                       child: user.photoUrl.isEmpty
-                          ? Text(user.username.substring(0, 1).toUpperCase())
+                          ? Text(user.username.isNotEmpty ? user.username.substring(0, 1).toUpperCase() : 'C')
                           : null,
                     ),
                     if (user.online)
