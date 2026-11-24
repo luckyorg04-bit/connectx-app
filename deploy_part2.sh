@@ -87,11 +87,10 @@ systemctl enable coturn
 systemctl restart coturn
 
 echo "=== 4/4 STORE PRIVATE TURN CONFIG IN FIRESTORE ==="
-cd "$API_SOURCE_DIR"
-TURN_SECRET="$TURN_SECRET" node <<'NODE'
+docker exec -i -e TURN_SECRET="$TURN_SECRET" "$API_CONTAINER" node <<'NODE'
 const fs = require('fs');
 const admin = require('firebase-admin');
-const serviceAccount = JSON.parse(fs.readFileSync('/etc/connectx-api/service-account.json', 'utf8'));
+const serviceAccount = JSON.parse(fs.readFileSync('/run/secrets/firebase-service-account.json', 'utf8'));
 admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 admin.firestore().collection('appConfig').doc('rtc').set({
   turnSharedSecret: process.env.TURN_SECRET,
