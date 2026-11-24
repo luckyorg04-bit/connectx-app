@@ -79,7 +79,7 @@ class _CallScreenState extends State<CallScreen> {
       _callSubscription = _callRef.snapshots().listen(_handleCallUpdate);
       if (!_isCaller) {
         try {
-          await FlutterRingtonePlayer().playRingtone(looping: true);
+          await FlutterRingtonePlayer.playRingtone(looping: true);
         } catch (error) {
           debugPrint('ConnectX incoming ringtone unavailable: $error');
         }
@@ -157,7 +157,7 @@ class _CallScreenState extends State<CallScreen> {
         'acceptedAt': FieldValue.serverTimestamp(),
       });
       _listenCandidates('callerCandidates');
-      await FlutterRingtonePlayer().stop();
+      await FlutterRingtonePlayer.stop();
       if (mounted) setState(() => _accepted = true);
     } catch (error) {
       if (mounted) setState(() => _error = 'Could not answer call: $error');
