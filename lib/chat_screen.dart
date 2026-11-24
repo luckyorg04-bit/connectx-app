@@ -295,6 +295,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
         fileName: fileName,
         bytes: Uint8List.fromList(bytes),
         contentType: contentType,
+        viewOnce: _sendViewOnce,
       );
       await _sendStructuredMessage(
         type: type,
