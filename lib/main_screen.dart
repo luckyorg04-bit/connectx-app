@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectx/models/chat.dart';
 import 'package:connectx/utils/user_list.dart';
@@ -479,62 +480,194 @@ class _GroupsList extends StatelessWidget {
 class _UpdatesTab extends StatelessWidget {
   const _UpdatesTab();
 
+  Future<void> _createTextStatus(BuildContext context) async {
+    final controller = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Create text status'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 500,
+          maxLines: 5,
+          decoration: const InputDecoration(
+            hintText: 'What would you like to share?',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Share status'),
+          ),
+        ],
+      ),
+    );
+
+    final text = controller.text.trim();
+    controller.dispose();
+    if (confirmed != true || text.isEmpty) return;
+
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final audience = <String>{
+      uid,
+      ...users.where((person) => person.key != uid).map((person) => person.key),
+    }.toList();
+    try {
+      await FirebaseFirestore.instance.collection('statuses').add({
+        'ownerUid': uid,
+        'userName': FirebaseAuth.instance.currentUser?.displayName ?? 'ConnectX user',
+        'statusText': text,
+        'audienceUids': audience,
+        'createdAt': FieldValue.serverTimestamp(),
+        'expiresAt': Timestamp.fromDate(
+          DateTime.now().add(const Duration(hours: 24)),
+        ),
+      });
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Status shared for 24 hours.')),
+        );
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not share status: $error')),
+        );
+      }
+    }
+  }
+
+  void _openStatus(BuildContext context, Map<String, dynamic> data) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text((data['userName'] ?? 'ConnectX user').toString()),
+        content: SelectableText((data['statusText'] ?? '').toString()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 90),
-      children: [
-        Text('Status', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
-        const SizedBox(height: 14),
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: Stack(
-            children: [
-              CircleAvatar(
-                radius: 27,
-                backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
-                child: const Icon(Icons.person_rounded, size: 30),
-              ),
-              Positioned(
-                right: 0,
-                bottom: 0,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Theme.of(context).scaffoldBackgroundColor, width: 2),
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final statusStream = FirebaseFirestore.instance.collection('statuses')
+        .where('audienceUids', arrayContains: uid).snapshots();
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: statusStream,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(child: Text('Unable to load updates: ${snapshot.error}'));
+        }
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final now = Timestamp.now();
+        final active = snapshot.data!.docs.where((doc) {
+          final expiry = doc.data()['expiresAt'];
+          return expiry is Timestamp && expiry.compareTo(now) > 0;
+        }).toList()
+          ..sort((a, b) {
+            final aTime = a.data()['createdAt'];
+            final bTime = b.data()['createdAt'];
+            final aDate = aTime is Timestamp ? aTime : Timestamp(0, 0);
+            final bDate = bTime is Timestamp ? bTime : Timestamp(0, 0);
+            return bDate.compareTo(aDate);
+          });
+        final mine = active.where((doc) => doc.data()['ownerUid'] == uid).toList();
+        final others = active.where((doc) => doc.data()['ownerUid'] != uid).toList();
+
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 90),
+          children: [
+            Text('Status', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 12),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Stack(
+                children: [
+                  const CircleAvatar(radius: 27, child: Icon(Icons.person_rounded, size: 30)),
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primary,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Theme.of(context).scaffoldBackgroundColor, width: 2),
+                      ),
+                      child: const Icon(Icons.add, size: 17, color: Colors.white),
+                    ),
                   ),
-                  child: const Icon(Icons.add, size: 17, color: Colors.white),
-                ),
+                ],
               ),
+              title: const Text('My status', style: TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: Text(mine.isEmpty ? 'Tap to add a text status' : '${mine.length} active update(s) · expires after 24 hours'),
+              onTap: () => _createTextStatus(context),
+              trailing: IconButton(
+                tooltip: 'Add text status',
+                icon: const Icon(Icons.edit_outlined),
+                onPressed: () => _createTextStatus(context),
+              ),
+            ),
+            if (mine.isNotEmpty) ...[
+              const Divider(height: 20),
+              Text('My updates', style: Theme.of(context).textTheme.titleSmall),
+              ...mine.map((doc) => ListTile(
+                leading: const CircleAvatar(child: Icon(Icons.person_outline)),
+                title: Text((doc.data()['statusText'] ?? '').toString(), maxLines: 2, overflow: TextOverflow.ellipsis),
+                subtitle: const Text('Your status · 24-hour expiry'),
+                onTap: () => _openStatus(context, doc.data()),
+              )),
             ],
-          ),
-          title: const Text('My status', style: TextStyle(fontWeight: FontWeight.w600)),
-          subtitle: const Text('Tap to add a status update'),
-          onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Status sharing will be enabled in the next feature stage.')),
-          ),
-        ),
-        const Divider(height: 24),
-        Text('Recent updates', style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Theme.of(context).colorScheme.primary)),
-        const SizedBox(height: 28),
-        const _SectionEmptyState(
-          icon: Icons.circle_outlined,
-          title: 'No recent updates',
-          description: 'When your contacts share a status, it will appear here.',
-        ),
-        const Divider(height: 32),
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: const CircleAvatar(child: Icon(Icons.campaign_outlined)),
-          title: const Text('Channels', style: TextStyle(fontWeight: FontWeight.w700)),
-          subtitle: const Text('Discover updates from people and organizations'),
-          trailing: const Icon(Icons.chevron_right_rounded),
-          onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Channels will be added in the next feature stage.')),
-          ),
-        ),
-      ],
+            const Divider(height: 24),
+            Text('Recent updates', style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Theme.of(context).colorScheme.primary)),
+            if (others.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 28),
+                child: _SectionEmptyState(
+                  icon: Icons.circle_outlined,
+                  title: 'No recent updates',
+                  description: 'Text statuses from your ConnectX chat contacts will appear here.',
+                ),
+              )
+            else
+              ...others.map((doc) {
+                final data = doc.data();
+                final createdAt = data['createdAt'];
+                final when = createdAt is Timestamp
+                    ? DateFormat('h:mm a').format(createdAt.toDate())
+                    : 'Recently';
+                return ListTile(
+                  leading: const CircleAvatar(child: Icon(Icons.person_rounded)),
+                  title: Text((data['userName'] ?? 'ConnectX user').toString()),
+                  subtitle: Text((data['statusText'] ?? '').toString(), maxLines: 2, overflow: TextOverflow.ellipsis),
+                  trailing: Text(when, style: Theme.of(context).textTheme.labelSmall),
+                  onTap: () => _openStatus(context, data),
+                );
+              }),
+            const Divider(height: 32),
+            const ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: CircleAvatar(child: Icon(Icons.campaign_outlined)),
+              title: Text('Channels', style: TextStyle(fontWeight: FontWeight.w700)),
+              subtitle: Text('Public channels are planned for a later Part 2 update.'),
+            ),
+          ],
+        );
+      },
     );
   }
 }
