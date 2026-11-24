@@ -3,6 +3,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 
 import 'models/user.dart';
+import 'services/database_service.dart';
 
 class NewChatScreen extends StatefulWidget {
   const NewChatScreen({Key? key}) : super(key: key);
@@ -38,7 +39,7 @@ class _ChatScreenState extends State<NewChatScreen> {
               return;
             }
 
-            DatabaseReference usersRef = FirebaseDatabase.instance.ref("Users");
+            DatabaseReference usersRef = ConnectXDatabase.instance.ref("Users");
             DatabaseEvent event = await usersRef.orderByChild('username')
                 .startAt(text).endAt('$text\uf8ff').once();
             for (var snapshot in event.snapshot.children) {
