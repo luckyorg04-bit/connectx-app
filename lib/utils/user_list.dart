@@ -21,6 +21,7 @@ class UserListState extends State<UserList> {
   final Map<String, Message?> _latest = {};
   final Map<String, int> _unread = {};
   final Map<String, Map<String, dynamic>> _meta = {};
+  final Set<String> _blockedUsers = <String>{};
 
   @override
   void initState() { super.initState(); _refresh(); }
@@ -36,6 +37,13 @@ class UserListState extends State<UserList> {
     if (uid == null || widget.users.isEmpty) return;
     final latest = <String, Message?>{}, unread = <String, int>{};
     final metadata = <String, Map<String, dynamic>>{};
+    final blockedSnapshot = await FirebaseDatabase.instance.ref('Users').child(uid).child('blockedUsers').get();
+    final blocked = <String>{};
+    if (blockedSnapshot.value is Map) {
+      (blockedSnapshot.value as Map).forEach((key, value) {
+        if (value == true) blocked.add(key.toString());
+      });
+    }
     await Future.wait(widget.users.map((contact) async {
       try {
         final snap = await FirebaseFirestore.instance.collection('messages')
@@ -52,7 +60,7 @@ class UserListState extends State<UserList> {
       } catch (_) { metadata[contact.key] = {}; }
     }));
     if (!mounted) return;
-    setState(() { _latest..clear()..addAll(latest); _unread..clear()..addAll(unread); _meta..clear()..addAll(metadata); });
+    setState(() { _latest..clear()..addAll(latest); _unread..clear()..addAll(unread); _meta..clear()..addAll(metadata); _blockedUsers..clear()..addAll(blocked); });
   }
 
   Future<void> _setMeta(User1 contact, String key, bool value) async {
@@ -66,7 +74,7 @@ class UserListState extends State<UserList> {
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     final contacts = widget.users.where((c) {
-      if (c.key == uid) return false;
+      if (c.key == uid || _blockedUsers.contains(c.key)) return false;
       final meta = _meta[c.key] ?? const <String, dynamic>{};
       if (widget.filter == 'Archived') return meta['archived'] == true;
       if (meta['archived'] == true) return false;
@@ -91,7 +99,8 @@ class UserListState extends State<UserList> {
     }
     return ListView.builder(itemCount: contacts.length, physics: const ClampingScrollPhysics(),
       itemBuilder: (context,index) {
-        final contact = contacts[index], meta = _meta[contacts[index].key] ?? <String,dynamic>{};
+        final contact = contacts[index];
+        final meta = _meta[contact.key] ?? <String, dynamic>{};
         final last = _latest[contact.key], count = _unread[contact.key] ?? 0;
         final preview = last?.message ?? (widget.wantChats ? 'Tap to start chatting' : '@${contact.username}');
         final time = last == null ? '' : DateFormat('h:mm a').format(DateTime.fromMillisecondsSinceEpoch(last.timestamp));
