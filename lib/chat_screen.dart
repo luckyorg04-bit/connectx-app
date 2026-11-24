@@ -328,6 +328,31 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
     }
   }
 
+  Future<void> _sendSticker() async {
+    const stickers = ['😀','😂','🥰','😍','🤔','😎','😭','🔥','🎉','❤️','👍','🙏','💯','🤝','🚀','🌟','🎂','☕','🌈','🐱','🐶','🌻','⚽','🎮'];
+    final sticker = await showModalBottomSheet<String>(context: context, builder: (context) => SafeArea(
+      child: Padding(padding: const EdgeInsets.all(12), child: GridView.count(
+        shrinkWrap: true, crossAxisCount: 4, children: stickers.map((value) => InkWell(
+          onTap: () => Navigator.pop(context, value),
+          child: Center(child: Text(value, style: const TextStyle(fontSize: 34))),
+        )).toList(),
+      )),
+    ));
+    if (sticker != null) {
+      await _sendStructuredMessage(type: 'sticker', text: sticker);
+    }
+  }
+
+  Future<void> _pickGif() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom, allowedExtensions: ['gif'], withData: true);
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.first;
+    if (file.bytes == null) return;
+    await _uploadBytes(bytes: file.bytes!, fileName: file.name,
+      contentType: 'image/gif', type: 'image');
+  }
+
   Future<void> _pickDocument() async {
     final result = await FilePicker.platform.pickFiles(withData: true);
     if (result == null || result.files.isEmpty) return;
@@ -762,6 +787,8 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
                 if (value == 'location') _sendLocation();
                 if (value == 'contact') _shareContact();
                 if (value == 'poll') _createPoll();
+                if (value == 'sticker') _sendSticker();
+                if (value == 'gif') _pickGif();
               },
               itemBuilder: (context) => const [
                 PopupMenuItem(value: 'image', child: ListTile(leading: Icon(Icons.photo), title: Text('Photo'))),
@@ -770,6 +797,8 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
                 PopupMenuItem(value: 'location', child: ListTile(leading: Icon(Icons.location_on), title: Text('Location'))),
                 PopupMenuItem(value: 'contact', child: ListTile(leading: Icon(Icons.contact_page), title: Text('Contact'))),
                 PopupMenuItem(value: 'poll', child: ListTile(leading: Icon(Icons.poll_outlined), title: Text('Poll'))),
+                PopupMenuItem(value: 'sticker', child: ListTile(leading: Icon(Icons.emoji_emotions_outlined), title: Text('Sticker'))),
+                PopupMenuItem(value: 'gif', child: ListTile(leading: Icon(Icons.gif_box_outlined), title: Text('GIF'))),
               ],
             ),
             Expanded(child: TextField(
