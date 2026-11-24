@@ -58,7 +58,7 @@ class ProfileScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 32),
-            _ProfileInfoTile(
+            const _ProfileInfoTile(
               icon: Icons.person_outline_rounded,
               title: 'Name',
               value: name,
