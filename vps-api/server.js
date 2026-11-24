@@ -443,14 +443,16 @@ function startListeners() {
       // The client must not write into another user's private RTDB profile.
       // Use Admin SDK to publish the conversation index for both participants.
       const indexTimestamp = Number(msg.timestamp) || Date.now();
-      Promise.all([
+      const updateIndexes = Promise.all([
         rtdb.ref('Users/' + msg.sender + '/chats/personal/' + recipient)
           .set(indexTimestamp),
         rtdb.ref('Users/' + recipient + '/chats/personal/' + msg.sender)
           .set(indexTimestamp)
-      ]).catch(error => console.error('Direct chat index update failed:', error.message));
+      ]).catch(error => {
+        console.error('Direct chat index update failed:', error.message);
+      });
 
-      rtdb.ref('Users/' + msg.sender).get().then(sender => {
+      updateIndexes.then(() => rtdb.ref('Users/' + msg.sender).get()).then(sender => {
         const title = sender.child('name').val() || 'New message';
         const body = msg.type === 'text' ? String(msg.message || 'New message').slice(0,180)
           : msg.type === 'image' ? 'Photo' : msg.type === 'video' ? 'Video'
