@@ -1,8 +1,8 @@
-import 'package:Chat/utils/user_list.dart';
+import 'package:connectx/utils/user_list.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 
-import 'models/User.dart';
+import 'models/user.dart';
 
 class NewChatScreen extends StatefulWidget {
   const NewChatScreen({Key? key}) : super(key: key);
