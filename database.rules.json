@@ -7,7 +7,7 @@
       ".indexOn": ["username"],
       "$uid": {
         ".write": "auth != null && auth.uid == $uid",
-        ".validate": "newData.hasChildren(['name', 'username', 'key', 'online', 'lastSeen', 'bio', 'photoUrl']) && newData.numChildren() == 7 && newData.child('key').val() == $uid && newData.child('name').val() is string && newData.child('username').val() is string && newData.child('online').val() is boolean && newData.child('lastSeen').val() is number && newData.child('bio').val() is string && newData.child('photoUrl').val() is string"
+        ".validate": "newData.hasChildren(['name', 'username', 'key', 'online', 'lastSeen', 'bio', 'photoUrl']) && newData.numChildren() == 7 && newData.child('key').val() == $uid && newData.child('name').isString() && newData.child('username').isString() && newData.child('online').isBoolean() && newData.child('lastSeen').isNumber() && newData.child('bio').isString() && newData.child('photoUrl').isString()"
       }
     },
     "PrivateUsers": {
