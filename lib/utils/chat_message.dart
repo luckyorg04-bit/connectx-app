@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:video_player/video_player.dart';
 import '../chat_screen.dart';
 import '../models/message.dart';
 
@@ -36,6 +37,8 @@ class _ChatMessageState extends State<ChatMessage> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   bool _audioPlaying = false;
   StreamSubscription<void>? _audioCompleteSubscription;
+  VideoPlayerController? _videoController;
+  Future<void>? _videoInitialization;
 
   @override
   void initState() {
@@ -43,12 +46,38 @@ class _ChatMessageState extends State<ChatMessage> {
     _audioCompleteSubscription = _audioPlayer.onPlayerComplete.listen((_) {
       if (mounted) setState(() => _audioPlaying = false);
     });
+    _initializeVideo();
+  }
+
+  void _initializeVideo() {
+    final url = widget.message.type == 'video' ? widget.message.mediaUrl : null;
+    if (url == null || url.isEmpty) return;
+    final controller = VideoPlayerController.network(url);
+    _videoController = controller;
+    _videoInitialization = controller.initialize().then((_) {
+      if (mounted) setState(() {});
+    }).catchError((Object error) {
+      debugPrint('ConnectX video preview failed: $error');
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant ChatMessage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.message.mediaUrl != widget.message.mediaUrl ||
+        oldWidget.message.type != widget.message.type) {
+      _videoController?.dispose();
+      _videoController = null;
+      _videoInitialization = null;
+      _initializeVideo();
+    }
   }
 
   @override
   void dispose() {
     _audioCompleteSubscription?.cancel();
     _audioPlayer.dispose();
+    _videoController?.dispose();
     super.dispose();
   }
 
@@ -121,12 +150,94 @@ class _ChatMessageState extends State<ChatMessage> {
           ]),
         );
       case 'video':
-        return ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: const CircleAvatar(child: Icon(Icons.play_arrow_rounded)),
-          title: Text(message.fileName ?? 'Video', style: TextStyle(color: textColor)),
-          subtitle: Text('Tap to open video', style: TextStyle(color: secondary, fontSize: 11)),
-          onTap: () => _openMedia(url),
+        if (message.isViewOnce && !widget.isMe) {
+          return TextButton.icon(
+            onPressed: () => _openMedia(url),
+            icon: const Icon(Icons.looks_one),
+            label: const Text('Open video once'),
+          );
+        }
+        final controller = _videoController;
+        if (controller == null) {
+          return ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const CircleAvatar(child: Icon(Icons.play_arrow_rounded)),
+            title: Text(message.fileName ?? 'Video', style: TextStyle(color: textColor)),
+            subtitle: Text('Video preview unavailable', style: TextStyle(color: secondary, fontSize: 11)),
+            onTap: () => _openMedia(url),
+          );
+        }
+        return SizedBox(
+          width: 250,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              FutureBuilder<void>(
+                future: _videoInitialization,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState != ConnectionState.done) {
+                    if (snapshot.hasError) {
+                      return const SizedBox(
+                        height: 120,
+                        child: Center(child: Icon(Icons.broken_video_outlined)),
+                      );
+                    }
+                    return const SizedBox(
+                      height: 120,
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
+                  if (!controller.value.isInitialized) {
+                    return const SizedBox(
+                      height: 120,
+                      child: Center(child: Icon(Icons.broken_video_outlined)),
+                    );
+                  }
+                  return ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: AspectRatio(
+                      aspectRatio: controller.value.aspectRatio > 0
+                          ? controller.value.aspectRatio : 16 / 9,
+                      child: VideoPlayer(controller),
+                    ),
+                  );
+                },
+              ),
+              Row(
+                children: [
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () async {
+                      if (!controller.value.isInitialized) return;
+                      if (controller.value.isPlaying) {
+                        await controller.pause();
+                      } else {
+                        await controller.play();
+                      }
+                      if (mounted) setState(() {});
+                    },
+                    icon: Icon(controller.value.isPlaying
+                        ? Icons.pause_circle_filled : Icons.play_circle_fill),
+                  ),
+                  Expanded(
+                    child: controller.value.isInitialized
+                        ? VideoProgressIndicator(controller, allowScrubbing: true)
+                        : Text(message.fileName ?? 'Video', style: TextStyle(color: textColor)),
+                  ),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    tooltip: 'Open video externally',
+                    onPressed: () => _openMedia(url),
+                    icon: const Icon(Icons.open_in_new, size: 18),
+                  ),
+                ],
+              ),
+              if (message.fileName != null)
+                Text(message.fileName!, maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: secondary, fontSize: 11)),
+            ],
+          ),
         );
       case 'document':
         return ListTile(
