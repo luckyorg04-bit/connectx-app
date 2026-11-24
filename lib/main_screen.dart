@@ -1017,39 +1017,85 @@ class _CallsTab extends StatelessWidget {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance.collection('calls')
         .where('participants', arrayContains: uid).snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) return Center(child: Text('Unable to load calls: ${snapshot.error}'));
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-        final calls = snapshot.data!.docs.toList()
-          ..sort((a,b) {
+      builder: (context, directSnapshot) {
+        if (directSnapshot.hasError) return Center(child: Text('Unable to load calls: ${directSnapshot.error}'));
+        if (!directSnapshot.hasData) return const Center(child: CircularProgressIndicator());
+        final directCalls = directSnapshot.data!.docs.toList()
+          ..sort((a, b) {
             final aa = a.data()['createdAt'], bb = b.data()['createdAt'];
-            return (bb is Timestamp ? bb : Timestamp(0,0)).compareTo(aa is Timestamp ? aa : Timestamp(0,0));
+            return (bb is Timestamp ? bb : Timestamp(0, 0))
+              .compareTo(aa is Timestamp ? aa : Timestamp(0, 0));
           });
-        if (calls.isEmpty) return const _SectionEmptyState(icon: Icons.call_outlined,
-          title: 'No calls yet', description: 'Your voice and video call history will appear here.');
-        return ListView(padding: const EdgeInsets.only(bottom: 90), children: [
-          const Padding(padding: EdgeInsets.all(16), child: Text('Recent calls',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
-          ...calls.map((doc) {
-            final data = doc.data();
-            final incoming = data['calleeUid'] == uid;
-            final ringing = data['status'] == 'ringing' && incoming;
-            final video = data['type'] == 'video';
-            final peerName = (incoming ? data['callerName'] : data['calleeName']) ?? 'ConnectX user';
-            final status = (data['status'] ?? 'unknown').toString();
-            return ListTile(
-              leading: CircleAvatar(child: Icon(video ? Icons.videocam : Icons.call)),
-              title: Text(peerName.toString()),
-              subtitle: Text(ringing ? 'Incoming ${video ? 'video' : 'voice'} call' :
-                '${incoming ? 'Incoming' : 'Outgoing'} · $status'),
-              trailing: ringing ? IconButton(icon: const Icon(Icons.call, color: Colors.green),
-                onPressed: () => Navigator.of(context).pushNamed('/call', arguments: {
-                  'callId': doc.id, 'peerUid': data['callerUid'].toString(),
-                  'peerName': peerName.toString(), 'isCaller': false, 'isVideo': video,
-                })) : null,
-            );
-          }),
-        ]);
+        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance.collection('groupCalls')
+            .where('participants', arrayContains: uid).snapshots(),
+          builder: (context, groupSnapshot) {
+            if (groupSnapshot.hasError) return Center(child: Text('Unable to load group calls: ${groupSnapshot.error}'));
+            if (!groupSnapshot.hasData) return const Center(child: CircularProgressIndicator());
+            final groupCalls = groupSnapshot.data!.docs.toList()
+              ..sort((a, b) {
+                final aa = a.data()['createdAt'], bb = b.data()['createdAt'];
+                return (bb is Timestamp ? bb : Timestamp(0, 0))
+                  .compareTo(aa is Timestamp ? aa : Timestamp(0, 0));
+              });
+            if (directCalls.isEmpty && groupCalls.isEmpty) {
+              return const _SectionEmptyState(icon: Icons.call_outlined,
+                title: 'No calls yet', description: 'Your voice, video and group call history will appear here.');
+            }
+            return ListView(padding: const EdgeInsets.only(bottom: 90), children: [
+              if (directCalls.isNotEmpty) ...[
+                const Padding(padding: EdgeInsets.all(16), child: Text('Recent calls',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
+                ...directCalls.map((doc) {
+                  final data = doc.data();
+                  final incoming = data['calleeUid'] == uid;
+                  final ringing = data['status'] == 'ringing' && incoming;
+                  final video = data['type'] == 'video';
+                  final peerName = (incoming ? data['callerName'] : data['calleeName']) ?? 'ConnectX user';
+                  final status = (data['status'] ?? 'unknown').toString();
+                  return ListTile(
+                    leading: CircleAvatar(child: Icon(video ? Icons.videocam : Icons.call)),
+                    title: Text(peerName.toString()),
+                    subtitle: Text(ringing ? 'Incoming ${video ? 'video' : 'voice'} call' :
+                      '${incoming ? 'Incoming' : 'Outgoing'} · $status'),
+                    trailing: ringing ? IconButton(icon: const Icon(Icons.call, color: Colors.green),
+                      onPressed: () => Navigator.of(context).pushNamed('/call', arguments: {
+                        'callId': doc.id, 'peerUid': data['callerUid'].toString(),
+                        'peerName': peerName.toString(), 'isCaller': false, 'isVideo': video,
+                      })) : null,
+                  );
+                }),
+              ],
+              if (groupCalls.isNotEmpty) ...[
+                const Padding(padding: EdgeInsets.fromLTRB(16, 20, 16, 8), child: Text('Group calls',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
+                ...groupCalls.map((doc) {
+                  final data = doc.data();
+                  final active = data['status'] == 'active';
+                  final type = data['type'] == 'video' ? 'Video' : 'Voice';
+                  final activeUids = List<String>.from(data['activeUids'] ?? []);
+                  return ListTile(
+                    leading: CircleAvatar(child: Icon(type == 'Video' ? Icons.video_call : Icons.groups)),
+                    title: Text((data['groupName'] ?? 'Group call').toString()),
+                    subtitle: Text('$type group call · ${active ? 'Active (${activeUids.length} joined)' : (data['status'] ?? 'Ended')}'),
+                    trailing: active ? IconButton(
+                      tooltip: 'Join group call',
+                      icon: const Icon(Icons.call, color: Colors.green),
+                      onPressed: () => Navigator.of(context).pushNamed('/group-call', arguments: {
+                        'callId': doc.id,
+                        'groupId': data['groupId'].toString(),
+                        'groupName': (data['groupName'] ?? 'Group').toString(),
+                        'callType': data['type'] ?? 'voice',
+                        'isCreator': false,
+                        'isGroupCall': true,
+                      }),
+                    ) : null,
+                  );
+                }),
+              ],
+            ]);
+          },
+        );
       },
     );
   }
