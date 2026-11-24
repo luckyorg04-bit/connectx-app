@@ -1,5 +1,8 @@
 import 'dart:async';
 import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'services/chat_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectx/models/chat.dart';
 import 'package:connectx/utils/user_list.dart';
@@ -480,195 +483,145 @@ class _GroupsList extends StatelessWidget {
 class _UpdatesTab extends StatelessWidget {
   const _UpdatesTab();
 
-  Future<void> _createTextStatus(BuildContext context) async {
-    final controller = TextEditingController();
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Create text status'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLength: 500,
-          maxLines: 5,
-          decoration: const InputDecoration(
-            hintText: 'What would you like to share?',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Share status'),
-          ),
-        ],
-      ),
-    );
-
-    final text = controller.text.trim();
-    controller.dispose();
-    if (confirmed != true || text.isEmpty) return;
-
+  Future<void> _create(BuildContext context) async {
     final uid = FirebaseAuth.instance.currentUser!.uid;
-    final audience = <String>{
-      uid,
-      ...users.where((person) => person.key != uid).map((person) => person.key),
-    }.toList();
+    final kind = await showModalBottomSheet<String>(context: context,
+      builder: (c) => SafeArea(child: Wrap(children: [
+        ListTile(leading: const Icon(Icons.text_fields), title: const Text('Text status'), onTap: () => Navigator.pop(c, 'text')),
+        ListTile(leading: const Icon(Icons.photo), title: const Text('Photo status'), onTap: () => Navigator.pop(c, 'image')),
+        ListTile(leading: const Icon(Icons.videocam), title: const Text('Video status'), onTap: () => Navigator.pop(c, 'video')),
+      ])));
+    if (kind == null) return;
+    final audience = <String>{uid, ...users.where((u) => u.key != uid).map((u) => u.key)};
+    final privacy = await showDialog<bool>(context: context, builder: (c) => AlertDialog(
+      title: const Text('Status privacy'),
+      content: const Text('Share this status with your ConnectX chat contacts?'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Contacts')),
+      ]));
+    if (privacy != true) return;
+    String text = '';
+    String? url, fileName;
+    if (kind == 'text') {
+      final controller = TextEditingController();
+      final ok = await showDialog<bool>(context: context, builder: (c) => AlertDialog(
+        title: const Text('Create text status'),
+        content: TextField(controller: controller, maxLength: 500, maxLines: 4,
+          decoration: const InputDecoration(hintText: 'What would you like to share?')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Share')),
+        ]));
+      text = controller.text.trim();
+      controller.dispose();
+      if (ok != true || text.isEmpty) return;
+    } else {
+      final picker = ImagePicker();
+      final picked = kind == 'video'
+        ? await picker.pickVideo(source: ImageSource.gallery, maxDuration: const Duration(seconds: 30))
+        : await picker.pickImage(source: ImageSource.gallery, imageQuality: 82);
+      if (picked == null) return;
+      final bytes = await picked.readAsBytes();
+      if (bytes.length > 25 * 1024 * 1024) {
+        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Maximum status media size is 25 MB.')));
+        return;
+      }
+      fileName = picked.name;
+      final ext = picked.name.split('.').last.toLowerCase();
+      final mime = kind == 'video' ? (ext == 'mov' ? 'video/quicktime' : 'video/mp4')
+        : (ext == 'png' ? 'image/png' : ext == 'webp' ? 'image/webp' : 'image/jpeg');
+      try {
+        url = await ChatStorage.upload(conversationId: '$uid,$uid',
+          fileName: picked.name, bytes: bytes, contentType: mime);
+      } catch (error) {
+        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Upload failed: $error')));
+        return;
+      }
+    }
     try {
       await FirebaseFirestore.instance.collection('statuses').add({
         'ownerUid': uid,
         'userName': FirebaseAuth.instance.currentUser?.displayName ?? 'ConnectX user',
         'statusText': text,
-        'audienceUids': audience,
+        'mediaType': kind,
+        if (url != null) 'mediaUrl': url,
+        if (fileName != null) 'fileName': fileName,
+        'audienceUids': audience.toList(),
         'createdAt': FieldValue.serverTimestamp(),
-        'expiresAt': Timestamp.fromDate(
-          DateTime.now().add(const Duration(hours: 24)),
-        ),
+        'expiresAt': Timestamp.fromDate(DateTime.now().add(const Duration(hours: 24))),
       });
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Status shared for 24 hours.')),
-        );
-      }
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Status shared for 24 hours.')));
     } catch (error) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not share status: $error')),
-        );
-      }
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not share status: $error')));
     }
   }
 
-  void _openStatus(BuildContext context, Map<String, dynamic> data) {
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text((data['userName'] ?? 'ConnectX user').toString()),
-        content: SelectableText((data['statusText'] ?? '').toString()),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
+  Future<void> _view(BuildContext context, QueryDocumentSnapshot<Map<String, dynamic>> doc, String uid) async {
+    final data = doc.data();
+    if (data['ownerUid'] != uid) {
+      try { await doc.reference.collection('views').doc(uid).set({'viewerUid': uid, 'viewedAt': FieldValue.serverTimestamp()}); } catch (_) {}
+    }
+    if (!context.mounted) return;
+    final type = (data['mediaType'] ?? 'text').toString();
+    await showDialog<void>(context: context, builder: (c) => Dialog(
+      child: Padding(padding: const EdgeInsets.all(16), child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Row(children: [Expanded(child: Text((data['userName'] ?? 'ConnectX user').toString(), style: const TextStyle(fontWeight: FontWeight.bold))),
+          IconButton(onPressed: () => Navigator.pop(c), icon: const Icon(Icons.close))]),
+        if (type == 'image' && data['mediaUrl'] != null)
+          Image.network(data['mediaUrl'].toString(), fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => const Text('Unable to load photo'))
+        else if (type == 'video' && data['mediaUrl'] != null)
+          ListTile(leading: const Icon(Icons.play_circle), title: Text((data['fileName'] ?? 'Video status').toString()),
+            onTap: () { final uri = Uri.tryParse(data['mediaUrl'].toString()); if (uri != null) launchUrl(uri, mode: LaunchMode.externalApplication); })
+        else
+          Padding(padding: const EdgeInsets.all(24), child: SelectableText((data['statusText'] ?? '').toString(), style: const TextStyle(fontSize: 20))),
+        if (data['ownerUid'] == uid)
+          StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(stream: doc.reference.collection('views').snapshots(),
+            builder: (_, snap) => Align(alignment: Alignment.centerLeft, child: Text('Seen by ${snap.data?.docs.length ?? 0}'))),
+      ]))));
   }
 
   @override
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser!.uid;
-    final statusStream = FirebaseFirestore.instance.collection('statuses')
-        .where('audienceUids', arrayContains: uid).snapshots();
-
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: statusStream,
+      stream: FirebaseFirestore.instance.collection('statuses').where('audienceUids', arrayContains: uid).snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(child: Text('Unable to load updates: ${snapshot.error}'));
-        }
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
+        if (snapshot.hasError) return Center(child: Text('Unable to load updates: ${snapshot.error}'));
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         final now = Timestamp.now();
-        final active = snapshot.data!.docs.where((doc) {
-          final expiry = doc.data()['expiresAt'];
-          return expiry is Timestamp && expiry.compareTo(now) > 0;
-        }).toList()
-          ..sort((a, b) {
-            final aTime = a.data()['createdAt'];
-            final bTime = b.data()['createdAt'];
-            final aDate = aTime is Timestamp ? aTime : Timestamp(0, 0);
-            final bDate = bTime is Timestamp ? bTime : Timestamp(0, 0);
-            return bDate.compareTo(aDate);
-          });
-        final mine = active.where((doc) => doc.data()['ownerUid'] == uid).toList();
-        final others = active.where((doc) => doc.data()['ownerUid'] != uid).toList();
-
-        return ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 90),
-          children: [
-            Text('Status', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 12),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Stack(
-                children: [
-                  const CircleAvatar(radius: 27, child: Icon(Icons.person_rounded, size: 30)),
-                  Positioned(
-                    right: 0,
-                    bottom: 0,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primary,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Theme.of(context).scaffoldBackgroundColor, width: 2),
-                      ),
-                      child: const Icon(Icons.add, size: 17, color: Colors.white),
-                    ),
-                  ),
-                ],
-              ),
-              title: const Text('My status', style: TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: Text(mine.isEmpty ? 'Tap to add a text status' : '${mine.length} active update(s) · expires after 24 hours'),
-              onTap: () => _createTextStatus(context),
-              trailing: IconButton(
-                tooltip: 'Add text status',
-                icon: const Icon(Icons.edit_outlined),
-                onPressed: () => _createTextStatus(context),
-              ),
-            ),
-            if (mine.isNotEmpty) ...[
-              const Divider(height: 20),
-              Text('My updates', style: Theme.of(context).textTheme.titleSmall),
-              ...mine.map((doc) => ListTile(
-                leading: const CircleAvatar(child: Icon(Icons.person_outline)),
-                title: Text((doc.data()['statusText'] ?? '').toString(), maxLines: 2, overflow: TextOverflow.ellipsis),
-                subtitle: const Text('Your status · 24-hour expiry'),
-                onTap: () => _openStatus(context, doc.data()),
-              )),
-            ],
-            const Divider(height: 24),
-            Text('Recent updates', style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Theme.of(context).colorScheme.primary)),
-            if (others.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 28),
-                child: _SectionEmptyState(
-                  icon: Icons.circle_outlined,
-                  title: 'No recent updates',
-                  description: 'Text statuses from your ConnectX chat contacts will appear here.',
-                ),
-              )
-            else
-              ...others.map((doc) {
-                final data = doc.data();
-                final createdAt = data['createdAt'];
-                final when = createdAt is Timestamp
-                    ? DateFormat('h:mm a').format(createdAt.toDate())
-                    : 'Recently';
-                return ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.person_rounded)),
-                  title: Text((data['userName'] ?? 'ConnectX user').toString()),
-                  subtitle: Text((data['statusText'] ?? '').toString(), maxLines: 2, overflow: TextOverflow.ellipsis),
-                  trailing: Text(when, style: Theme.of(context).textTheme.labelSmall),
-                  onTap: () => _openStatus(context, data),
-                );
-              }),
-            const Divider(height: 32),
-            const ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: CircleAvatar(child: Icon(Icons.campaign_outlined)),
-              title: Text('Channels', style: TextStyle(fontWeight: FontWeight.w700)),
-              subtitle: Text('Public channels are planned for a later Part 2 update.'),
-            ),
-          ],
-        );
-      },
-    );
+        final docs = snapshot.data!.docs.where((d) => d.data()['expiresAt'] is Timestamp &&
+          (d.data()['expiresAt'] as Timestamp).compareTo(now) > 0).toList()
+          ..sort((a,b) => ((b.data()['createdAt'] is Timestamp) ? b.data()['createdAt'] as Timestamp : Timestamp(0,0))
+            .compareTo((a.data()['createdAt'] is Timestamp) ? a.data()['createdAt'] as Timestamp : Timestamp(0,0)));
+        final mine = docs.where((d) => d.data()['ownerUid'] == uid).toList();
+        final others = docs.where((d) => d.data()['ownerUid'] != uid).toList();
+        Widget statusTile(QueryDocumentSnapshot<Map<String, dynamic>> d, bool own) {
+          final data = d.data(), type = (d.data()['mediaType'] ?? 'text').toString();
+          return ListTile(
+            leading: CircleAvatar(child: Icon(type == 'video' ? Icons.videocam : type == 'image' ? Icons.image : Icons.text_fields)),
+            title: Text(own ? (data['statusText'] ?? data['fileName'] ?? 'My status').toString() : (data['userName'] ?? 'Contact').toString(), maxLines: 1, overflow: TextOverflow.ellipsis),
+            subtitle: own
+              ? StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(stream: d.reference.collection('views').snapshots(),
+                  builder: (_, v) => Text('Seen by ${v.data?.docs.length ?? 0} · 24-hour status'))
+              : Text((data['statusText'] ?? data['fileName'] ?? 'Media status').toString(), maxLines: 1, overflow: TextOverflow.ellipsis),
+            onTap: () => _view(context, d, uid),
+            trailing: own ? IconButton(icon: const Icon(Icons.delete_outline), onPressed: () => d.reference.delete()) : null,
+          );
+        }
+        return ListView(padding: const EdgeInsets.fromLTRB(16,12,16,90), children: [
+          Text('Status', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+          ListTile(contentPadding: EdgeInsets.zero, leading: const CircleAvatar(child: Icon(Icons.add_a_photo)),
+            title: const Text('My status'), subtitle: const Text('Add text, photo or video'),
+            onTap: () => _create(context), trailing: IconButton(icon: const Icon(Icons.add), onPressed: () => _create(context))),
+          ...mine.map((d) => statusTile(d, true)),
+          const Divider(height: 24),
+          Text('Recent updates', style: Theme.of(context).textTheme.titleSmall),
+          if (others.isEmpty) const _SectionEmptyState(icon: Icons.circle_outlined, title: 'No recent updates', description: 'Statuses from your contacts appear here.')
+          else ...others.map((d) => statusTile(d, false)),
+        ]);
+      });
   }
 }
 
