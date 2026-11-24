@@ -40,11 +40,12 @@ class _CallScreenState extends State<CallScreen> {
   bool _accepted = false;
   bool _muted = false;
   bool _cameraOff = false;
-  bool _speakerOn = false;
+  bool _speakerOn = true;
   bool _remoteDescriptionSet = false;
   final List<RTCIceCandidate> _pendingRemoteCandidates = <RTCIceCandidate>[];
   bool _leaving = false;
   String? _error;
+  bool _errorDialogShowing = false;
 
   String get _uid => FirebaseAuth.instance.currentUser!.uid;
   DocumentReference<Map<String, dynamic>> get _callRef =>
@@ -64,6 +65,49 @@ class _CallScreenState extends State<CallScreen> {
     _initialize();
   }
 
+  String _friendlyError(String raw) {
+    final value = raw.toLowerCase();
+    if (value.contains('microphone') || value.contains('camera') || value.contains('permission')) {
+      final devices = value.contains('camera') ? 'microphone and camera' : 'microphone';
+      return 'ConnectX needs ' + devices + ' access to place this call. Allow the requested permission in Android settings, then try again.';
+    }
+    if (value.contains('turn') || value.contains('relay') || value.contains('ice') || value.contains('network')) {
+      return 'A secure media connection could not be established. Check both phones’ internet connections and try again.';
+    }
+    if (value.contains('firestore') || value.contains('permission-denied') || value.contains('not authorized')) {
+      return 'ConnectX could not exchange call setup data. Please try again in a moment.';
+    }
+    if (value.contains('no longer available') || value.contains('offer is not ready')) {
+      return 'This call is no longer available. Ask the caller to call again.';
+    }
+    return 'The call could not be completed. Check your internet connection and try again.';
+  }
+
+  void _reportError(String raw) {
+    if (!mounted) return;
+    setState(() => _error = raw);
+    if (_errorDialogShowing) return;
+    _errorDialogShowing = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) { _errorDialogShowing = false; return; }
+      try {
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            icon: const Icon(Icons.call_end_rounded, color: Colors.redAccent, size: 34),
+            title: const Text('Call problem'),
+            content: Text(_friendlyError(raw)),
+            actions: [
+              FilledButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('OK')),
+            ],
+          ),
+        );
+      } finally {
+        _errorDialogShowing = false;
+      }
+    });
+  }
   Future<void> _initialize() async {
     try {
       await _localRenderer.initialize();
@@ -92,12 +136,13 @@ class _CallScreenState extends State<CallScreen> {
             });
           } else if (state == RTCIceConnectionState.RTCIceConnectionStateFailed && mounted && !_leaving) {
             _iceDisconnectTimer?.cancel();
-            setState(() => _error = 'Media connection failed. Check network/TURN connectivity and try again.');
+            _reportError('Media connection failed. Check network/TURN connectivity and try again.');
           }
         }
         debugPrint('ConnectX ICE connection state: $state');
       };
       _peer!.onAddStream = (stream) {
+        for (final track in stream.getTracks()) { track.enabled = true; }
         _remoteStream = stream;
         if (!mounted) return;
         setState(() => _remoteRenderer.srcObject = stream);
@@ -114,11 +159,12 @@ class _CallScreenState extends State<CallScreen> {
           });
         } catch (error) {
           debugPrint('ConnectX ICE candidate write failed: $error');
-          if (mounted) setState(() => _error = 'Network candidate could not be sent. Check Firestore call permissions.');
+          if (mounted) _reportError('Network candidate could not be sent. Check Firestore call permissions.');
         }
       };
       _peer!.onTrack = (event) async {
         try {
+          event.track.enabled = true;
           // Some Android/WebRTC combinations deliver streamless tracks. Build a
           // remote MediaStream in that case so audio and video are still attached.
           MediaStream stream;
@@ -135,7 +181,7 @@ class _CallScreenState extends State<CallScreen> {
           debugPrint('ConnectX remote ${event.track.kind} track attached');
         } catch (error) {
           debugPrint('ConnectX remote track attach failed: $error');
-          if (mounted) setState(() => _error = 'Remote media could not be displayed: $error');
+          if (mounted) _reportError('Remote media could not be displayed: $error');
         }
       };
       _callSubscription = _callRef.snapshots().listen(_handleCallUpdate);
@@ -148,7 +194,7 @@ class _CallScreenState extends State<CallScreen> {
       }
       if (_isCaller) await _startOutgoingCall();
     } catch (error) {
-      if (mounted) setState(() => _error = 'Could not initialize call: $error');
+      if (mounted) _reportError('Could not initialize call: $error');
     }
   }
 
@@ -228,7 +274,7 @@ class _CallScreenState extends State<CallScreen> {
       }
     }
     final constraints = {
-      'audio': true,
+      'audio': {'echoCancellation': true, 'noiseSuppression': true, 'autoGainControl': true},
       'video': _isVideo ? {
         'facingMode': 'user',
         'width': {'ideal': 640},
@@ -238,8 +284,9 @@ class _CallScreenState extends State<CallScreen> {
     _localStream = await navigator.mediaDevices.getUserMedia(constraints);
     _localRenderer.srcObject = _localStream;
     try {
-      await Helper.setSpeakerphoneOn(_isVideo);
-      _speakerOn = _isVideo;
+      // Start on loudspeaker so voice and video calls have an audible route.
+      await Helper.setSpeakerphoneOn(true);
+      _speakerOn = true;
     } catch (error) {
       debugPrint('ConnectX speakerphone initialization failed: $error');
     }
@@ -270,7 +317,7 @@ class _CallScreenState extends State<CallScreen> {
         if (!_accepted && mounted) _finishCall('missed');
       });
     } catch (error) {
-      if (mounted) setState(() => _error = 'Call could not start: $error');
+      if (mounted) _reportError('Call could not start: $error');
       try {
         await _callRef.update({'status': 'failed', 'endedAt': FieldValue.serverTimestamp()});
       } catch (updateError) {
@@ -306,7 +353,7 @@ class _CallScreenState extends State<CallScreen> {
       await FlutterRingtonePlayer.stop();
       if (mounted) setState(() => _accepted = true);
     } catch (error) {
-      if (mounted) setState(() => _error = 'Could not answer call: $error');
+      if (mounted) _reportError('Could not answer call: $error');
       try {
         await _callRef.update({'status': 'declined', 'endedAt': FieldValue.serverTimestamp()});
       } catch (updateError) {
@@ -333,7 +380,6 @@ class _CallScreenState extends State<CallScreen> {
         if (mounted) setState(() => _accepted = true);
       }
     }
-    if (status == 'failed' && _error != null) return;
     if (_isCaller && (status == 'declined' || status == 'busy' || status == 'ended' || status == 'failed' || status == 'missed' || status == 'cancelled')) {
       await _writeCallChatEvent(data);
     }
@@ -406,7 +452,7 @@ class _CallScreenState extends State<CallScreen> {
       _speakerOn = next;
       if (mounted) setState(() {});
     } catch (error) {
-      if (mounted) setState(() => _error = 'Could not change audio output: $error');
+      if (mounted) _reportError('Could not change audio output: $error');
     }
   }
 
@@ -477,9 +523,16 @@ class _CallScreenState extends State<CallScreen> {
               Text(_mediaConnected ? _formatDuration(_elapsed) : _accepted ? 'Connecting media…' : _connecting ? 'Connecting…' : _isCaller ? 'Calling…' : 'Incoming call',
                 style: const TextStyle(color: Colors.white70)),
             ])),
-          if (_error != null)
+          if (_error == 'Media connection interrupted. Reconnecting…')
             Positioned(left: 16, right: 16, bottom: 16,
-              child: Text(_error!, style: const TextStyle(color: Colors.redAccent))),
+              child: Center(child: DecoratedBox(
+                decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(20)),
+                child: Padding(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                    SizedBox(width: 9), Text('Reconnecting…', style: TextStyle(color: Colors.white)),
+                  ])),
+              ))),
         ])),
         Padding(padding: const EdgeInsets.all(22), child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
