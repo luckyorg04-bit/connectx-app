@@ -22,6 +22,10 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   int _selectedTab = 0;
+  bool _showProfile = false;
+  String _chatFilter = 'All';
+
+  static const _tabTitles = ['ConnectX', 'Updates', 'Communities', 'Calls'];
 
   @override
   void initState() {
@@ -36,56 +40,170 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final isProfile = _selectedTab == 1;
+    final title = _showProfile ? 'Profile' : _tabTitles[_selectedTab];
     return Scaffold(
       appBar: AppBar(
-        title: Text(isProfile ? 'Profile' : 'ConnectX',
-            style: const TextStyle(fontWeight: FontWeight.w700)),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
         automaticallyImplyLeading: false,
         actions: [
-          if (isProfile)
+          if (_showProfile) ...[
             IconButton(
               tooltip: 'Edit profile',
               icon: const Icon(Icons.edit_outlined),
               onPressed: _openEditProfile,
             ),
-          IconButton(
-            tooltip: 'Log out',
-            icon: const Icon(Icons.logout_rounded),
-            onPressed: _logout,
-          ),
-        ],
-      ),
-      body: IndexedStack(
-        index: _selectedTab,
-        children: [
-          UserList(users: users, key: userListKey, wantChats: true),
-          const ProfileScreen(),
-        ],
-      ),
-      floatingActionButton: isProfile
-          ? null
-          : FloatingActionButton(
-              onPressed: () => Navigator.of(context).pushNamed("/main/new"),
-              shape: const CircleBorder(),
-              child: const Icon(Icons.chat_rounded),
+            IconButton(
+              tooltip: 'Log out',
+              icon: const Icon(Icons.logout_rounded),
+              onPressed: _logout,
             ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedTab,
-        onDestinationSelected: (index) => setState(() => _selectedTab = index),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.chat_bubble_outline_rounded),
-            selectedIcon: Icon(Icons.chat_bubble_rounded),
-            label: 'Chats',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline_rounded),
-            selectedIcon: Icon(Icons.person_rounded),
-            label: 'Profile',
-          ),
+          ] else ...[
+            if (_selectedTab == 0)
+              IconButton(
+                tooltip: 'Search people',
+                icon: const Icon(Icons.search_rounded),
+                onPressed: () => Navigator.of(context).pushNamed("/main/new"),
+              ),
+            if (_selectedTab == 3)
+              IconButton(
+                tooltip: 'Call options',
+                icon: const Icon(Icons.link_rounded),
+                onPressed: () => _showComingSoon('Call links'),
+              ),
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: () => setState(() => _showProfile = true),
+                child: CircleAvatar(
+                  radius: 18,
+                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                  child: Icon(Icons.person_rounded,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer, size: 21),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
+      body: _showProfile
+          ? const ProfileScreen()
+          : IndexedStack(
+              index: _selectedTab,
+              children: [
+                _buildChatsTab(),
+                const _UpdatesTab(),
+                const _CommunitiesTab(),
+                const _CallsTab(),
+              ],
+            ),
+      floatingActionButton: _showProfile
+          ? null
+          : _selectedTab == 0
+              ? FloatingActionButton(
+                  onPressed: () => Navigator.of(context).pushNamed("/main/new"),
+                  shape: const CircleBorder(),
+                  child: const Icon(Icons.chat_rounded),
+                )
+              : _selectedTab == 1
+                  ? FloatingActionButton(
+                      onPressed: () => _showComingSoon('Create status'),
+                      shape: const CircleBorder(),
+                      child: const Icon(Icons.camera_alt_rounded),
+                    )
+                  : _selectedTab == 2
+                      ? FloatingActionButton.extended(
+                          onPressed: () => _showComingSoon('Create community'),
+                          icon: const Icon(Icons.groups_rounded),
+                          label: const Text('New community'),
+                        )
+                      : FloatingActionButton(
+                          onPressed: () => Navigator.of(context).pushNamed("/main/new"),
+                          shape: const CircleBorder(),
+                          child: const Icon(Icons.add_call_rounded),
+                        ),
+      bottomNavigationBar: _showProfile
+          ? null
+          : NavigationBar(
+              selectedIndex: _selectedTab,
+              onDestinationSelected: (index) => setState(() => _selectedTab = index),
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Icons.chat_bubble_outline_rounded),
+                  selectedIcon: Icon(Icons.chat_bubble_rounded),
+                  label: 'Chats',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.circle_outlined),
+                  selectedIcon: Icon(Icons.circle),
+                  label: 'Updates',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.groups_outlined),
+                  selectedIcon: Icon(Icons.groups_rounded),
+                  label: 'Communities',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.call_outlined),
+                  selectedIcon: Icon(Icons.call_rounded),
+                  label: 'Calls',
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildChatsTab() {
+    const filters = ['All', 'Unread', 'Favorites', 'Groups'];
+    return Column(
+      children: [
+        SizedBox(
+          height: 58,
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            scrollDirection: Axis.horizontal,
+            itemCount: filters.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (context, index) {
+              final filter = filters[index];
+              final selected = _chatFilter == filter;
+              return ChoiceChip(
+                label: Text(filter),
+                selected: selected,
+                onSelected: (_) => setState(() => _chatFilter = filter),
+                showCheckmark: false,
+              );
+            },
+          ),
+        ),
+        Expanded(
+          child: _chatFilter == 'All'
+              ? UserList(users: users, key: userListKey, wantChats: true)
+              : _SectionEmptyState(
+                  icon: _chatFilter == 'Unread'
+                      ? Icons.mark_chat_unread_outlined
+                      : _chatFilter == 'Favorites'
+                          ? Icons.star_border_rounded
+                          : Icons.groups_outlined,
+                  title: _chatFilter == 'Unread'
+                      ? 'No unread chats'
+                      : _chatFilter == 'Favorites'
+                          ? 'Your favorite chats will appear here'
+                          : 'Your group chats will appear here',
+                  description: _chatFilter == 'Unread'
+                      ? 'Unread conversations will be listed here.'
+                      : _chatFilter == 'Favorites'
+                          ? 'Star or favorite a conversation to find it quickly.'
+                          : 'Create or join a group to start chatting with multiple people.',
+                ),
+        ),
+      ],
+    );
+  }
+
+  void _showComingSoon(String feature) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$feature will be added in the next feature stage.')),
     );
   }
 
@@ -208,5 +326,160 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       subscription.cancel();
     }
     super.dispose();
+  }
+}
+
+class _UpdatesTab extends StatelessWidget {
+  const _UpdatesTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 90),
+      children: [
+        Text('Status', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 14),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Stack(
+            children: [
+              CircleAvatar(
+                radius: 27,
+                backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
+                child: const Icon(Icons.person_rounded, size: 30),
+              ),
+              Positioned(
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Theme.of(context).scaffoldBackgroundColor, width: 2),
+                  ),
+                  child: const Icon(Icons.add, size: 17, color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+          title: const Text('My status', style: TextStyle(fontWeight: FontWeight.w600)),
+          subtitle: const Text('Tap to add a status update'),
+          onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Status sharing will be enabled in the next feature stage.')),
+          ),
+        ),
+        const Divider(height: 24),
+        Text('Recent updates', style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Theme.of(context).colorScheme.primary)),
+        const SizedBox(height: 28),
+        const _SectionEmptyState(
+          icon: Icons.circle_outlined,
+          title: 'No recent updates',
+          description: 'When your contacts share a status, it will appear here.',
+        ),
+        const Divider(height: 32),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const CircleAvatar(child: Icon(Icons.campaign_outlined)),
+          title: const Text('Channels', style: TextStyle(fontWeight: FontWeight.w700)),
+          subtitle: const Text('Discover updates from people and organizations'),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Channels will be added in the next feature stage.')),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CommunitiesTab extends StatelessWidget {
+  const _CommunitiesTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
+      children: [
+        Container(
+          height: 170,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.primaryContainer,
+            borderRadius: BorderRadius.circular(22),
+          ),
+          child: Icon(Icons.groups_rounded,
+              size: 76, color: Theme.of(context).colorScheme.onPrimaryContainer),
+        ),
+        const SizedBox(height: 24),
+        Text('Bring groups together',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 10),
+        Text(
+          'Organize related groups in one place. Share announcements and keep community conversations connected.',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                height: 1.5,
+              ),
+        ),
+        const SizedBox(height: 24),
+        FilledButton.icon(
+          onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Community creation will be enabled in the next feature stage.')),
+          ),
+          icon: const Icon(Icons.add_rounded),
+          label: const Text('Start a community'),
+        ),
+      ],
+    );
+  }
+}
+
+class _CallsTab extends StatelessWidget {
+  const _CallsTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return const _SectionEmptyState(
+      icon: Icons.call_outlined,
+      title: 'No calls yet',
+      description: 'Your voice and video call history will appear here. Start a call from a chat.',
+    );
+  }
+}
+
+class _SectionEmptyState extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String description;
+
+  const _SectionEmptyState({
+    required this.icon,
+    required this.title,
+    required this.description,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 54, color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.65)),
+            const SizedBox(height: 16),
+            Text(title, textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            Text(description, textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  height: 1.4,
+                )),
+          ],
+        ),
+      ),
+    );
   }
 }
