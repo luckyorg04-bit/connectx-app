@@ -29,5 +29,11 @@ jobs:
           cache: true
       - name: Install packages
         run: flutter pub get
+      - name: Check VPS API syntax
+        run: node --check vps-api/server.js
+      - name: Check deployment script syntax
+        run: bash -n deploy_part2.sh
       - name: Analyze Flutter project
         run: flutter analyze --no-fatal-infos
+      - name: Run Flutter tests
+        run: flutter test
