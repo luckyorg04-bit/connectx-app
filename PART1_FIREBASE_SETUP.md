@@ -30,13 +30,14 @@ Afterward, allow these ports in the Hostinger firewall:
 
 ## Realtime Database access model
 
-The app writes a user's own profile and own chat-index entry. The trusted ConnectX VPS Admin SDK writes the conversation index for both participants when a Firestore direct-message document is created. Do not permit a client to write arbitrary data under another user's `Users/{uid}` record.
+The client now separates public and private data:
+- `PublicUsers/{uid}`: name, username, online state, last-seen time, profile photo URL and bio. Signed-in users can read profiles; only the owner can write their own profile.
+- `PrivateUsers/{uid}`: the owner's chat index, chat metadata and notification preferences. Only the owner can read/write; the VPS Admin SDK updates both participants' chat indexes.
+- `PrivateTokens/{uid}`: the owner's FCM token. The client can write its own token but cannot read tokens; only the trusted VPS Admin SDK reads them.
+- `BlockLists/{ownerUid}/{blockedUid}`: the owner manages their block list; a blocked user can read only their own entry to enforce mutual blocking.
+- `Typing/{ownerUid}/{viewerUid}`: the owner writes typing state; only the owner and intended viewer can read it.
 
-The repository currently does not include a Realtime Database rules file. Review and publish rules in Firebase Console that permit:
-- Authenticated users to read the profile fields needed for user search and chat display.
-- A signed-in user to write only their own profile, online state, FCM token and own chat metadata.
-- No client writes to another user's profile or chat index.
-- No public reads of private account fields.
+The old `Users/{uid}` records are migrated by `vps-api/migrate-rtdb.js`. The migration retains the legacy data for rollback, copies only public profile fields into `PublicUsers`, and moves private metadata/tokens into their restricted paths. The deployment script then publishes `database.rules.json` together with Firestore rules and indexes. Do not manually add a broad read rule at the Realtime Database root.
 
 ## Media and billing
 
