@@ -26,3 +26,11 @@ This file tracks implementation work separately from final device testing.
 3. Only after implementation and infrastructure are complete: run the final Flutter analysis, Android build, and device/network verification; then deliver the final APK.
 
 No final testing or APK sign-off is claimed by this document.
+## Final source hardening updates
+
+- Pending incoming-call routing now sends group-call notifications to the group-call screen instead of the one-to-one call screen.
+- Voice-note playback completion uses one managed listener per message widget and cancels it on dispose.
+- View-once media opens are serialized per file within the API process; the viewed-by metadata is replaced atomically to reduce simultaneous double-open races.
+- FCM listeners are disposed on logout so a signed-out session does not retain foreground/token-refresh subscriptions.
+
+These are source updates only. They have not been compiled or runtime-tested, and the VPS deployment plus Hostinger firewall configuration remain required.
