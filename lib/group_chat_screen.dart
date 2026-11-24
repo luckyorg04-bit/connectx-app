@@ -109,6 +109,40 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     }
   }
 
+  Future<void> _startGroupCall() async {
+    final callType = await showModalBottomSheet<String>(context: context,
+      builder: (c) => SafeArea(child: Wrap(children: [
+        ListTile(leading: const Icon(Icons.call), title: const Text('Voice group call'),
+          onTap: () => Navigator.pop(c, 'voice')),
+        ListTile(leading: const Icon(Icons.videocam), title: const Text('Video group call'),
+          onTap: () => Navigator.pop(c, 'video')),
+      ])));
+    if (callType == null || !mounted) return;
+    try {
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+      final ref = FirebaseFirestore.instance.collection('groupCalls').doc();
+      await ref.set({
+        'groupId': _groupId,
+        'groupName': _groupName,
+        'createdBy': uid,
+        'participants': [uid],
+        'activeUids': [uid],
+        'type': callType,
+        'status': 'active',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      if (!mounted) return;
+      await Navigator.of(context).pushNamed('/group-call', arguments: {
+        'callId': ref.id, 'groupId': _groupId, 'groupName': _groupName,
+        'callType': callType, 'isCreator': true,
+      });
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not start group call: $error')),
+      );
+    }
+  }
+
   Future<void> _send() async {
     final text = _controller.text.trim();
     if (text.isEmpty || _sending) return;
@@ -134,13 +168,39 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     final uid = FirebaseAuth.instance.currentUser!.uid;
     return Scaffold(
       appBar: AppBar(
-        actions: [IconButton(tooltip: 'Manage group', icon: const Icon(Icons.group_outlined), onPressed: _manageGroup)],
+        actions: [\n          IconButton(tooltip: 'Start group call', icon: const Icon(Icons.video_call), onPressed: _startGroupCall),\n          IconButton(tooltip: 'Manage group', icon: const Icon(Icons.group_outlined), onPressed: _manageGroup),\n        ],
         title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(_groupName),
           const Text('Group conversation', style: TextStyle(fontSize: 11)),
         ]),
       ),
       body: Column(children: [
+        StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance.collection('groupCalls')
+            .where('groupId', isEqualTo: _groupId).where('status', isEqualTo: 'active').snapshots(),
+          builder: (context, calls) {
+            if (!calls.hasData || calls.data!.docs.isEmpty) return const SizedBox.shrink();
+            final activeCall = calls.data!.docs.first;
+            final callData = activeCall.data();
+            final participants = List<String>.from(callData['activeUids'] ?? []);
+            if (participants.contains(uid)) return const SizedBox.shrink();
+            return Material(
+              color: Theme.of(context).colorScheme.primaryContainer,
+              child: ListTile(
+                leading: const Icon(Icons.groups_rounded),
+                title: Text('${callData['type'] == 'video' ? 'Video' : 'Voice'} group call is active'),
+                subtitle: Text('${participants.length} participant(s) in call'),
+                trailing: FilledButton(
+                  onPressed: () => Navigator.of(context).pushNamed('/group-call', arguments: {
+                    'callId': activeCall.id, 'groupId': _groupId, 'groupName': _groupName,
+                    'callType': callData['type'] ?? 'voice', 'isCreator': false,
+                  }),
+                  child: const Text('Join'),
+                ),
+              ),
+            );
+          },
+        ),
         Expanded(
           child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
             stream: _messages.orderBy('createdAt', descending: true).limit(100).snapshots(),
