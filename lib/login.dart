@@ -1,7 +1,6 @@
 import 'package:connectx/main.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'services/notification_service.dart';
@@ -255,7 +254,7 @@ class AuthPageState extends State<AuthPage> {
   }
 
   Future<void> _ensureUserProfile(User user, {String? preferredName, String? preferredUsername}) async {
-    final ref = ConnectXDatabase.instance.ref('Users').child(user.uid);
+    final ref = ConnectXDatabase.instance.ref('PublicUsers').child(user.uid);
     final existing = await ref.get();
     if (existing.exists) {
       final currentData = existing.value is Map
@@ -269,13 +268,6 @@ class AuthPageState extends State<AuthPage> {
         });
       }
       return;
-    }
-
-    String token = '';
-    try {
-      token = await FirebaseMessaging.instance.getToken() ?? '';
-    } catch (_) {
-      // Push notifications can be enabled later; authentication must still work.
     }
 
     final emailPrefix = (user.email ?? 'connectx_user')
@@ -299,7 +291,6 @@ class AuthPageState extends State<AuthPage> {
       'key': user.uid,
       'online': true,
       'lastSeen': ServerValue.timestamp,
-      'fcmToken': token,
       'bio': 'Hey there! I am using ConnectX',
       'photoUrl': user.photoURL ?? '',
     });
