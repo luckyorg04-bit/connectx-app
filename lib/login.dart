@@ -256,7 +256,19 @@ class AuthPageState extends State<AuthPage> {
   Future<void> _ensureUserProfile(User user, {String? preferredName, String? preferredUsername}) async {
     final ref = FirebaseDatabase.instance.ref('Users').child(user.uid);
     final existing = await ref.get();
-    if (existing.exists) return;
+    if (existing.exists) {
+      final currentData = existing.value is Map
+          ? Map<dynamic, dynamic>.from(existing.value as Map)
+          : <dynamic, dynamic>{};
+      if (currentData['bio'] == null || currentData.containsKey('about')) {
+        await ref.update({
+          'bio': currentData['bio']?.toString() ??
+              currentData['about']?.toString() ?? 'Hey there! I am using ConnectX',
+          'about': null,
+        });
+      }
+      return;
+    }
 
     String token = '';
     try {
@@ -287,7 +299,7 @@ class AuthPageState extends State<AuthPage> {
       'online': true,
       'lastSeen': ServerValue.timestamp,
       'fcmToken': token,
-      'about': 'Hey there! I am using ConnectX',
+      'bio': 'Hey there! I am using ConnectX',
       'photoUrl': user.photoURL ?? '',
     });
   }
