@@ -7,6 +7,7 @@ import 'login.dart';
 import 'main_screen.dart';
 import 'new_chat_screen.dart';
 import 'group_chat_screen.dart';
+import 'group_call_screen.dart';
 import 'services/notification_service.dart';
 import 'call_screen.dart';
 import 'app_navigator.dart';
@@ -49,6 +50,7 @@ class MyApp extends StatelessWidget {
         '/main': (context) => const MainScreen(),
         '/chat': (context) => const ChatScreen(),
         '/group': (context) => const GroupChatScreen(),
+        '/group-call': (context) => const GroupCallScreen(),
         '/call': (context) => const CallScreen(),
         "/main/new": (context) => const NewChatScreen(),
       },
