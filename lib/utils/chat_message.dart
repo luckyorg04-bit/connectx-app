@@ -315,6 +315,24 @@ class _ChatMessageState extends State<ChatMessage> {
           ),
           Text('Voice message', style: TextStyle(color: textColor)),
         ]);
+      case 'call':
+        final isVideoCall = message.message.toLowerCase().contains('video');
+        final duration = message.durationMs ?? 0;
+        final totalSeconds = duration ~/ 1000;
+        final hours = totalSeconds ~/ 3600;
+        final minutes = (totalSeconds ~/ 60) % 60;
+        final seconds = totalSeconds % 60;
+        final elapsed = hours > 0
+          ? '${hours}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}'
+          : '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+        return Row(mainAxisSize: MainAxisSize.min, children: [
+          CircleAvatar(radius: 19, child: Icon(isVideoCall ? Icons.videocam_rounded : Icons.call_rounded, size: 20)),
+          const SizedBox(width: 10),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(message.message, style: TextStyle(color: textColor, fontWeight: FontWeight.w600)),
+            if (duration > 0) Text(elapsed, style: TextStyle(color: secondary, fontSize: 12)),
+          ]),
+        ]);
       case 'location':
         final lat = message.latitude;
         final lng = message.longitude;
