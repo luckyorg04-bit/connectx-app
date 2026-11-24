@@ -40,7 +40,16 @@ class NotificationService {
       await _localNotifications.initialize(settings, onDidReceiveNotificationResponse: (response) async {
         final payload = response.payload;
         if (payload == null || payload.isEmpty) return;
-        try { openIncomingCall(Map<String, dynamic>.from(jsonDecode(payload) as Map)); } catch (_) {}
+        try {
+          final data = Map<String, dynamic>.from(jsonDecode(payload) as Map);
+          if (data['type'] == 'direct_message') {
+            await openDirectChatFromConversation(data['conversationId']?.toString() ?? '');
+          } else {
+            openIncomingCall(data);
+          }
+        } catch (error) {
+          // Ignore malformed notification payloads.
+        }
       });
       await _localNotifications
           .resolvePlatformSpecificImplementation<
@@ -104,7 +113,12 @@ class NotificationService {
                   'isCreator': false,
                   'isGroupCall': true,
                 })
-              : null,
+              : message.data['type'] == 'direct_message'
+                ? jsonEncode({
+                    'type': 'direct_message',
+                    'conversationId': message.data['conversationId'] ?? '',
+                  })
+                : null,
         );
       } catch (_) {
         // Ignore display failures; do not interrupt the active chat.
@@ -118,6 +132,10 @@ class NotificationService {
   }
 
   static void _handleOpenedMessage(RemoteMessage message) {
+    if (message.data['type'] == 'direct_message') {
+      openDirectChatFromConversation(message.data['conversationId']?.toString() ?? '');
+      return;
+    }
     if (message.data['type'] == 'group_call') {
       openIncomingCall({
         'callId': message.data['callId'],
