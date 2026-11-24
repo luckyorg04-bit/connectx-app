@@ -21,9 +21,8 @@ This file tracks implementation work separately from final device testing.
 
 ## Infrastructure work still required
 
-1. Deploy `firestore.rules` and `firestore.indexes.json` to Firebase project `connectx-app-f8407`.
-2. Copy the latest `vps-api/server.js` to the VPS, build the updated API image and recreate only `connectx-api`, preserving its existing Traefik configuration, port, volumes and restart policy.
-3. Install Coturn and write the shared secret/URLs to the private `appConfig/rtc` Firestore document using `vps-api/TURN_SETUP.md`.
-4. Only after implementation and infrastructure are complete: run the final Flutter analysis, Android build, and device/network verification; then deliver the final APK.
+1. Run the controlled deployment script from the VPS: `bash deploy_part2.sh`. It deploys Firestore rules/indexes, updates only the existing `connectx-api` container in place, installs Coturn and stores private TURN configuration. The script does not run Flutter tests or build an APK.
+2. In Hostinger Firewall, allow TCP/UDP 3478 and UDP 49160–49200 as described in `vps-api/TURN_SETUP.md`.
+3. Only after implementation and infrastructure are complete: run the final Flutter analysis, Android build, and device/network verification; then deliver the final APK.
 
 No final testing or APK sign-off is claimed by this document.
