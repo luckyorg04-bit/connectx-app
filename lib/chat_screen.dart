@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:connectx/main.dart';
+import 'package:connectx/main_screen.dart' show users;
 import 'package:connectx/utils/chat_message.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
