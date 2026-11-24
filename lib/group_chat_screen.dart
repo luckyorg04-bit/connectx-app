@@ -137,6 +137,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         'type': callType,
         'status': 'active',
         'createdAt': FieldValue.serverTimestamp(),
+        'expiresAt': Timestamp.fromDate(DateTime.now().add(const Duration(hours: 4))),
       });
       if (!mounted) return;
       await Navigator.of(context).pushNamed('/group-call', arguments: {
