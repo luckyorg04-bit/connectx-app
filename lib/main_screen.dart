@@ -283,6 +283,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
       await doc.set({
         'name': groupName,
         'createdBy': uid,
+        'adminUids': [uid],
         'memberUids': members,
         'createdAt': FieldValue.serverTimestamp(),
       });
