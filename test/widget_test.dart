@@ -67,7 +67,7 @@ void main() {
     final first = DateTime(2026, 11, 24, 23, 59).millisecondsSinceEpoch;
     final next = DateTime(2026, 11, 25, 0, 1).millisecondsSinceEpoch;
     expect(isNewDay(false, first, next), isTrue);
-    expect(isNewDay(false, first, first + 60000), isFalse);
+    expect(isNewDay(false, first, first + 30000), isFalse);
   });
 
   test('username validation enforces supported format', () {
