@@ -70,7 +70,8 @@ class UserListState extends State<UserList> {
     final staleIds = _messageSubscriptions.keys
         .where((id) => !activeIds.contains(id)).toList();
     for (final id in staleIds) {
-      await _messageSubscriptions.remove(id)?.cancel();
+      final subscription = _messageSubscriptions.remove(id);
+      if (subscription != null) await subscription.cancel();
       _latest.remove(id);
       _unread.remove(id);
       _meta.remove(id);
