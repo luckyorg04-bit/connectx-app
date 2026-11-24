@@ -326,7 +326,10 @@ service cloud.firestore {
         )
         || (
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'endedAt'])
-          && resource.data.createdBy == request.auth.uid
+          && (
+            resource.data.createdBy == request.auth.uid
+            || request.auth.uid in get(/databases/$(database)/documents/groupChats/$(resource.data.groupId)).data.get('adminUids', [])
+          )
           && request.resource.data.status == 'ended'
         )
       );
