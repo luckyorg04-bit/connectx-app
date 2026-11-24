@@ -3,9 +3,16 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
 class RtcConfig {
+  static Map<String, dynamic>? _cachedConfig;
+  static DateTime? _cachedAt;
   static const String _endpoint = 'https://connecttx.duckdns.org/api/turn-credentials';
 
   static Future<Map<String, dynamic>> load() async {
+    final cachedAt = _cachedAt;
+    if (_cachedConfig != null && cachedAt != null &&
+        DateTime.now().difference(cachedAt) < const Duration(minutes: 45)) {
+      return _cachedConfig!;
+    }
     final iceServers = <Map<String, dynamic>>[
       {'urls': 'stun:stun.l.google.com:19302'},
       {'urls': 'stun:stun1.l.google.com:19302'},
@@ -28,6 +35,8 @@ class RtcConfig {
     } catch (_) {
       // STUN remains available when the TURN service is not configured.
     }
-    return {'iceServers': iceServers};
+    _cachedConfig = {'iceServers': iceServers};
+    _cachedAt = DateTime.now();
+    return _cachedConfig!;
   }
 }
