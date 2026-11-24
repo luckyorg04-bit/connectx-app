@@ -32,7 +32,7 @@ class _ChatScreenState extends State<NewChatScreen> {
 
             users.clear();
 
-            String text = searchController.text.trim();
+            String text = searchController.text.trim().toLowerCase();
 
             if(text.isEmpty) {
               return;
