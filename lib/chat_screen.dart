@@ -101,7 +101,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
       ]),
     ));
     if (selected == null) return;
-    await ConnectXDatabase.instance.ref('Users').child(_uid)
+    await ConnectXDatabase.instance.ref('PrivateUsers').child(_uid)
       .child('chatMeta').child(user!.key).child('disappearingDurationMs').set(selected);
     if (mounted) setState(() => _disappearingDurationMs = selected);
   }
@@ -576,8 +576,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
   }
 
   Future<void> _blockOrUnblockUser() async {
-    final ref = ConnectXDatabase.instance.ref('Users').child(_uid)
-        .child('blockedUsers').child(user!.key);
+    final ref = ConnectXDatabase.instance.ref('BlockLists').child(_uid).child(user!.key);
     final existing = await ref.get();
     if (existing.value == true) {
       await ref.remove();
