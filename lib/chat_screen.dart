@@ -235,18 +235,14 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
   // a reported send failure.
   Future<void> _updateChatIndex({String? targetUid}) async {
     final peerUid = targetUid ?? user!.key;
-    final writes = <Future<void>>[
-      FirebaseDatabase.instance.ref('Users').child(_uid)
-          .child('chats').child('personal').child(peerUid).set(ServerValue.timestamp),
-      FirebaseDatabase.instance.ref('Users').child(peerUid)
-          .child('chats').child('personal').child(_uid).set(ServerValue.timestamp),
-    ];
-    for (var i = 0; i < writes.length; i++) {
-      try {
-        await writes[i];
-      } catch (error) {
-        debugPrint('ConnectX chat index update failed (side ${i + 1}): $error');
-      }
+    // A client may only update its own RTDB profile. The trusted VPS
+    // Firestore listener updates both participants' chat indexes with Admin SDK.
+    try {
+      await FirebaseDatabase.instance.ref('Users').child(_uid)
+          .child('chats').child('personal').child(peerUid)
+          .set(ServerValue.timestamp);
+    } catch (error) {
+      debugPrint('ConnectX local chat index update failed: $error');
     }
   }
 
