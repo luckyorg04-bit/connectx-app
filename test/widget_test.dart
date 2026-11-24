@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:connectx/chat_screen.dart';
 import 'package:connectx/login.dart';
 import 'package:connectx/models/message.dart';
+import 'package:connectx/models/user.dart';
 
 void main() {
   test('conversation IDs are stable regardless of participant order', () {
@@ -43,6 +44,30 @@ void main() {
     expect(validateEmail('person@example.com'), isNull);
     expect(validateEmail('not-an-email'), isNotNull);
     expect(validateEmail(''), isNotNull);
+  });
+
+  test('public user JSON never includes private FCM tokens', () {
+    final user = User1(
+      name: 'Lucky',
+      username: 'lucky_01',
+      key: 'user-1',
+      online: true,
+      lastSeen: 1732440000000,
+      bio: 'Hello',
+      photoUrl: '',
+    );
+
+    expect(user.toJson().keys.toSet(), {
+      'name', 'username', 'key', 'online', 'lastSeen', 'photoUrl', 'bio',
+    });
+    expect(user.toJson().containsKey('fcmToken'), isFalse);
+  });
+
+  test('date separators detect a new calendar day', () {
+    final first = DateTime(2026, 11, 24, 23, 59).millisecondsSinceEpoch;
+    final next = DateTime(2026, 11, 25, 0, 1).millisecondsSinceEpoch;
+    expect(isNewDay(false, first, next), isTrue);
+    expect(isNewDay(false, first, first + 60000), isFalse);
   });
 
   test('username validation enforces supported format', () {
