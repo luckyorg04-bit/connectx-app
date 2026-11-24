@@ -20,8 +20,9 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
+class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, TickerProviderStateMixin {
   int _selectedTab = 0;
+  late final TabController _tabController;
   bool _showProfile = false;
   String _chatFilter = 'All';
 
@@ -30,6 +31,12 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 4, vsync: this);
+    _tabController.addListener(() {
+      if (mounted && _selectedTab != _tabController.index) {
+        setState(() => _selectedTab = _tabController.index);
+      }
+    });
     WidgetsBinding.instance.addObserver(this);
     final uid = FirebaseAuth.instance.currentUser!.uid;
     final onlineRef = FirebaseDatabase.instance.ref("Users").child(uid).child("online");
@@ -40,10 +47,12 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final title = _showProfile ? 'Profile' : _tabTitles[_selectedTab];
     return Scaffold(
       appBar: AppBar(
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+        title: Text(
+          _showProfile ? 'Profile' : 'ConnectX',
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
         automaticallyImplyLeading: false,
         leading: _showProfile
             ? IconButton(
@@ -67,36 +76,55 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           ] else ...[
             if (_selectedTab == 0)
               IconButton(
-                tooltip: 'Search people',
+                tooltip: 'Search',
                 icon: const Icon(Icons.search_rounded),
-                onPressed: () => Navigator.of(context).pushNamed("/main/new"),
+                onPressed: () => Navigator.of(context).pushNamed('/main/new'),
               ),
-            if (_selectedTab == 3)
+            if (_selectedTab == 1)
               IconButton(
-                tooltip: 'Call options',
-                icon: const Icon(Icons.link_rounded),
-                onPressed: () => _showComingSoon('Call links'),
+                tooltip: 'Create status',
+                icon: const Icon(Icons.camera_alt_outlined),
+                onPressed: () => _showComingSoon('Create status'),
               ),
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: InkWell(
-                customBorder: const CircleBorder(),
-                onTap: () => setState(() => _showProfile = true),
-                child: CircleAvatar(
-                  radius: 18,
-                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                  child: Icon(Icons.person_rounded,
-                      color: Theme.of(context).colorScheme.onPrimaryContainer, size: 21),
-                ),
-              ),
+            PopupMenuButton<String>(
+              tooltip: 'More options',
+              onSelected: (value) {
+                if (value == 'profile') {
+                  setState(() => _showProfile = true);
+                } else if (value == 'new_group') {
+                  _showComingSoon('New group');
+                } else if (value == 'settings') {
+                  _showComingSoon('Settings');
+                }
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(value: 'new_group', child: Text('New group')),
+                PopupMenuItem(value: 'profile', child: Text('Profile')),
+                PopupMenuItem(value: 'settings', child: Text('Settings')),
+              ],
             ),
           ],
         ],
+        bottom: _showProfile
+            ? null
+            : TabBar(
+                controller: _tabController,
+                indicatorColor: Colors.white,
+                indicatorWeight: 3,
+                labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+                tabs: const [
+                  Tab(text: 'CHATS'),
+                  Tab(text: 'UPDATES'),
+                  Tab(text: 'COMMUNITIES'),
+                  Tab(text: 'CALLS'),
+                ],
+              ),
       ),
       body: _showProfile
           ? const ProfileScreen()
-          : IndexedStack(
-              index: _selectedTab,
+          : TabBarView(
+              controller: _tabController,
               children: [
                 _buildChatsTab(),
                 const _UpdatesTab(),
@@ -108,7 +136,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           ? null
           : _selectedTab == 0
               ? FloatingActionButton(
-                  onPressed: () => Navigator.of(context).pushNamed("/main/new"),
+                  onPressed: () => Navigator.of(context).pushNamed('/main/new'),
                   shape: const CircleBorder(),
                   child: const Icon(Icons.chat_rounded),
                 )
@@ -125,38 +153,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                           label: const Text('New community'),
                         )
                       : FloatingActionButton(
-                          onPressed: () => Navigator.of(context).pushNamed("/main/new"),
+                          onPressed: () => Navigator.of(context).pushNamed('/main/new'),
                           shape: const CircleBorder(),
                           child: const Icon(Icons.add_call_rounded),
                         ),
-      bottomNavigationBar: _showProfile
-          ? null
-          : NavigationBar(
-              selectedIndex: _selectedTab,
-              onDestinationSelected: (index) => setState(() => _selectedTab = index),
-              destinations: const [
-                NavigationDestination(
-                  icon: Icon(Icons.chat_bubble_outline_rounded),
-                  selectedIcon: Icon(Icons.chat_bubble_rounded),
-                  label: 'Chats',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.circle_outlined),
-                  selectedIcon: Icon(Icons.circle),
-                  label: 'Updates',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.groups_outlined),
-                  selectedIcon: Icon(Icons.groups_rounded),
-                  label: 'Communities',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.call_outlined),
-                  selectedIcon: Icon(Icons.call_rounded),
-                  label: 'Calls',
-                ),
-              ],
-            ),
     );
   }
 
@@ -329,6 +329,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _tabController.dispose();
     for (final subscription in subscriptions) {
       subscription.cancel();
     }
