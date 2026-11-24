@@ -711,24 +711,152 @@ class _CommunitiesTab extends StatelessWidget {
   const _CommunitiesTab();
 
   Future<void> _create(BuildContext context) async {
-    final name = TextEditingController(), description = TextEditingController();
+    final name = TextEditingController();
+    final description = TextEditingController();
     final ok = await showDialog<bool>(context: context, builder: (c) => AlertDialog(
       title: const Text('Create community'),
-      content: Column(mainAxisSize: MainAxisSize.min, children: [
-        TextField(controller: name, decoration: const InputDecoration(labelText: 'Community name')),
-        TextField(controller: description, decoration: const InputDecoration(labelText: 'Description')),
-      ]),
-      actions: [TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
-        FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Create'))],
+      content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextField(controller: name, maxLength: 50, decoration: const InputDecoration(labelText: 'Community name')),
+        TextField(controller: description, maxLength: 240, maxLines: 3,
+          decoration: const InputDecoration(labelText: 'Description')),
+      ])),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Create')),
+      ],
     ));
     final title = name.text.trim(), about = description.text.trim();
     name.dispose(); description.dispose();
     if (ok != true || title.isEmpty) return;
     final uid = FirebaseAuth.instance.currentUser!.uid;
-    await FirebaseFirestore.instance.collection('communities').add({
-      'name': title, 'description': about, 'ownerUid': uid, 'memberUids': [uid],
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+    try {
+      await FirebaseFirestore.instance.collection('communities').add({
+        'name': title, 'description': about, 'ownerUid': uid,
+        'adminUids': [uid], 'memberUids': [uid],
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Community created.')),
+      );
+    } catch (error) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not create community: $error')),
+      );
+    }
+  }
+
+  Future<void> _open(BuildContext context, QueryDocumentSnapshot<Map<String, dynamic>> doc) async {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final ref = doc.reference;
+    final initial = doc.data();
+    final members = List<String>.from(initial['memberUids'] ?? []);
+    final joined = members.contains(uid);
+    final controller = TextEditingController();
+    await showModalBottomSheet<void>(
+      context: context, isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(child: SizedBox(
+        height: MediaQuery.of(sheetContext).size.height * .82,
+        child: Column(children: [
+          StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+            stream: ref.snapshots(),
+            builder: (context, snap) {
+              final data = snap.data?.data() ?? initial;
+              final currentMembers = List<String>.from(data['memberUids'] ?? []);
+              final isMember = currentMembers.contains(uid);
+              final admins = List<String>.from(data['adminUids'] ?? [data['ownerUid']].whereType<String>());
+              final isAdmin = admins.contains(uid) || data['ownerUid'] == uid;
+              return Column(children: [
+                ListTile(
+                  leading: const CircleAvatar(child: Icon(Icons.groups_rounded)),
+                  title: Text((data['name'] ?? 'Community').toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text('${data['description'] ?? ''}\n${currentMembers.length} members'),
+                  isThreeLine: true,
+                ),
+                Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Row(children: [
+                  Expanded(child: OutlinedButton.icon(
+                    onPressed: () async {
+                      try {
+                        await ref.update({'memberUids': isMember
+                          ? FieldValue.arrayRemove([uid])
+                          : FieldValue.arrayUnion([uid])});
+                      } catch (error) {
+                        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Membership update failed: $error')),
+                        );
+                      }
+                    },
+                    icon: Icon(isMember ? Icons.exit_to_app : Icons.group_add),
+                    label: Text(isMember ? 'Leave community' : 'Join community'),
+                  )),
+                  if (isAdmin) const Padding(
+                    padding: EdgeInsets.only(left: 8),
+                    child: Chip(avatar: Icon(Icons.shield_outlined, size: 16), label: Text('Admin')),
+                  ),
+                ])),
+              ]);
+            },
+          ),
+          const Divider(),
+          Expanded(child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: ref.collection('posts').orderBy('createdAt', descending: true).limit(100).snapshots(),
+            builder: (context, snap) {
+              if (snap.hasError) return Center(child: Text('Unable to load community posts: ${snap.error}'));
+              if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+              if (snap.data!.docs.isEmpty) return const Center(child: Text('No posts yet. Start the discussion.'));
+              return ListView(children: snap.data!.docs.map((post) {
+                final postData = post.data();
+                return ListTile(
+                  leading: const CircleAvatar(child: Icon(Icons.forum_outlined)),
+                  title: Text((postData['text'] ?? '').toString()),
+                  subtitle: Text('${postData['authorName'] ?? 'Community member'} · ${postData['createdAt'] is Timestamp ? DateFormat('dd MMM, h:mm a').format((postData['createdAt'] as Timestamp).toDate()) : 'Just now'}'),
+                );
+              }).toList());
+            },
+          )),
+          StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+            stream: ref.snapshots(),
+            builder: (context, snap) {
+              final data = snap.data?.data() ?? initial;
+              final isMember = List<String>.from(data['memberUids'] ?? []).contains(uid);
+              final admins = List<String>.from(data['adminUids'] ?? [data['ownerUid']].whereType<String>());
+              final isAdmin = admins.contains(uid) || data['ownerUid'] == uid;
+              if (!isMember) return const Padding(
+                padding: EdgeInsets.all(12),
+                child: Text('Join this community to participate in discussions.'),
+              );
+              return Padding(padding: EdgeInsets.fromLTRB(12, 8, 12, MediaQuery.of(context).viewInsets.bottom + 12),
+                child: Row(children: [
+                  Expanded(child: TextField(controller: controller, minLines: 1, maxLines: 4,
+                    decoration: const InputDecoration(hintText: 'Write a community post'))),
+                  IconButton(
+                    tooltip: 'Publish post',
+                    onPressed: () async {
+                      final text = controller.text.trim();
+                      if (text.isEmpty) return;
+                      try {
+                        await ref.collection('posts').add({
+                          'text': text, 'authorUid': uid,
+                          'authorName': FirebaseAuth.instance.currentUser?.displayName ?? 'ConnectX member',
+                          'createdAt': FieldValue.serverTimestamp(),
+                          'isAdminPost': isAdmin,
+                        });
+                        controller.clear();
+                      } catch (error) {
+                        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Post failed: $error')),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.send_rounded),
+                  ),
+                ]),
+              );
+            },
+          ),
+        ]),
+      )),
+    );
+    controller.dispose();
   }
 
   @override
@@ -739,22 +867,32 @@ class _CommunitiesTab extends StatelessWidget {
       builder: (context, snap) {
         if (snap.hasError) return Center(child: Text('Unable to load communities: ${snap.error}'));
         if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+        final docs = snap.data!.docs;
         return ListView(padding: const EdgeInsets.all(16), children: [
           Text('Communities', style: Theme.of(context).textTheme.headlineSmall),
-          const Text('Create or join communities and bring related groups together.'),
+          const Text('Create or join communities and take part in group discussions.'),
           const SizedBox(height: 12),
-          FilledButton.icon(onPressed: () => _create(context), icon: const Icon(Icons.add), label: const Text('Create community')),
-          ...snap.data!.docs.map((doc) {
+          FilledButton.icon(onPressed: () => _create(context),
+            icon: const Icon(Icons.add), label: const Text('Create community')),
+          if (docs.isEmpty) const Padding(
+            padding: EdgeInsets.all(28),
+            child: _SectionEmptyState(icon: Icons.groups_outlined,
+              title: 'No communities yet', description: 'Create a community and invite people to join.'),
+          ),
+          ...docs.map((doc) {
             final data = doc.data();
             final members = List<String>.from(data['memberUids'] ?? []);
             final joined = members.contains(uid);
-            return ListTile(
-              leading: const CircleAvatar(child: Icon(Icons.groups)),
-              title: Text((data['name'] ?? 'Community').toString()),
-              subtitle: Text('${data['description'] ?? ''} · ${members.length} members'),
-              trailing: joined ? const Icon(Icons.check_circle) : TextButton(
-                onPressed: () => doc.reference.update({'memberUids': FieldValue.arrayUnion([uid])}),
-                child: const Text('Join')),
+            return Card(
+              child: ListTile(
+                leading: const CircleAvatar(child: Icon(Icons.groups)),
+                title: Text((data['name'] ?? 'Community').toString()),
+                subtitle: Text('${data['description'] ?? ''} · ${members.length} members',
+                  maxLines: 2, overflow: TextOverflow.ellipsis),
+                trailing: Icon(joined ? Icons.check_circle : Icons.chevron_right,
+                  color: joined ? Colors.green : null),
+                onTap: () => _open(context, doc),
+              ),
             );
           }),
         ]);
