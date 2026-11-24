@@ -54,7 +54,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
       final pending = pendingCallArguments;
       if (pending != null) {
         pendingCallArguments = null;
-        appNavigatorKey.currentState?.pushNamed('/call', arguments: pending);
+        appNavigatorKey.currentState?.pushNamed(
+          pending['isGroupCall'] == true ? '/group-call' : '/call',
+          arguments: pending,
+        );
       }
     });
   }
