@@ -527,7 +527,7 @@ class _CallScreenState extends State<CallScreen> {
             Positioned(left: 16, right: 16, bottom: 16,
               child: Center(child: DecoratedBox(
                 decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(20)),
-                child: const Padding(padding: EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                child: Padding(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
                     SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
                     SizedBox(width: 9), Text('Reconnecting…', style: TextStyle(color: Colors.white)),
