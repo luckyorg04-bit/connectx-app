@@ -325,7 +325,8 @@ service cloud.firestore {
               && request.resource.data.activeUids.size() <= 8
               && request.resource.data.activeUids.hasAll(resource.data.activeUids)
               && request.resource.data.participants is list
-              && request.resource.data.participants.size() == resource.data.participants.size() + 1
+              && request.resource.data.participants.size() >= resource.data.participants.size()
+              && request.resource.data.participants.size() <= resource.data.participants.size() + 1
               && request.resource.data.participants.hasAll(resource.data.participants)
               && request.auth.uid in request.resource.data.participants
             )
