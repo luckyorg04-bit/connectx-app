@@ -174,14 +174,14 @@ class _CallScreenState extends State<CallScreen> {
       final answer = Map<String, dynamic>.from(data['answer']);
       if (answer['sdp'] != null) {
         _ringTimeoutTimer?.cancel();
-    FlutterRingtonePlayer().stop();
+    FlutterRingtonePlayer.stop();
         await _peer?.setRemoteDescription(RTCSessionDescription(answer['sdp'], answer['type']));
         _remoteDescriptionSet = true;
         if (mounted) setState(() => _accepted = true);
       }
     }
     if (status == 'declined' || status == 'ended' || status == 'failed' || status == 'missed' || status == 'cancelled') {
-      FlutterRingtonePlayer().stop();
+      FlutterRingtonePlayer.stop();
       if (!_leaving && mounted && ModalRoute.of(context)?.isCurrent == true) {
         _leaving = true;
         Navigator.of(context).pop();
@@ -226,7 +226,7 @@ class _CallScreenState extends State<CallScreen> {
   Future<void> _finishCall(String status) async {
     if (_leaving) return;
     _leaving = true;
-    await FlutterRingtonePlayer().stop();
+    await FlutterRingtonePlayer.stop();
     try {
       if (_isCaller) {
         await _callRef.update({'status': status, 'endedAt': FieldValue.serverTimestamp()});
