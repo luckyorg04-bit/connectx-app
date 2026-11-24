@@ -137,7 +137,7 @@ class _ChatMessageState extends State<ChatMessage> {
         return SizedBox(width: 245, child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Row(children: [Icon(Icons.poll_outlined, size: 18), SizedBox(width: 6), Text('POLL', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11))]),
+            Row(children: const [Icon(Icons.poll_outlined, size: 18), SizedBox(width: 6), Text('POLL', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11))]),
             const SizedBox(height: 7),
             Text(message.message, style: TextStyle(color: textColor, fontSize: 16, fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
