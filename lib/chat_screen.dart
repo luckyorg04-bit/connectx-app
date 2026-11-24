@@ -472,6 +472,17 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
     );
   }
 
+  Future<void> _startCall({required bool video}) async {
+    final callId = FirebaseFirestore.instance.collection('calls').doc().id;
+    await Navigator.of(context).pushNamed('/call', arguments: {
+      'callId': callId,
+      'peerUid': user!.key,
+      'peerName': user!.name,
+      'isCaller': true,
+      'isVideo': video,
+    });
+  }
+
   Future<void> _showStarredMessages() async {
     final snap = await FirebaseDatabase.instance.ref('Users').child(_uid)
         .child('chatMeta').child(user!.key).child('starredMessages').get();
@@ -708,6 +719,10 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
           ])),
         ]),
         actions: [
+          IconButton(tooltip: 'Voice call', icon: const Icon(Icons.call_outlined),
+            onPressed: () => _startCall(video: false)),
+          IconButton(tooltip: 'Video call', icon: const Icon(Icons.videocam_outlined),
+            onPressed: () => _startCall(video: true)),
           PopupMenuButton<String>(
             onSelected: (value) {
               if (value == 'starred') _showStarredMessages();
