@@ -77,6 +77,66 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
     }
   }
 
+  Future<void> _createPoll() async {
+    final question = TextEditingController();
+    final options = [TextEditingController(), TextEditingController()];
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Create poll'),
+          content: SizedBox(width: double.maxFinite, child: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(controller: question, maxLength: 180,
+                decoration: const InputDecoration(labelText: 'Question')),
+              ...options.asMap().entries.map((entry) => TextField(
+                controller: entry.value,
+                maxLength: 80,
+                decoration: InputDecoration(labelText: 'Option ${entry.key + 1}'))),
+              if (options.length < 6)
+                TextButton.icon(onPressed: () => setDialogState(() => options.add(TextEditingController())),
+                  icon: const Icon(Icons.add), label: const Text('Add option')),
+            ]),
+          )),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Share poll')),
+          ],
+        ),
+      ),
+    );
+    final q = question.text.trim();
+    final choices = options.map((c) => c.text.trim()).where((v) => v.isNotEmpty).toList();
+    question.dispose();
+    for (final c in options) { c.dispose(); }
+    if (confirmed != true || q.isEmpty || choices.length < 2) {
+      if (confirmed == true && mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a question and at least two options.')));
+      return;
+    }
+    try {
+      await _ensureCanMessage();
+      await _messages.add({
+        'message': q,
+        'type': 'poll',
+        'pollOptions': choices,
+        'pollVotes': <String, dynamic>{},
+        'isRead': false,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+        'sender': _uid,
+        'isEdited': false,
+        'isForwarded': false,
+        'reactions': <String, dynamic>{},
+      });
+      await FirebaseDatabase.instance.ref('Users').child(_uid).child('chats')
+        .child('personal').child(user!.key).set(ServerValue.timestamp);
+      await FirebaseDatabase.instance.ref('Users').child(user!.key).child('chats')
+        .child('personal').child(_uid).set(ServerValue.timestamp);
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Poll not sent: $error')));
+    }
+  }
+
   Future<void> _sendMessage() async {
     final text = textFieldController.text.trim();
     if (text.isEmpty || _sending) return;
@@ -659,6 +719,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
                 if (value == 'document') _pickDocument();
                 if (value == 'location') _sendLocation();
                 if (value == 'contact') _shareContact();
+                if (value == 'poll') _createPoll();
               },
               itemBuilder: (context) => const [
                 PopupMenuItem(value: 'image', child: ListTile(leading: Icon(Icons.photo), title: Text('Photo'))),
@@ -666,6 +727,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
                 PopupMenuItem(value: 'document', child: ListTile(leading: Icon(Icons.insert_drive_file), title: Text('Document'))),
                 PopupMenuItem(value: 'location', child: ListTile(leading: Icon(Icons.location_on), title: Text('Location'))),
                 PopupMenuItem(value: 'contact', child: ListTile(leading: Icon(Icons.contact_page), title: Text('Contact'))),
+                PopupMenuItem(value: 'poll', child: ListTile(leading: Icon(Icons.poll_outlined), title: Text('Poll'))),
               ],
             ),
             Expanded(child: TextField(
