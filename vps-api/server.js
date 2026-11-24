@@ -182,6 +182,28 @@ function startListeners() {
     }
   }, e => console.error('Direct Firestore listener error:', e.message));
 
+  let callInitial = true;
+  const notifiedCalls = new Set();
+  db.collection('calls').onSnapshot(snapshot => {
+    if (callInitial) { callInitial = false; console.log('Call notification listener ready; initial documents:', snapshot.size); return; }
+    for (const change of snapshot.docChanges()) {
+      if (change.type !== 'added' && change.type !== 'modified') continue;
+      const call = change.doc.data() || {};
+      const callId = change.doc.id;
+      if (call.status !== 'ringing' || !call.offer || !call.offer.sdp || notifiedCalls.has(callId)) continue;
+      const calleeUid = String(call.calleeUid || '');
+      const callerUid = String(call.callerUid || '');
+      if (!calleeUid || !callerUid) continue;
+      notifiedCalls.add(callId);
+      const callerName = String(call.callerName || 'ConnectX user');
+      const callType = call.type === 'video' ? 'video' : 'voice';
+      sendDirect(calleeUid, callerName,
+        callType === 'video' ? 'Incoming video call' : 'Incoming voice call',
+        { type: 'incoming_call', callId, callerUid, callerName, callType }
+      ).catch(e => console.error('Call notification error:', e.message));
+    }
+  }, e => console.error('Call Firestore listener error:', e.message));
+
   let groupInitial = true;
   db.collectionGroup('messages').onSnapshot(snapshot => {
     if (groupInitial) { groupInitial = false; console.log('Group Firestore listener ready; initial documents:', snapshot.size); return; }
