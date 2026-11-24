@@ -1,13 +1,15 @@
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../chat_screen.dart';
 import '../models/message.dart';
 
 final Set<String> _readReceiptAttempts = <String>{};
 
-class ChatMessage extends StatelessWidget {
+class ChatMessage extends StatefulWidget {
   final Message message;
   final bool isMe;
   final int? previousMessage;
@@ -24,7 +26,113 @@ class ChatMessage extends StatelessWidget {
   }) : super(key: key);
 
   @override
+  State<ChatMessage> createState() => _ChatMessageState();
+}
+
+class _ChatMessageState extends State<ChatMessage> {
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  bool _audioPlaying = false;
+
+  @override
+  void dispose() {
+    _audioPlayer.dispose();
+    super.dispose();
+  }
+
+  Future<void> _openUrl(String value) async {
+    final uri = Uri.tryParse(value);
+    if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Widget _mediaContent(Color textColor, Color secondary) {
+    final message = widget.message;
+    final url = message.mediaUrl ?? '';
+    switch (message.type) {
+      case 'image':
+        return GestureDetector(
+          onTap: () => _openUrl(url),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.network(url, width: 230, height: 190, fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const SizedBox(
+                  width: 220, height: 90, child: Center(child: Icon(Icons.broken_image_outlined))),
+              ),
+            ),
+            if (message.fileName != null)
+              Padding(padding: const EdgeInsets.only(top: 4),
+                child: Text(message.fileName!, style: TextStyle(color: textColor, fontSize: 12))),
+          ]),
+        );
+      case 'video':
+        return ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const CircleAvatar(child: Icon(Icons.play_arrow_rounded)),
+          title: Text(message.fileName ?? 'Video', style: TextStyle(color: textColor)),
+          subtitle: Text('Tap to open video', style: TextStyle(color: secondary, fontSize: 11)),
+          onTap: () => _openUrl(url),
+        );
+      case 'document':
+        return ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.insert_drive_file_rounded, size: 30),
+          title: Text(message.fileName ?? 'Document', maxLines: 2,
+            overflow: TextOverflow.ellipsis, style: TextStyle(color: textColor)),
+          subtitle: Text('Tap to open document', style: TextStyle(color: secondary, fontSize: 11)),
+          onTap: () => _openUrl(url),
+        );
+      case 'audio':
+        return Row(mainAxisSize: MainAxisSize.min, children: [
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            icon: Icon(_audioPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill,
+              size: 34, color: Theme.of(context).colorScheme.primary),
+            onPressed: () async {
+              if (_audioPlaying) {
+                await _audioPlayer.pause();
+                if (mounted) setState(() => _audioPlaying = false);
+              } else {
+                await _audioPlayer.play(UrlSource(url));
+                if (mounted) setState(() => _audioPlaying = true);
+                _audioPlayer.onPlayerComplete.listen((_) {
+                  if (mounted) setState(() => _audioPlaying = false);
+                });
+              }
+            },
+          ),
+          Text('Voice message', style: TextStyle(color: textColor)),
+        ]);
+      case 'location':
+        final lat = message.latitude;
+        final lng = message.longitude;
+        return TextButton.icon(
+          onPressed: lat == null || lng == null ? null
+            : () => _openUrl('https://www.google.com/maps/search/?api=1&query=$lat,$lng'),
+          icon: const Icon(Icons.location_on_rounded),
+          label: Text('View shared location', style: TextStyle(color: textColor)),
+        );
+      case 'contact':
+        return ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const CircleAvatar(child: Icon(Icons.person_rounded)),
+          title: Text(message.contactName ?? 'Contact', style: TextStyle(color: textColor)),
+          subtitle: Text(message.contactPhone ?? '', style: TextStyle(color: secondary)),
+          trailing: IconButton(
+            icon: const Icon(Icons.call_rounded),
+            onPressed: message.contactPhone == null ? null
+              : () => _openUrl('tel:${message.contactPhone}'),
+          ),
+        );
+      default:
+        return Text(message.message,
+          style: TextStyle(color: textColor, fontSize: 16, height: 1.28));
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final message = widget.message;
+    final isMe = widget.isMe;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final bubble = isMe ? (dark ? const Color(0xFF005C4B) : const Color(0xFFD9FDD3))
         : (dark ? const Color(0xFF202C33) : Colors.white);
@@ -42,7 +150,7 @@ class ChatMessage extends StatelessWidget {
     }
 
     return Column(children: [
-      if (isNewDay(isFirstMessage, previousMessage, message.timestamp))
+      if (isNewDay(widget.isFirstMessage, widget.previousMessage, message.timestamp))
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 12),
           child: DecoratedBox(
@@ -84,18 +192,16 @@ class ChatMessage extends StatelessWidget {
                 child: Text(message.replyTo!, maxLines: 2, overflow: TextOverflow.ellipsis,
                   style: TextStyle(fontSize: 12, color: textColor.withOpacity(.8))),
               ),
+            _mediaContent(textColor, secondary),
             Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Flexible(child: Text(message.message, style: TextStyle(color: textColor, fontSize: 16, height: 1.28))),
+              if (message.isEdited) Text('edited ', style: TextStyle(fontSize: 9, color: secondary)),
               const SizedBox(width: 8),
-              Row(mainAxisSize: MainAxisSize.min, children: [
-                if (message.isEdited) Text('edited ', style: TextStyle(fontSize: 9, color: secondary)),
-                Text(time, style: TextStyle(fontSize: 10, color: secondary)),
-                if (isMe) ...[
-                  const SizedBox(width: 3),
-                  Icon(message.isRead ? Icons.done_all_rounded : Icons.done_rounded,
-                    size: 15, color: message.isRead ? const Color(0xFF53BDEB) : secondary),
-                ],
-              ]),
+              Text(time, style: TextStyle(fontSize: 10, color: secondary)),
+              if (isMe) ...[
+                const SizedBox(width: 3),
+                Icon(message.isRead ? Icons.done_all_rounded : Icons.done_rounded,
+                  size: 15, color: message.isRead ? const Color(0xFF53BDEB) : secondary),
+              ],
             ]),
             if (message.reactions.isNotEmpty)
               Padding(
