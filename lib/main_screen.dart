@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectx/models/chat.dart';
 import 'package:connectx/utils/user_list.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -110,7 +111,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
                 if (value == 'profile') {
                   setState(() => _showProfile = true);
                 } else if (value == 'new_group') {
-                  _showComingSoon('New group');
+                  _createGroup();
                 } else if (value == 'settings') {
                   _showComingSoon('Settings');
                 }
@@ -202,11 +203,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
         ),
         Expanded(
           child: _chatFilter == 'Groups'
-              ? const _SectionEmptyState(
-                  icon: Icons.groups_outlined,
-                  title: 'No group chats yet',
-                  description: 'Group conversations will be added in Part 2.',
-                )
+              ? _GroupsList(onCreateGroup: _createGroup)
               : users.isEmpty && _chatFilter == 'All'
                   ? const _SectionEmptyState(
                       icon: Icons.chat_bubble_outline_rounded,
@@ -223,6 +220,83 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
         ),
       ],
     );
+  }
+
+
+  Future<void> _createGroup() async {
+    final nameController = TextEditingController();
+    final selected = <String>{};
+    final available = users.where((person) =>
+      person.key != FirebaseAuth.instance.currentUser!.uid).toList();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Create group'),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 360,
+            child: Column(children: [
+              TextField(
+                controller: nameController,
+                maxLength: 40,
+                decoration: const InputDecoration(labelText: 'Group name'),
+              ),
+              const SizedBox(height: 8),
+              const Align(alignment: Alignment.centerLeft,
+                child: Text('Add members', style: TextStyle(fontWeight: FontWeight.w600))),
+              Expanded(
+                child: available.isEmpty
+                  ? const Center(child: Text('No other contacts yet. You can create the group now and add members later.'))
+                  : ListView(children: available.map((person) => CheckboxListTile(
+                      value: selected.contains(person.key),
+                      title: Text(person.name),
+                      subtitle: Text('@${person.username}'),
+                      onChanged: (value) => setDialogState(() {
+                        if (value == true) { selected.add(person.key); }
+                        else { selected.remove(person.key); }
+                      }),
+                    )).toList()),
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Create')),
+          ],
+        ),
+      ),
+    );
+    final groupName = nameController.text.trim();
+    nameController.dispose();
+    if (confirmed != true || groupName.isEmpty) return;
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final members = <String>{uid, ...selected}.toList();
+    try {
+      final doc = FirebaseFirestore.instance.collection('groupChats').doc();
+      await doc.set({
+        'name': groupName,
+        'createdBy': uid,
+        'memberUids': members,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      for (final memberUid in members) {
+        await FirebaseDatabase.instance.ref('Users').child(memberUid)
+            .child('groups').child(doc.id).set(true);
+      }
+      if (mounted) {
+        setState(() => _chatFilter = 'Groups');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Group created.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not create group: $error')),
+      );
+    }
   }
 
   void _showComingSoon(String feature) {
@@ -351,6 +425,70 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
       subscription.cancel();
     }
     super.dispose();
+  }
+}
+
+
+class _GroupsList extends StatelessWidget {
+  final VoidCallback onCreateGroup;
+  const _GroupsList({required this.onCreateGroup});
+
+  @override
+  Widget build(BuildContext context) {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    return Column(children: [
+      Align(
+        alignment: Alignment.centerRight,
+        child: TextButton.icon(
+          onPressed: onCreateGroup,
+          icon: const Icon(Icons.group_add_outlined),
+          label: const Text('New group'),
+        ),
+      ),
+      Expanded(
+        child: StreamBuilder<DatabaseEvent>(
+          stream: FirebaseDatabase.instance.ref('Users').child(uid).child('groups').onValue,
+          builder: (context, snapshot) {
+            if (snapshot.hasError) return const Center(child: Text('Unable to load groups.'));
+            if (!snapshot.hasData || snapshot.data!.snapshot.value == null) {
+              return const _SectionEmptyState(
+                icon: Icons.groups_outlined,
+                title: 'No group chats yet',
+                description: 'Create a group to start a group conversation.',
+              );
+            }
+            final value = snapshot.data!.snapshot.value;
+            if (value is! Map) return const Center(child: Text('No group chats yet.'));
+            final ids = value.keys.map((key) => key.toString()).toList();
+            if (ids.isEmpty) return const Center(child: Text('No group chats yet.'));
+            return ListView.builder(
+              itemCount: ids.length,
+              itemBuilder: (context, index) {
+                final id = ids[index];
+                return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                  future: FirebaseFirestore.instance.collection('groupChats').doc(id).get(),
+                  builder: (context, groupSnapshot) {
+                    if (!groupSnapshot.hasData || !groupSnapshot.data!.exists) {
+                      return const SizedBox.shrink();
+                    }
+                    final data = groupSnapshot.data!.data() ?? {};
+                    final name = (data['name'] ?? 'Group').toString();
+                    final count = (data['memberUids'] as List?)?.length ?? 0;
+                    return ListTile(
+                      leading: const CircleAvatar(child: Icon(Icons.groups_rounded)),
+                      title: Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: Text('$count members'),
+                      onTap: () => Navigator.of(context).pushNamed('/group',
+                        arguments: {'groupId': id, 'name': name}),
+                    );
+                  },
+                );
+              },
+            );
+          },
+        ),
+      ),
+    ]);
   }
 }
 
