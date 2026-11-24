@@ -23,6 +23,7 @@ class Message {
   final Map<String, dynamic> pollVotes;
   final int? expiresAt;
   final bool isViewOnce;
+  final Map<String, dynamic> viewedBy;
 
   Message({
     required this.message,
@@ -47,6 +48,7 @@ class Message {
     this.pollVotes = const {},
     this.expiresAt,
     this.isViewOnce = false,
+    this.viewedBy = const {},
   });
 
   factory Message.fromJson(Map<String, dynamic> json) {
@@ -73,6 +75,7 @@ class Message {
       pollVotes: Map<String, dynamic>.from(json['pollVotes'] ?? const {}),
       expiresAt: (json['expiresAt'] as num?)?.toInt(),
       isViewOnce: json['isViewOnce'] == true,
+      viewedBy: Map<String, dynamic>.from(json['viewedBy'] ?? const {}),
     );
   }
 
@@ -99,6 +102,7 @@ class Message {
     'pollVotes': pollVotes,
     'expiresAt': expiresAt,
     'isViewOnce': isViewOnce,
+    'viewedBy': viewedBy,
   };
 
   static Message fromSnapshot(DocumentSnapshot object) {
