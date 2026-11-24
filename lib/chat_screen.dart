@@ -99,6 +99,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
       } else {
         await _messages.add({
           'message': text,
+          'type': 'text',
           'isRead': false,
           'timestamp': now,
           'sender': _uid,
@@ -187,7 +188,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
       final url = await ChatStorage.upload(
         conversationId: assignUsers(_uid, user!.key),
         fileName: fileName,
-        bytes: bytes is List<int> ? Uint8List.fromList(bytes) : Uint8List(0),
+        bytes: Uint8List.fromList(bytes),
         contentType: contentType,
       );
       await _sendStructuredMessage(
@@ -530,6 +531,13 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
     final targetId = assignUsers(_uid, target.key);
     await FirebaseFirestore.instance.collection('messages').doc(targetId).collection('chats').add({
       'message': message.message,
+      'type': message.type,
+      'mediaUrl': message.mediaUrl,
+      'fileName': message.fileName,
+      'latitude': message.latitude,
+      'longitude': message.longitude,
+      'contactName': message.contactName,
+      'contactPhone': message.contactPhone,
       'isRead': false,
       'timestamp': DateTime.now().millisecondsSinceEpoch,
       'sender': _uid,
