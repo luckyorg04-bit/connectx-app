@@ -60,14 +60,14 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       if (!call.exists) throw Exception('This group call is no longer available.');
       final callData = call.data()!;
       if (callData['status'] != 'active') throw Exception('This group call has ended.');
-      if (!isCreator) {
-        final active = List<String>.from(callData['activeUids'] ?? []);
-        if (!active.contains(_uid) && active.length >= 8) {
-          throw Exception('This group call has reached its 8 participant limit.');
-        }
-        await _callRef.update({'activeUids': FieldValue.arrayUnion([_uid])});
+      final active = List<String>.from(callData['activeUids'] ?? []);
+      if (!isCreator && !active.contains(_uid) && active.length >= 8) {
+        throw Exception('This group call has reached its 8 participant limit.');
       }
       await _prepareMedia();
+      if (!isCreator) {
+        await _callRef.update({'activeUids': FieldValue.arrayUnion([_uid])});
+      }
       _callSubscription = _callRef.snapshots().listen((snapshot) {
         final data = snapshot.data();
         if (data == null || data['status'] != 'active') {
@@ -78,6 +78,11 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
         _syncPeers(active);
       });
     } catch (error) {
+      if (isCreator) {
+        try {
+          await _callRef.update({'status': 'ended', 'endedAt': FieldValue.serverTimestamp()});
+        } catch (_) {}
+      }
       if (mounted) setState(() => _error = error.toString());
     }
   }
