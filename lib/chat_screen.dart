@@ -6,7 +6,6 @@ import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'services/chat_storage.dart';
 import 'package:connectx/main.dart';
 import 'package:connectx/main_screen.dart' show users;
