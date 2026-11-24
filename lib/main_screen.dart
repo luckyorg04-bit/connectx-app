@@ -815,20 +815,28 @@ class _CommunitiesTab extends StatelessWidget {
             },
           ),
           const Divider(),
-          Expanded(child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-            stream: ref.collection('posts').orderBy('createdAt', descending: true).limit(100).snapshots(),
-            builder: (context, snap) {
-              if (snap.hasError) return Center(child: Text('Unable to load community posts: ${snap.error}'));
-              if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-              if (snap.data!.docs.isEmpty) return const Center(child: Text('No posts yet. Start the discussion.'));
-              return ListView(children: snap.data!.docs.map((post) {
-                final postData = post.data();
-                return ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.forum_outlined)),
-                  title: Text((postData['text'] ?? '').toString()),
-                  subtitle: Text('${postData['authorName'] ?? 'Community member'} · ${postData['createdAt'] is Timestamp ? DateFormat('dd MMM, h:mm a').format((postData['createdAt'] as Timestamp).toDate()) : 'Just now'}'),
-                );
-              }).toList());
+          Expanded(child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+            stream: ref.snapshots(),
+            builder: (context, membership) {
+              final community = membership.data?.data() ?? initial;
+              final canRead = List<String>.from(community['memberUids'] ?? []).contains(uid);
+              if (!canRead) return const Center(child: Text('Join this community to view its discussions.'));
+              return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                stream: ref.collection('posts').orderBy('createdAt', descending: true).limit(100).snapshots(),
+                builder: (context, snap) {
+                  if (snap.hasError) return Center(child: Text('Unable to load community posts: ${snap.error}'));
+                  if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+                  if (snap.data!.docs.isEmpty) return const Center(child: Text('No posts yet. Start the discussion.'));
+                  return ListView(children: snap.data!.docs.map((post) {
+                    final postData = post.data();
+                    return ListTile(
+                      leading: const CircleAvatar(child: Icon(Icons.forum_outlined)),
+                      title: Text((postData['text'] ?? '').toString()),
+                      subtitle: Text('${postData['authorName'] ?? 'Community member'} · ${postData['createdAt'] is Timestamp ? DateFormat('dd MMM, h:mm a').format((postData['createdAt'] as Timestamp).toDate()) : 'Just now'}'),
+                    );
+                  }).toList());
+                },
+              );
             },
           )),
           StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
