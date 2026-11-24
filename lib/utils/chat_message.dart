@@ -4,7 +4,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../chat_screen.dart';
 import '../models/message.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 final Set<String> _readReceiptAttempts = <String>{};
 
