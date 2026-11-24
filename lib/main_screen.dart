@@ -37,10 +37,30 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
     });
     WidgetsBinding.instance.addObserver(this);
     final uid = FirebaseAuth.instance.currentUser!.uid;
-    final onlineRef = FirebaseDatabase.instance.ref("Users").child(uid).child("online");
-    onlineRef.onDisconnect().set(false);
-    onlineRef.set(true);
+    final userRef = FirebaseDatabase.instance.ref("Users").child(uid);
+    userRef.onDisconnect().update({
+      'online': false,
+      'lastSeen': ServerValue.timestamp,
+    });
+    userRef.update({'online': true});
     getData();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final userRef = FirebaseDatabase.instance.ref('Users').child(uid);
+    if (state == AppLifecycleState.resumed) {
+      userRef.update({'online': true});
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      userRef.update({
+        'online': false,
+        'lastSeen': ServerValue.timestamp,
+      });
+    }
   }
 
   @override
