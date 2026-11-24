@@ -390,9 +390,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
                 CircleAvatar(
                   radius: 42,
                   backgroundImage: pickedPhoto != null
-                      ? FileImage(File(pickedPhoto!.path))
+                      ? FileImage(File(pickedPhoto!.path)) as ImageProvider<Object>
                       : (!removePhoto && currentPhotoUrl.isNotEmpty
-                          ? NetworkImage(currentPhotoUrl) : null),
+                          ? NetworkImage(currentPhotoUrl) as ImageProvider<Object>
+                          : null),
                   child: pickedPhoto == null && (removePhoto || currentPhotoUrl.isEmpty)
                       ? const Icon(Icons.person, size: 42)
                       : null,
