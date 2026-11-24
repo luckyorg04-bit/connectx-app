@@ -182,6 +182,12 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
     required String type,
   }) async {
     if (bytes.isEmpty) return;
+    if (bytes.length > 25 * 1024 * 1024) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Maximum attachment size is 25 MB.')),
+      );
+      return;
+    }
     if (mounted) setState(() => _sending = true);
     try {
       await _ensureCanMessage();
