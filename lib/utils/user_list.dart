@@ -1,11 +1,11 @@
-import 'package:Chat/main.dart';
-import 'package:Chat/models/message.dart';
+import 'package:connectx/main.dart';
+import 'package:connectx/models/message.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../chat_screen.dart';
-import '../models/User.dart';
+import '../models/user.dart';
 
 class UserList extends StatefulWidget {
   final List<User1> users;
