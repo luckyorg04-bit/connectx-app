@@ -103,13 +103,22 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
   Future<void> _setTyping(bool typing) async {
     final ref = FirebaseDatabase.instance.ref('Users').child(_uid)
         .child('typing').child(user!.key);
-    if (typing) {
-      await ref.set(true);
-      _typingTimer?.cancel();
-      _typingTimer = Timer(const Duration(seconds: 3), () => ref.remove());
-    } else {
-      _typingTimer?.cancel();
-      await ref.remove();
+    try {
+      if (typing) {
+        await ref.set(true);
+        _typingTimer?.cancel();
+        _typingTimer = Timer(const Duration(seconds: 3), () {
+          ref.remove().catchError((error) {
+            debugPrint('ConnectX typing cleanup failed: $error');
+          });
+        });
+      } else {
+        _typingTimer?.cancel();
+        await ref.remove();
+      }
+    } catch (error) {
+      // Typing presence is optional; it must never block message delivery.
+      debugPrint('ConnectX typing presence unavailable: $error');
     }
   }
 
@@ -242,12 +251,29 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
   }
 
   Future<void> _ensureCanMessage() async {
-    final currentBlocked = await FirebaseDatabase.instance.ref('Users')
-        .child(_uid).child('blockedUsers').child(user!.key).get();
-    final otherBlocked = await FirebaseDatabase.instance.ref('Users')
-        .child(user!.key).child('blockedUsers').child(_uid).get();
-    if (currentBlocked.value == true || otherBlocked.value == true) {
-      throw Exception('This conversation is blocked. Unblock the user to send messages.');
+    // Respect an explicit block, but do not let an unavailable RTDB read prevent
+    // Firestore messaging. RTDB stores auxiliary block metadata, not messages.
+    try {
+      final currentBlocked = await FirebaseDatabase.instance.ref('Users')
+          .child(_uid).child('blockedUsers').child(user!.key).get();
+      if (currentBlocked.value == true) {
+        throw Exception('This conversation is blocked. Unblock the user to send messages.');
+      }
+    } catch (error) {
+      if (error is Exception &&
+          error.toString().contains('This conversation is blocked')) rethrow;
+      debugPrint('ConnectX local block check unavailable: $error');
+    }
+    try {
+      final otherBlocked = await FirebaseDatabase.instance.ref('Users')
+          .child(user!.key).child('blockedUsers').child(_uid).get();
+      if (otherBlocked.value == true) {
+        throw Exception('This conversation is blocked. The other user has blocked you.');
+      }
+    } catch (error) {
+      if (error is Exception &&
+          error.toString().contains('This conversation is blocked')) rethrow;
+      debugPrint('ConnectX peer block check unavailable: $error');
     }
   }
 
