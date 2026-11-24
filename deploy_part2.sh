@@ -84,6 +84,8 @@ for attempt in $(seq 1 15); do
   fi
   sleep 2
 done
+echo "=== RECONCILE RTDB DATA AFTER THE API SWITCH ==="
+docker exec "$API_CONTAINER" node /app/migrate-rtdb.js
 docker commit "$API_CONTAINER" "$API_IMAGE" >/dev/null
 echo "ConnectX API source updated; saved image tag: $API_IMAGE"
 
