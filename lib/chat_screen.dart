@@ -1,10 +1,10 @@
-import 'package:Chat/main.dart';
-import 'package:Chat/utils/chat_message.dart';
+import 'package:connectx/main.dart';
+import 'package:connectx/utils/chat_message.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'models/User.dart';
+import 'models/user.dart';
 import 'models/message.dart';
 
 class ChatScreen extends StatefulWidget {
