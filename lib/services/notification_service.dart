@@ -5,6 +5,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../app_navigator.dart';
+import 'database_service.dart';
 
 final FlutterLocalNotificationsPlugin _localNotifications =
     FlutterLocalNotificationsPlugin();
@@ -169,7 +170,7 @@ class NotificationService {
 
   static Future<void> _saveToken(String uid, String? token) async {
     if (token == null || token.isEmpty) return;
-    await FirebaseDatabase.instance.ref('Users').child(uid).update({
+    await ConnectXDatabase.instance.ref('Users').child(uid).update({
       'fcmToken': token,
     });
   }
