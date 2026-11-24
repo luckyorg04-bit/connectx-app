@@ -19,6 +19,10 @@ class Message {
   final double? longitude;
   final String? contactName;
   final String? contactPhone;
+  final List<String> pollOptions;
+  final Map<String, dynamic> pollVotes;
+  final int? expiresAt;
+  final bool isViewOnce;
 
   Message({
     required this.message,
@@ -39,6 +43,10 @@ class Message {
     this.longitude,
     this.contactName,
     this.contactPhone,
+    this.pollOptions = const [],
+    this.pollVotes = const {},
+    this.expiresAt,
+    this.isViewOnce = false,
   });
 
   factory Message.fromJson(Map<String, dynamic> json) {
@@ -61,6 +69,10 @@ class Message {
       longitude: (json['longitude'] as num?)?.toDouble(),
       contactName: json['contactName']?.toString(),
       contactPhone: json['contactPhone']?.toString(),
+      pollOptions: (json['pollOptions'] as List? ?? const []).map((e) => e.toString()).toList(),
+      pollVotes: Map<String, dynamic>.from(json['pollVotes'] ?? const {}),
+      expiresAt: (json['expiresAt'] as num?)?.toInt(),
+      isViewOnce: json['isViewOnce'] == true,
     );
   }
 
@@ -83,6 +95,10 @@ class Message {
     'longitude': longitude,
     'contactName': contactName,
     'contactPhone': contactPhone,
+    'pollOptions': pollOptions,
+    'pollVotes': pollVotes,
+    'expiresAt': expiresAt,
+    'isViewOnce': isViewOnce,
   };
 
   static Message fromSnapshot(DocumentSnapshot object) {
