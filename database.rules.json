@@ -4,11 +4,13 @@
     ".write": false,
     "PublicUsers": {
       ".read": "auth != null",
-      ".indexOn": ["username"],
+      ".indexOn": [
+        "username"
+      ],
       "$uid": {
         ".write": "auth != null && auth.uid == $uid",
-        ".validate": "newData.hasChildren(['name', 'username', 'key', 'online', 'lastSeen', 'bio', 'photoUrl']) && newData.child('key').val() == $uid && newData.child('name').isString() && newData.child('username').isString() && newData.child('online').isBoolean() && newData.child('lastSeen').isNumber() && newData.child('bio').isString() && newData.child('photoUrl').isString()"
-        ,"$other": {
+        ".validate": "newData.hasChildren(['name', 'username', 'key', 'online', 'lastSeen', 'bio', 'photoUrl']) && newData.child('key').val() == $uid && newData.child('name').isString() && newData.child('username').isString() && newData.child('online').isBoolean() && newData.child('lastSeen').isNumber() && newData.child('bio').isString() && newData.child('photoUrl').isString()",
+        "$other": {
           ".validate": "$other == 'name' || $other == 'username' || $other == 'key' || $other == 'online' || $other == 'lastSeen' || $other == 'bio' || $other == 'photoUrl'"
         }
       }
@@ -21,9 +23,14 @@
     },
     "PhoneLookup": {
       "$phoneHash": {
-        ".read": "auth != null",
-        ".write": "auth != null && (!data.exists() || data.val() == auth.uid) && newData.val() == auth.uid",
-        ".validate": "newData.isString()"
+        ".read": false,
+        ".write": false
+      }
+    },
+    "PhoneLookupRateLimits": {
+      "$uid": {
+        ".read": false,
+        ".write": false
       }
     },
     "PrivateTokens": {
