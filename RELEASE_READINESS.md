@@ -17,7 +17,7 @@
 - The phone registration callable replaces a user's previous index entry only after reserving the new number.
 - The VPS API at `https://connecttx.duckdns.org` handles media uploads, TURN credentials and FCM notification listeners. The Functions package is limited to phone lookup/registration callables to avoid two notification workers being deployed from the current source.
 - Group calls now request microphone/camera permissions, initialize audio routing and handle streamless remote tracks.
-- Privacy policy is accessible from Profile inside the app. An in-app Profile action starts a manual account-deletion email request; this is not automatic account deletion.
+- Privacy policy is accessible from Profile inside the app. Firebase Hosting configuration and public `privacy-policy.html` / `account-deletion.html` pages are prepared, but Hosting has not been deployed. The in-app Profile action starts a manual account-deletion email request; this is not automatic account deletion.
 
 ## CI and verification
 
@@ -28,9 +28,9 @@ The current commit's results must be read from the GitHub Actions run list. Do n
 ## Production blockers / external actions
 
 1. **Account deletion:** The app currently initiates a support email request; it does not automatically delete the Firebase Auth account, user data, messages, groups, statuses or uploaded media. Implement and test complete deletion before declaring Google Play account-deletion compliance.
-2. **Public privacy-policy URL:** `privacy-policy.html` is in the repository, but `firebase.json` does not configure Firebase Hosting. Publish it at a stable public HTTPS URL and enter that exact URL in Play Console and the app listing.
+2. **Public privacy/deletion URLs:** Firebase Hosting is now configured in `firebase.json`, with `public/privacy-policy.html` and `public/account-deletion.html`. Hosting has not been deployed and the live site ID/URL has not been verified. Create/confirm the Firebase Hosting site, deploy Hosting, verify both pages load publicly, then enter the actual account-deletion URL in Play Console Data Safety and the privacy-policy URL in Play Console.
 3. **Upload signing:** A production AAB must be signed with the upload key currently registered by Google Play. The GitHub release workflow requires the four repository secrets `UPLOAD_KEYSTORE_BASE64`, `UPLOAD_KEYSTORE_PASSWORD`, `UPLOAD_KEY_ALIAS`, and `UPLOAD_KEY_PASSWORD`. Do not upload a different keystore or private key to the repository. Resolve the existing Play upload-certificate mismatch before using the AAB workflow.
-4. **Firebase deployment:** The updated RTDB rules, Firestore rules/indexes and phone callable functions are not deployed by CI. Back up current configuration and deploy only after reviewing the diff.
+4. **Firebase deployment:** The updated RTDB rules, Firestore rules/indexes, phone callable functions and Hosting pages are not deployed by CI. Back up current configuration and deploy only after reviewing the diff.
 5. **Notification migration:** The VPS is the intended single FCM notification worker. If the old Cloud Function notification triggers are still deployed, remove those legacy triggers during the reviewed Functions deployment after confirming the VPS worker is healthy. Keep `registerPhoneNumber` and `lookupPhoneNumber`.
 6. **VPS operations:** Confirm the service is healthy, its Firebase service account is mounted outside Git, persistent upload storage is backed up, TURN credentials are configured, and logs/monitoring are available.
 7. **Play Console declarations:** Complete Data Safety, app content, ads/Advertising ID (if applicable), target API, permissions, privacy-policy, account-deletion URL and store-listing declarations using the actual shipped SDK behavior. Do not infer answers from this report.
@@ -50,6 +50,7 @@ The current commit's results must be read from the GitHub Actions run list. Do n
    ```
 
 5. Review any prompt to delete old notification-trigger functions. Remove only the legacy duplicate notification triggers; do not remove the two phone callables.
-6. Verify phone registration/search, notification delivery and call signaling against the live project after deployment.
+6. After confirming the Firebase Hosting site ID, deploy the public pages separately with `firebase deploy --only hosting` and verify the actual URLs.
+7. Verify phone registration/search, notification delivery and call signaling against the live project after deployment.
 
 **CI does not deploy Firebase, merge the PR, change signing keys or publish to Google Play.**
