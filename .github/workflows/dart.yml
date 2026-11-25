@@ -37,8 +37,8 @@ jobs:
         run: node --check vps-api/migrate-rtdb.js
       - name: Validate Firebase configuration JSON
         run: node -e "for (const f of ['firebase.json','database.rules.json','firestore.indexes.json']) JSON.parse(require('fs').readFileSync(f, 'utf8'))"
-      - name: Validate Realtime Database rules with emulator
-        run: npx --yes firebase-tools emulators:exec --only database --project demo-connectx "echo Realtime Database rules loaded"
+      - name: Validate Realtime Database and Firestore rules with emulator
+        run: npx --yes firebase-tools emulators:exec --only database,firestore --project demo-connectx "echo Firebase database and Firestore rules loaded"
       - name: Check deployment script syntax
         run: bash -n deploy_part2.sh
       - name: Analyze Flutter project
