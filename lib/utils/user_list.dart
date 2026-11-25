@@ -23,6 +23,7 @@ class UserListState extends State<UserList> {
   final Map<String, int> _unread = {};
   final Map<String, Map<String, dynamic>> _meta = {};
   final Set<String> _blockedUsers = <String>{};
+  final Set<String> _deliveryReceiptAttempts = <String>{};
   final Map<String, StreamSubscription<QuerySnapshot<Map<String, dynamic>>>> _messageSubscriptions = {};
   String _lastUserSignature = '';
 
@@ -45,6 +46,18 @@ class UserListState extends State<UserList> {
     if (widget.wantChats && nextSignature != _lastUserSignature) {
       _lastUserSignature = nextSignature;
       _refresh();
+    }
+  }
+
+  void _markMessagesDelivered(String uid, QuerySnapshot<Map<String, dynamic>> snapshot) {
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      if (data['sender'] == uid || data['isDelivered'] == true || data['isRead'] == true) continue;
+      if (!_deliveryReceiptAttempts.add(doc.id)) continue;
+      doc.reference.update({'isDelivered': true}).catchError((Object error) {
+        _deliveryReceiptAttempts.remove(doc.id);
+        debugPrint('ConnectX delivery receipt update failed: $error');
+      });
     }
   }
 
@@ -80,6 +93,7 @@ class UserListState extends State<UserList> {
         final snap = await FirebaseFirestore.instance.collection('messages')
           .doc(assignUsers(uid, contact.key)).collection('chats')
           .orderBy('timestamp', descending: true).limit(10).get();
+        _markMessagesDelivered(uid, snap);
         final list = snap.docs.map(Message.fromSnapshot).toList();
         latest[contact.key] = list.isEmpty ? null : list.first;
         unread[contact.key] = list.where((m) => !m.isRead && m.sender != uid).length;
@@ -104,6 +118,7 @@ class UserListState extends State<UserList> {
         .orderBy('timestamp', descending: true).limit(10).snapshots();
     _messageSubscriptions[contact.key] = stream.listen((snapshot) {
       if (!mounted) return;
+      _markMessagesDelivered(uid, snapshot);
       final messages = snapshot.docs.map(Message.fromSnapshot).toList();
       setState(() {
         _latest[contact.key] = messages.isEmpty ? null : messages.first;
