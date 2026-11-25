@@ -46,6 +46,13 @@ subprojects {
                 project.logger.lifecycle("ConnectX: finalized compileSdk 36 for ${project.name}")
             }
 
+            if ((androidExtension.namespace == null || androidExtension.namespace.toString().trim().isEmpty())
+                    && project.name == "flutter_ringtone_player") {
+                // This plugin's Android source package is io.inway.ringtone.player,
+                // but its published Android library manifest does not declare a package.
+                androidExtension.namespace = "io.inway.ringtone.player"
+            }
+
             if (androidExtension.namespace == null || androidExtension.namespace.toString().trim().isEmpty()) {
                 throw new GradleException(
                     "ConnectX compatibility check: Android library plugin '${project.name}' has no namespace and no package in src/main/AndroidManifest.xml. Upgrade that Flutter plugin to an AGP 8-compatible version."
