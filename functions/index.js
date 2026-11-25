@@ -48,6 +48,10 @@ exports.notifyDirectMessage = functions
         .set(indexTimestamp)
     ]);
 
+    // Call history entries are already visible in the conversation. Do not
+    // generate a second push notification after a call has ended.
+    if (message.type === 'call') return null;
+
     const senderSnapshot = await admin.database()
       .ref('PublicUsers/' + message.sender).once('value');
     const senderName = senderSnapshot.child('name').val() || 'New message';
