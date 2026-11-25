@@ -69,6 +69,8 @@ class MyApp extends StatelessWidget {
         '/group-call': (context) => const GroupCallScreen(),
         '/call': (context) => const CallScreen(),
         "/main/new": (context) => const NewChatScreen(),
+        "/my-qr": (context) => const ConnectQrScreen(),
+        "/scan-qr": (context) => const ConnectQrScreen(scanMode: true),
       },
       onGenerateInitialRoutes: (String initialRouteName) {
         if (initialRouteName == "/chat") {
