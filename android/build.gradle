@@ -14,6 +14,11 @@ subprojects {
 // Enable BuildConfig for Android library plugins (including cloud_firestore).
 subprojects {
     plugins.withId("com.android.library") {
+        if (project.name == "cloud_firestore") {
+            android {
+                namespace "io.flutter.plugins.firebase.firestore"
+            }
+        }
         android {
             buildFeatures {
                 buildConfig = true
