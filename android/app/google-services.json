@@ -63,6 +63,35 @@
           ]
         }
       }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:606601921652:android:0b5d88f565ee3b925dbd21",
+        "android_client_info": {
+          "package_name": "com.ghostgroup.connectx"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "606601921652-j45k2pq748m063om48den48q8ea3vc2s.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCmOqCIjNRE9YDLLQb1wLSwKQ_PIPWtPNs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "606601921652-j45k2pq748m063om48den48q8ea3vc2s.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
     }
   ],
   "configuration_version": "1"
