@@ -42,3 +42,5 @@ flutter:
 
 dependency_overrides:
   collection: 1.17.1
+  # file_picker 5.x resolves an obsolete win32 release that is incompatible with Dart 3.5+.
+  win32: ^5.5.4
