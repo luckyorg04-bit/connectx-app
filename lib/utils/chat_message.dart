@@ -358,7 +358,7 @@ class _ChatMessageState extends State<ChatMessage> {
         _readReceiptAttempts.add(message.messageId!)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         FirebaseFirestore.instance.collection('messages').doc(assignUsers(uid, message.sender))
-            .collection('chats').doc(message.messageId).update({'isRead': true}).catchError((_) {});
+            .collection('chats').doc(message.messageId).update({'isRead': true, 'isDelivered': true}).catchError((_) {});
       });
     }
 
@@ -412,7 +412,7 @@ class _ChatMessageState extends State<ChatMessage> {
               Text(time, style: TextStyle(fontSize: 10, color: secondary)),
               if (isMe) ...[
                 const SizedBox(width: 3),
-                Icon(message.isRead ? Icons.done_all_rounded : Icons.done_rounded,
+                Icon(message.isRead || message.isDelivered ? Icons.done_all_rounded : Icons.done_rounded,
                   size: 15, color: message.isRead ? const Color(0xFF53BDEB) : secondary),
               ],
             ]),
