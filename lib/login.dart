@@ -314,10 +314,9 @@ class AuthPageState extends State<AuthPage> {
   Future<void> _reserveUsername(String username, String uid) async {
     final legacy = await ConnectXDatabase.instance.ref('PublicUsers').orderByChild('username').equalTo(username).get();
     if (legacy.children.any((child) => child.key != uid)) throw UsernameTakenException();
-    final result = await ConnectXDatabase.instance.ref('UsernameIndex').child(username.replaceAll('.', ',')).runTransaction((data) {
-      if (data.value == null || data.value == uid) {
-        data.value = uid;
-        return Transaction.success(data);
+    final result = await ConnectXDatabase.instance.ref('UsernameIndex').child(username.replaceAll('.', ',')).runTransaction((Object? currentValue) {
+      if (currentValue == null || currentValue == uid) {
+        return Transaction.success(uid);
       }
       return Transaction.abort();
     }, applyLocally: false);
@@ -326,8 +325,8 @@ class AuthPageState extends State<AuthPage> {
 
   Future<void> _releaseUsername(String username, String uid) async {
     try {
-      await ConnectXDatabase.instance.ref('UsernameIndex').child(username.replaceAll('.', ',')).runTransaction((data) {
-        if (data.value == uid) { data.value = null; return Transaction.success(data); }
+      await ConnectXDatabase.instance.ref('UsernameIndex').child(username.replaceAll('.', ',')).runTransaction((Object? currentValue) {
+        if (currentValue == uid) return Transaction.success(null);
         return Transaction.abort();
       }, applyLocally: false);
     } catch (e) { debugPrint('ConnectX username reservation cleanup failed: $e'); }
