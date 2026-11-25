@@ -1,8 +1,6 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
-import 'package:firebase_database/firebase_database.dart';
-
 import 'database_service.dart';
 
 /// Stores phone numbers privately and exposes only a one-way lookup key.
