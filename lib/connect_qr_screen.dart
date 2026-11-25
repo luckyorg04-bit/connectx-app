@@ -108,8 +108,7 @@ class _ConnectQrScreenState extends State<ConnectQrScreen> {
 
       if (!mounted) return;
       if (openChat == true) {
-        Navigator.of(context).pop();
-        await Navigator.of(context).pushNamed('/chat', arguments: user);
+        await Navigator.of(context).pushReplacementNamed('/chat', arguments: user);
       }
     } catch (error) {
       debugPrint('ConnectX QR scan failed: $error');
