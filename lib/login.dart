@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'services/notification_service.dart';
 import 'services/database_service.dart';
+import 'services/phone_lookup_service.dart';
 
 class AuthPage extends StatefulWidget {
   const AuthPage({Key? key}) : super(key: key);
@@ -19,6 +20,7 @@ class AuthPageState extends State<AuthPage> {
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
 
   bool _isLogin = true;
   bool _isLoading = false;
@@ -31,6 +33,7 @@ class AuthPageState extends State<AuthPage> {
     _passwordController.dispose();
     _nameController.dispose();
     _usernameController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
@@ -96,6 +99,21 @@ class AuthPageState extends State<AuthPage> {
                           border: OutlineInputBorder(),
                         ),
                         validator: validateUsername,
+                      ),
+                      const SizedBox(height: 14),
+                    ],
+                    if (!_isLogin) ...[
+                      TextFormField(
+                        controller: _phoneController,
+                        keyboardType: TextInputType.phone,
+                        textInputAction: TextInputAction.next,
+                        decoration: const InputDecoration(
+                          labelText: 'Phone number (include country code)',
+                          hintText: '+91 98765 43210',
+                          prefixIcon: Icon(Icons.phone_outlined),
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: validatePhone,
                       ),
                       const SizedBox(height: 14),
                     ],
