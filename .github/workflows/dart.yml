@@ -1,12 +1,12 @@
 name: Flutter checks
 
 concurrency:
-  group: connectx-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  group: connectx-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 on:
   push:
-    branches: ["master", "release/connectx-ui-only-1.0.4"]
+    branches: ["master"]
   pull_request:
     branches: ["master"]
 
