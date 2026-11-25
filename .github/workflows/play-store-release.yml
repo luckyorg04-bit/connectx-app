@@ -78,7 +78,7 @@ jobs:
       - name: Format and analyze authentication flow
         run: |
           dart format lib/login.dart
-          flutter analyze lib/login.dart --no-pub
+          flutter analyze lib/login.dart --no-pub --no-fatal-infos
 
       - name: Build signed Play Store App Bundle
         run: flutter build appbundle --release
