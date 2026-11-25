@@ -26,6 +26,11 @@ apply plugin: 'kotlin-android'
 apply plugin: 'com.google.gms.google-services'
 apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
 
+def uploadStoreFile = System.getenv('ANDROID_KEYSTORE_PATH')
+def uploadKeyAlias = System.getenv('ANDROID_KEY_ALIAS')
+def uploadStorePassword = System.getenv('ANDROID_STORE_PASSWORD')
+def uploadKeyPassword = System.getenv('ANDROID_KEY_PASSWORD')
+
 android {
     compileSdkVersion flutter.compileSdkVersion
     ndkVersion flutter.ndkVersion
@@ -44,10 +49,9 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
+        // IMPORTANT: Replace this placeholder with the final Play Store application ID
+        // and register the same ID in Firebase before creating a production release.
         applicationId "com.example.newfluuter15042023"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://docs.flutter.dev/deployment/android#reviewing-the-build-configuration.
         minSdkVersion 21
         multiDexEnabled true
         targetSdkVersion flutter.targetSdkVersion
@@ -55,11 +59,24 @@ android {
         versionName flutterVersionName
     }
 
+    signingConfigs {
+        release {
+            if (uploadStoreFile == null || uploadKeyAlias == null ||
+                uploadStorePassword == null || uploadKeyPassword == null) {
+                throw new GradleException("Release signing is not configured. Set ANDROID_KEYSTORE_PATH, ANDROID_KEY_ALIAS, ANDROID_STORE_PASSWORD and ANDROID_KEY_PASSWORD.")
+            }
+            storeFile file(uploadStoreFile)
+            storePassword uploadStorePassword
+            keyAlias uploadKeyAlias
+            keyPassword uploadKeyPassword
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
+            minifyEnabled false
+            shrinkResources false
         }
     }
 }
