@@ -354,12 +354,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
     }
   }
 
-  void _showComingSoon(String feature) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$feature will be added in the next feature stage.')),
-    );
-  }
-
   Future<void> _openEditProfile() async {
     final uid = FirebaseAuth.instance.currentUser!.uid;
     final ref = ConnectXDatabase.instance.ref("PublicUsers").child(uid);
@@ -872,8 +866,6 @@ class _CommunitiesTab extends StatelessWidget {
   Future<void> _open(BuildContext context, QueryDocumentSnapshot<Map<String, dynamic>> doc) async {
     final uid = FirebaseAuth.instance.currentUser!.uid;
     final ref = doc.reference;
-    final initial = doc.data();
-    final members = List<String>.from(initial['memberUids'] ?? []);
     final controller = TextEditingController();
     await showModalBottomSheet<void>(
       context: context, isScrollControlled: true,
