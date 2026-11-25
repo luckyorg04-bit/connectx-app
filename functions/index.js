@@ -262,7 +262,17 @@ exports.registerPhoneNumber = functions
     const phone = normalizePhoneNumber(data && data.phone);
     const hash = phoneLookupHash(phone);
     const lookupRef = admin.database().ref('PhoneLookup/' + hash);
+    const privatePhoneRef = admin.database().ref('PrivateUsers/' + uid + '/phone');
+    const oldPhoneSnapshot = await privatePhoneRef.once('value');
+    const oldPhoneValue = oldPhoneSnapshot.val();
+    const oldPhone = typeof oldPhoneValue === 'string'
+      ? oldPhoneValue.replace(/\\D/g, '')
+      : '';
 
+    if (oldPhone === phone) return { success: true, unchanged: true };
+
+    // Reserve the new number atomically before changing the user's private
+    // profile. A different UID can never take an already-reserved number.
     const reservation = await lookupRef.transaction(current => {
       if (current === null || current === uid) return uid;
       return;
@@ -272,8 +282,21 @@ exports.registerPhoneNumber = functions
       throw new functions.https.HttpsError('already-exists', 'This phone number is already linked to another ConnectX account.');
     }
 
-    await admin.database().ref('PrivateUsers/' + uid + '/phone').set(phone);
-    return { success: true };
+    try {
+      await privatePhoneRef.set(phone);
+      if (oldPhone && oldPhone !== phone) {
+        await admin.database().ref('PhoneLookup/' + phoneLookupHash(oldPhone))
+          .transaction(current => current === uid ? null : current);
+      }
+      return { success: true };
+    } catch (error) {
+      // Release only the reservation created by this account. Never remove a
+      // mapping that another account may have acquired.
+      if (oldPhone !== phone) {
+        await lookupRef.transaction(current => current === uid ? null : current);
+      }
+      throw new functions.https.HttpsError('internal', 'Could not save the phone number. Please try again.');
+    }
   });
 
 exports.lookupPhoneNumber = functions
