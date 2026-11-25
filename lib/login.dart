@@ -314,7 +314,7 @@ class AuthPageState extends State<AuthPage> {
   Future<void> _reserveUsername(String username, String uid) async {
     final legacy = await ConnectXDatabase.instance.ref('PublicUsers').orderByChild('username').equalTo(username).get();
     if (legacy.children.any((child) => child.key != uid)) throw UsernameTakenException();
-    final result = await ConnectXDatabase.instance.ref('UsernameIndex').child(username).runTransaction((data) {
+    final result = await ConnectXDatabase.instance.ref('UsernameIndex').child(username.replaceAll('.', ',')).runTransaction((data) {
       if (data.value == null || data.value == uid) {
         data.value = uid;
         return Transaction.success(data);
@@ -326,7 +326,7 @@ class AuthPageState extends State<AuthPage> {
 
   Future<void> _releaseUsername(String username, String uid) async {
     try {
-      await ConnectXDatabase.instance.ref('UsernameIndex').child(username).runTransaction((data) {
+      await ConnectXDatabase.instance.ref('UsernameIndex').child(username.replaceAll('.', ',')).runTransaction((data) {
         if (data.value == uid) { data.value = null; return Transaction.success(data); }
         return Transaction.abort();
       }, applyLocally: false);
