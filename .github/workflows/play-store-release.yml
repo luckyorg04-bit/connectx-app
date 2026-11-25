@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - master
+      - fix/connectx-auth-ui-icon-audit
     paths:
       - 'lib/**'
       - 'pubspec.yaml'
@@ -73,6 +74,11 @@ jobs:
 
       - name: Resolve Flutter dependencies
         run: flutter pub get
+
+      - name: Format and analyze authentication flow
+        run: |
+          dart format lib/login.dart
+          flutter analyze lib/login.dart --no-pub
 
       - name: Build signed Play Store App Bundle
         run: flutter build appbundle --release
