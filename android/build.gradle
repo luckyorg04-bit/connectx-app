@@ -11,22 +11,35 @@ subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
 }
 
-// Enable BuildConfig for Android library plugins (including cloud_firestore).
+// Compatibility bridge for older Flutter Android plugins on AGP 8+.
+// Prefer a plugin's declared namespace. If it is missing, recover it from
+// the plugin's AndroidManifest.xml instead of hard-coding individual plugins.
 subprojects {
     plugins.withId("com.android.library") {
-        if (project.name == "cloud_firestore") {
-            android {
-                namespace "io.flutter.plugins.firebase.firestore"
+        def androidExtension = project.extensions.findByName("android")
+
+        if (androidExtension != null) {
+            if (androidExtension.namespace == null || androidExtension.namespace.toString().trim().isEmpty()) {
+                def manifestFile = project.file("src/main/AndroidManifest.xml")
+
+                if (manifestFile.exists()) {
+                    def manifest = new XmlSlurper(false, false).parse(manifestFile)
+                    def manifestPackage = manifest.@package.text()?.trim()
+
+                    if (manifestPackage) {
+                        androidExtension.namespace = manifestPackage
+                        project.logger.lifecycle("ConnectX: using manifest package '${manifestPackage}' as namespace for ${project.name}")
+                    }
+                }
             }
-        }
-        if (project.name == "flutter_local_notifications") {
-            android {
-                namespace "com.dexterous.flutterlocalnotifications"
-            }
-        }
-        android {
-            buildFeatures {
-                buildConfig = true
+
+            // Some older Android libraries still declare custom BuildConfig fields.
+            androidExtension.buildFeatures.buildConfig = true
+
+            if (androidExtension.namespace == null || androidExtension.namespace.toString().trim().isEmpty()) {
+                throw new GradleException(
+                    "ConnectX compatibility check: Android library plugin '${project.name}' has no namespace and no package in src/main/AndroidManifest.xml. Upgrade that Flutter plugin to an AGP 8-compatible version."
+                )
             }
         }
     }
