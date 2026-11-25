@@ -11,12 +11,16 @@ subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
 }
 
-// Compatibility bridge for older Flutter Android plugins on AGP 8+.
+// Normalize legacy Flutter Android plugins for AGP 8 and Java 17.
 subprojects {
     plugins.withId("com.android.library") {
         def androidExtension = project.extensions.findByName("android")
 
         if (androidExtension != null) {
+            // Legacy plugins may omit compileSdk or inherit an obsolete SDK.
+            androidExtension.compileSdkVersion = 36
+            androidExtension.buildFeatures.buildConfig = true
+
             if (androidExtension.namespace == null || androidExtension.namespace.toString().trim().isEmpty()) {
                 def manifestFile = project.file("src/main/AndroidManifest.xml")
                 if (manifestFile.exists()) {
@@ -29,7 +33,6 @@ subprojects {
                 }
             }
 
-            androidExtension.buildFeatures.buildConfig = true
             androidExtension.compileOptions {
                 sourceCompatibility JavaVersion.VERSION_17
                 targetCompatibility JavaVersion.VERSION_17
@@ -43,13 +46,11 @@ subprojects {
         }
     }
 
-    // Set the Java target for every Android plugin's JavaCompile task.
     tasks.withType(JavaCompile).configureEach {
         sourceCompatibility = "17"
         targetCompatibility = "17"
     }
 
-    // Set Kotlin target for every Flutter Android plugin, including legacy plugins.
     plugins.withId("org.jetbrains.kotlin.android") {
         tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
             kotlinOptions.jvmTarget = "17"
