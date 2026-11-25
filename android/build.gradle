@@ -35,6 +35,10 @@ subprojects {
 
             // Some older Android libraries still declare custom BuildConfig fields.
             androidExtension.buildFeatures.buildConfig = true
+            androidExtension.compileOptions {
+                sourceCompatibility JavaVersion.VERSION_17
+                targetCompatibility JavaVersion.VERSION_17
+            }
 
             if (androidExtension.namespace == null || androidExtension.namespace.toString().trim().isEmpty()) {
                 throw new GradleException(
@@ -46,6 +50,11 @@ subprojects {
 }
 
 subprojects {
+    plugins.withId("org.jetbrains.kotlin.android") {
+        tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+            kotlinOptions.jvmTarget = "17"
+        }
+    }
     project.evaluationDependsOn(":app")
 }
 
