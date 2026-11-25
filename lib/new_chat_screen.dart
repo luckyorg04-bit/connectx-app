@@ -23,7 +23,7 @@ class _ChatScreenState extends State<NewChatScreen> {
   bool _looksLikePhone(String value) {
     final digits = value.replaceAll(RegExp(r'\D'), '');
     return digits.length >= 7 && digits.length <= 15 &&
-        RegExp(r'^[+0-9()\s.-]+).hasMatch(value);
+        RegExp(r'^[+0-9()\s.-]+$').hasMatch(value);
   }
 
   Future<void> _searchUsers(String value) async {
