@@ -3,6 +3,7 @@ import 'package:connectx/chat_screen.dart';
 import 'package:connectx/login.dart';
 import 'package:connectx/models/message.dart';
 import 'package:connectx/models/user.dart';
+import 'package:connectx/services/phone_lookup_service.dart';
 
 void main() {
   test('conversation IDs are stable regardless of participant order', () {
@@ -68,6 +69,13 @@ void main() {
     final next = DateTime(2026, 11, 25, 0, 1).millisecondsSinceEpoch;
     expect(isNewDay(false, first, next), isTrue);
     expect(isNewDay(false, first, first + 30000), isFalse);
+  });
+
+  test('phone validation accepts international phone numbers without OTP', () {
+    expect(validatePhone('+91 98765 43210'), isNull);
+    expect(validatePhone('9876'), isNotNull);
+    expect(PhoneLookupService.normalize('+91 98765 43210'), '919876543210');
+    expect(PhoneLookupService.normalize('91-98765-43210'), '919876543210');
   });
 
   test('username validation enforces supported format', () {
