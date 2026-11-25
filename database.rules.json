@@ -44,6 +44,12 @@
         ".write": false
       }
     },
+    "PhoneRegistrationRateLimits": {
+      "$uid": {
+        ".read": false,
+        ".write": false
+      }
+    },
     "PrivateTokens": {
       "$uid": {
         ".read": false,
