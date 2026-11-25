@@ -23,7 +23,7 @@ dependencies:
   url_launcher: ^6.1.10
   permission_handler: ^10.2.0
   image_picker: ^0.8.7+5
-  file_picker: ^5.2.10
+  file_picker: ^8.3.7
   record: ^4.4.4
   audioplayers: ^4.1.0
   path_provider: ^2.0.14
