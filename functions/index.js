@@ -42,7 +42,7 @@ exports.registerPhoneNumber = functions
     const oldPhoneSnapshot = await privatePhoneRef.once('value');
     const oldPhoneValue = oldPhoneSnapshot.val();
     const oldPhone = typeof oldPhoneValue === 'string'
-      ? oldPhoneValue.replace(/\\D/g, '')
+      ? oldPhoneValue.replace(/\D/g, '')
       : '';
 
     if (oldPhone === phone) return { success: true, unchanged: true };
