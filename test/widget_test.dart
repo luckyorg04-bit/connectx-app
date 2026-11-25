@@ -15,6 +15,7 @@ void main() {
     final original = Message(
       message: 'photo.jpg',
       isRead: true,
+      isDelivered: true,
       timestamp: 1732440000000,
       sender: 'sender-1',
       messageId: 'message-1',
@@ -31,6 +32,7 @@ void main() {
 
     expect(restored.message, original.message);
     expect(restored.isRead, isTrue);
+    expect(restored.isDelivered, isTrue);
     expect(restored.sender, original.sender);
     expect(restored.messageId, original.messageId);
     expect(restored.replyToId, original.replyToId);
