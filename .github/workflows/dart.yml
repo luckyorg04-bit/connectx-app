@@ -1,7 +1,7 @@
 name: Flutter checks
 
 concurrency:
-  group: connectx-${{ github.workflow }}-${{ github.ref }}
+  group: connectx-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 on:
