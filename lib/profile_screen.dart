@@ -67,6 +67,26 @@ class ProfileScreen extends StatelessWidget {
                 ),
               ]),
             ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.of(context).pushNamed('/my-qr'),
+                    icon: const Icon(Icons.qr_code_2_rounded),
+                    label: const Text('My QR code'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton.tonalIcon(
+                    onPressed: () => Navigator.of(context).pushNamed('/scan-qr'),
+                    icon: const Icon(Icons.qr_code_scanner_rounded),
+                    label: const Text('Scan QR'),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 26),
             Text('ACCOUNT DETAILS', style: theme.textTheme.labelSmall?.copyWith(
               color: colors.onSurfaceVariant, letterSpacing: 1.1, fontWeight: FontWeight.w800)),
