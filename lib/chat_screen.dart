@@ -756,7 +756,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
     final currentUser = FirebaseAuth.instance.currentUser!;
     return Scaffold(
       backgroundColor: Theme.of(context).brightness == Brightness.dark
-          ? const Color(0xFF0B141A) : const Color(0xFFEFEAE2),
+          ? const Color(0xFF101A20) : const Color(0xFFF4F7F7),
       appBar: AppBar(
         automaticallyImplyLeading: false,
         title: Row(children: [
@@ -851,7 +851,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
             ]),
           ),
         SafeArea(child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
           child: Row(children: [
             PopupMenuButton<String>(
               padding: EdgeInsets.zero,
@@ -890,7 +890,9 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
                 hintText: _recording ? 'Recording voice note…' : _sendViewOnce ? 'View-once media mode' : 'Message',
                 filled: true,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(26), borderSide: BorderSide.none),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 1.4)),
               ),
             )),
             const SizedBox(width: 6),
