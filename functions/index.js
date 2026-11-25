@@ -47,6 +47,19 @@ exports.registerPhoneNumber = functions
 
     if (oldPhone === phone) return { success: true, unchanged: true };
 
+    const registrationRateRef = admin.database().ref('PhoneRegistrationRateLimits/' + uid);
+    const now = Date.now();
+    const rateResult = await registrationRateRef.transaction(current => {
+      const previous = current && typeof current === 'object' ? current : {};
+      const windowStart = Number(previous.windowStart) || now;
+      const count = now - windowStart >= 3600000 ? 1 : (Number(previous.count) || 0) + 1;
+      if (count > 5) return;
+      return { windowStart: count === 1 ? now : windowStart, count };
+    });
+    if (!rateResult.committed) {
+      throw new functions.https.HttpsError('resource-exhausted', 'Too many phone registration attempts. Try again later.');
+    }
+
     // Reserve the new number atomically before changing the user's private
     // profile. A different UID can never take an already-reserved number.
     const reservation = await lookupRef.transaction(current => {
