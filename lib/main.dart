@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'chat_screen.dart';
+import 'connect_qr_screen.dart';
 import 'login.dart';
 import 'main_screen.dart';
 import 'new_chat_screen.dart';
