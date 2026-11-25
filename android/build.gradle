@@ -12,8 +12,6 @@ subprojects {
 }
 
 // Compatibility bridge for older Flutter Android plugins on AGP 8+.
-// Prefer a plugin's declared namespace. If it is missing, recover it from
-// the plugin's AndroidManifest.xml instead of hard-coding individual plugins.
 subprojects {
     plugins.withId("com.android.library") {
         def androidExtension = project.extensions.findByName("android")
@@ -21,11 +19,9 @@ subprojects {
         if (androidExtension != null) {
             if (androidExtension.namespace == null || androidExtension.namespace.toString().trim().isEmpty()) {
                 def manifestFile = project.file("src/main/AndroidManifest.xml")
-
                 if (manifestFile.exists()) {
                     def manifest = new XmlSlurper(false, false).parse(manifestFile)
                     def manifestPackage = manifest.@package.text()?.trim()
-
                     if (manifestPackage) {
                         androidExtension.namespace = manifestPackage
                         project.logger.lifecycle("ConnectX: using manifest package '${manifestPackage}' as namespace for ${project.name}")
@@ -33,7 +29,6 @@ subprojects {
                 }
             }
 
-            // Some older Android libraries still declare custom BuildConfig fields.
             androidExtension.buildFeatures.buildConfig = true
             androidExtension.compileOptions {
                 sourceCompatibility JavaVersion.VERSION_17
@@ -47,14 +42,22 @@ subprojects {
             }
         }
     }
-}
 
-subprojects {
+    // Set the Java target for every Android plugin's JavaCompile task.
+    tasks.withType(JavaCompile).configureEach {
+        sourceCompatibility = "17"
+        targetCompatibility = "17"
+    }
+
+    // Set Kotlin target for every Flutter Android plugin, including legacy plugins.
     plugins.withId("org.jetbrains.kotlin.android") {
         tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
             kotlinOptions.jvmTarget = "17"
         }
     }
+}
+
+subprojects {
     project.evaluationDependsOn(":app")
 }
 
