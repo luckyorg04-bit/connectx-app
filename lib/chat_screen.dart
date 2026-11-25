@@ -76,7 +76,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
       final data = doc.data();
       if (data['sender'] == _uid || data['isRead'] == true) continue;
       if (!_readReceiptInFlight.add(doc.id)) continue;
-      doc.reference.update({'isRead': true}).catchError((Object error) {
+      doc.reference.update({'isRead': true, 'isDelivered': true}).catchError((Object error) {
         debugPrint('ConnectX read receipt update failed: $error');
       }).whenComplete(() {
         _readReceiptInFlight.remove(doc.id);
@@ -185,6 +185,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
         'pollOptions': choices,
         'pollVotes': <String, dynamic>{},
         'isRead': false,
+          'isDelivered': false,
         'timestamp': DateTime.now().millisecondsSinceEpoch,
         'sender': _uid,
         'isEdited': false,
@@ -221,6 +222,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
           'message': text,
           'type': 'text',
           'isRead': false,
+          'isDelivered': false,
           'timestamp': now,
           'sender': _uid,
           'replyTo': _replyingTo?.message,
@@ -313,6 +315,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
       'contactName': contactName,
       'contactPhone': contactPhone,
       'isRead': false,
+          'isDelivered': false,
       'timestamp': DateTime.now().millisecondsSinceEpoch,
       'sender': _uid,
       'isEdited': false,
@@ -740,6 +743,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
       'contactName': message.contactName,
       'contactPhone': message.contactPhone,
       'isRead': false,
+          'isDelivered': false,
       'timestamp': DateTime.now().millisecondsSinceEpoch,
       'sender': _uid,
       'isForwarded': true,
