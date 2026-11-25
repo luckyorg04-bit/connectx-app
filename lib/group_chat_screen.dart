@@ -308,7 +308,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                       padding: const EdgeInsets.all(11),
                       constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * .8),
                       decoration: BoxDecoration(
-                        color: mine ? const Color(0xFFD9FDD3) : Theme.of(context).colorScheme.surface,
+                        color: mine ? Theme.of(context).colorScheme.primaryContainer : Theme.of(context).colorScheme.surfaceContainerHighest,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -320,7 +320,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                           ]),
                           Align(alignment: Alignment.centerLeft,
                             child: Text((data['text'] ?? '').toString(),
-                              style: const TextStyle(color: Color(0xFF111B21), fontSize: 16, fontWeight: FontWeight.w600))),
+                              style: TextStyle(color: Theme.of(context).colorScheme.onPrimaryContainer, fontSize: 16, fontWeight: FontWeight.w600))),
                           ...pollOptions.asMap().entries.map((option) {
                             final count = pollVotes.values.where((value) => value == option.key).length;
                             final selected = pollVotes[uid] == option.key;
@@ -350,10 +350,10 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                         else
                           Align(alignment: Alignment.centerLeft,
                             child: Text((data['text'] ?? '').toString(),
-                              style: const TextStyle(color: Color(0xFF111B21), fontSize: 16))),
+                              style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 16))),
                         if (created != null)
                           Text(TimeOfDay.fromDateTime(created.toDate()).format(context),
-                            style: const TextStyle(fontSize: 10, color: Colors.black54)),
+                            style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                       ]),
                     ),
                   );
