@@ -2,6 +2,15 @@ name: ConnectX Play Store Release AAB
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - master
+    paths:
+      - 'lib/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - 'android/**'
+      - '.github/workflows/play-store-release.yml'
 
 permissions:
   contents: read
