@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class Message {
   final String message;
   final bool isRead;
+  final bool isDelivered;
   final int timestamp;
   final String sender;
   final String? messageId;
@@ -28,6 +29,7 @@ class Message {
   Message({
     required this.message,
     required this.isRead,
+    this.isDelivered = false,
     required this.timestamp,
     required this.sender,
     this.messageId,
@@ -55,6 +57,7 @@ class Message {
     return Message(
       message: (json['message'] ?? '').toString(),
       isRead: json['isRead'] == true,
+      isDelivered: json['isDelivered'] == true || json['isRead'] == true,
       timestamp: (json['timestamp'] as num?)?.toInt() ?? 0,
       sender: (json['sender'] ?? '').toString(),
       messageId: json['messageId']?.toString(),
@@ -82,6 +85,7 @@ class Message {
   Map<String, dynamic> toJson() => {
     'message': message,
     'isRead': isRead,
+    'isDelivered': isDelivered,
     'timestamp': timestamp,
     'sender': sender,
     'messageId': messageId,
