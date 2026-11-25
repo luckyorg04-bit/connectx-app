@@ -108,7 +108,7 @@ class _ChatMessageState extends State<ChatMessage> {
       }
     }
     final token = await user!.getIdToken();
-    if (token == null || token.isEmpty) return null;
+    if (token.isEmpty) return null;
     final uri = Uri.parse(value);
     return uri.replace(queryParameters: {
       ...uri.queryParameters,
