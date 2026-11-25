@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'services/database_service.dart';
 
 class ProfileScreen extends StatelessWidget {
@@ -99,6 +100,51 @@ class ProfileScreen extends StatelessWidget {
             Text('Your profile details help other people recognise you on ConnectX.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant, height: 1.45)),
+            const SizedBox(height: 20),
+            const Divider(),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.delete_forever_outlined, color: Colors.redAccent),
+              title: const Text('Request account deletion'),
+              subtitle: const Text('Contact ConnectX support to request deletion of your account and associated data.'),
+              onTap: () async {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (dialogContext) => AlertDialog(
+                    title: const Text('Request account deletion?'),
+                    content: const Text(
+                      'This opens an email request to ConnectX support. Your account is not deleted automatically; support will verify and process the request.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(dialogContext, false),
+                        child: const Text('Cancel'),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.pop(dialogContext, true),
+                        child: const Text('Continue'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirmed != true || !context.mounted) return;
+                final email = user.email ?? '';
+                final uri = Uri(
+                  scheme: 'mailto',
+                  path: 'contact@luckydubey.in',
+                  queryParameters: {
+                    'subject': 'ConnectX Account and Data Deletion Request',
+                    'body': 'Please process my ConnectX account and associated data deletion request.\\n\\nRegistered email: $email\\nConnectX UID: ${user.uid}\\n',
+                  },
+                );
+                final launched = await launchUrl(uri);
+                if (!launched && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('No email app is available. Email contact@luckydubey.in to request deletion.')),
+                  );
+                }
+              },
+            ),
           ],
         );
       },
