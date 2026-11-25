@@ -10,12 +10,11 @@ import 'database_service.dart';
 class PhoneLookupService {
   static String normalize(String value) {
     final trimmed = value.trim();
-    final hasPlus = trimmed.startsWith('+');
     final digits = trimmed.replaceAll(RegExp(r'\\D'), '');
     if (digits.length < 7 || digits.length > 15) {
       throw const FormatException('Enter a phone number with 7–15 digits, including country code.');
     }
-    return hasPlus ? '+$digits' : digits;
+    return digits;
   }
 
   static String _key(String normalizedPhone) =>
@@ -25,11 +24,7 @@ class PhoneLookupService {
     final normalized = normalize(phone);
     final database = ConnectXDatabase.instance;
     final lookupRef = database.ref('PhoneLookup').child(_key(normalized));
-    try {
-      await lookupRef.set(uid);
-    } on FirebaseException {
-      rethrow;
-    }
+    await lookupRef.set(uid);
     await database.ref('PrivateUsers').child(uid).child('phone').set(normalized);
   }
 
