@@ -330,6 +330,56 @@ class AuthPageState extends State<AuthPage> {
     });
   }
 
+  Future<String?> _askPhoneNumber() async {
+    final controller = TextEditingController();
+    String? errorText;
+    final result = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Add your phone number'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Use your phone number so people can find you on ConnectX. No OTP is required.'),
+              const SizedBox(height: 14),
+              TextField(
+                controller: controller,
+                keyboardType: TextInputType.phone,
+                decoration: InputDecoration(
+                  hintText: '+91 98765 43210',
+                  labelText: 'Phone number',
+                  errorText: errorText,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final validation = validatePhone(controller.text);
+                if (validation != null) {
+                  setDialogState(() => errorText = validation);
+                } else {
+                  Navigator.pop(dialogContext, controller.text.trim());
+                }
+              },
+              child: const Text('Continue'),
+            ),
+          ],
+        ),
+      ),
+    );
+    controller.dispose();
+    return result;
+  }
+
   Future<void> _resetPassword() async {
     final email = _emailController.text.trim();
     if (!isEmailValid(email)) {
@@ -384,6 +434,13 @@ bool isEmailValid(String email) {
   final emailRegExp = RegExp(
       r'^(([^<>()[\]\\.,;:\s@\"]+(\.[^<>()[\]\\.,;:\s@\"]+)*)|(\".+\"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$');
   return emailRegExp.hasMatch(email);
+}
+
+String? validatePhone(String? value) {
+  final digits = (value ?? '').replaceAll(RegExp(r'\\D'), '');
+  if (digits.isEmpty) return 'Please enter your phone number';
+  if (digits.length < 7 || digits.length > 15) return 'Enter 7–15 digits, including country code';
+  return null;
 }
 
 String? validateEmail(String? value) {
