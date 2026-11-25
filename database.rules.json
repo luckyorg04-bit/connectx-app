@@ -19,6 +19,13 @@
         ".write": "auth != null && auth.uid == $uid"
       }
     },
+    "PhoneLookup": {
+      "$phoneHash": {
+        ".read": "auth != null",
+        ".write": "auth != null && (!data.exists() || data.val() == auth.uid) && newData.val() == auth.uid",
+        ".validate": "newData.isString()"
+      }
+    },
     "PrivateTokens": {
       "$uid": {
         ".read": false,
