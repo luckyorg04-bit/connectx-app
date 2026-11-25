@@ -101,6 +101,13 @@ class ProfileScreen extends StatelessWidget {
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant, height: 1.45)),
             const SizedBox(height: 20),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.privacy_tip_outlined),
+              title: const Text('Privacy policy'),
+              subtitle: const Text('How ConnectX handles your information.'),
+              onTap: () => Navigator.of(context).pushNamed('/privacy'),
+            ),
             const Divider(),
             ListTile(
               contentPadding: EdgeInsets.zero,
