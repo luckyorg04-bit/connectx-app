@@ -245,6 +245,13 @@ class AuthPageState extends State<AuthPage> {
       );
       if (!_isLogin) {
         await PhoneLookupService.register(credential.user!.uid, _phoneController.text.trim());
+      } else if (await PhoneLookupService.getPrivatePhone(credential.user!.uid) == null) {
+        final phone = await _askPhoneNumber();
+        if (phone == null) {
+          await FirebaseAuth.instance.signOut();
+          return;
+        }
+        await PhoneLookupService.register(credential.user!.uid, phone);
       }
       await _openMain();
     } on FirebaseAuthException catch (error) {
