@@ -52,6 +52,13 @@ exports.notifyDirectMessage = functions
     // generate a second push notification after a call has ended.
     if (message.type === 'call') return null;
 
+    const recipientPrivate = admin.database().ref('PrivateUsers/' + recipientUid);
+    const [muteSnapshot, settingsSnapshot] = await Promise.all([
+      recipientPrivate.child('chatMeta/' + message.sender + '/muted').once('value'),
+      recipientPrivate.child('notificationSettings/messages').once('value')
+    ]);
+    if (muteSnapshot.val() === true || settingsSnapshot.val() === false) return null;
+
     const senderSnapshot = await admin.database()
       .ref('PublicUsers/' + message.sender).once('value');
     const senderName = senderSnapshot.child('name').val() || 'New message';
@@ -92,8 +99,13 @@ exports.notifyGroupMessage = functions
 
     const tokens = [];
     for (const uid of recipients) {
-      const userSnapshot = await admin.database().ref('PrivateTokens/' + uid).once('value');
-      const token = userSnapshot.val();
+      const privateRef = admin.database().ref('PrivateUsers/' + uid);
+      const [tokenSnapshot, settingsSnapshot] = await Promise.all([
+        admin.database().ref('PrivateTokens/' + uid).once('value'),
+        privateRef.child('notificationSettings/groups').once('value')
+      ]);
+      if (settingsSnapshot.val() === false) continue;
+      const token = tokenSnapshot.val();
       if (token) tokens.push({ uid, token });
     }
     if (!tokens.length) return null;
