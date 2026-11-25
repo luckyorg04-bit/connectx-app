@@ -43,6 +43,19 @@ void main() {
     expect(restored.reactions['receiver-1'], '❤️');
   });
 
+  test('delivery receipt is separate from read receipt', () {
+    final original = Message(
+      message: 'Hello',
+      isRead: false,
+      isDelivered: true,
+      timestamp: 1732440000000,
+      sender: 'sender-1',
+    );
+    final restored = Message.fromJson(original.toJson());
+    expect(restored.isDelivered, isTrue);
+    expect(restored.isRead, isFalse);
+  });
+
   test('email validation rejects malformed addresses', () {
     expect(validateEmail('person@example.com'), isNull);
     expect(validateEmail('not-an-email'), isNotNull);
