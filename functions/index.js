@@ -117,3 +117,72 @@ exports.notifyGroupMessage = functions
     ));
     return null;
   });
+
+// Notify the callee as soon as a direct voice/video call is created.
+exports.notifyIncomingCall = functions
+  .region('asia-south1')
+  .firestore.document('calls/{callId}')
+  .onCreate(async (snapshot, context) => {
+    const call = snapshot.data() || {};
+    const callerUid = String(call.callerUid || '');
+    const calleeUid = String(call.calleeUid || '');
+    if (!callerUid || !calleeUid || callerUid === calleeUid || call.status !== 'ringing') return null;
+    const callerName = String(call.callerName || 'ConnectX user').slice(0, 80);
+    return sendToUser(calleeUid, callerName,
+      call.type === 'video' ? 'Incoming video call' : 'Incoming voice call', {
+        type: 'incoming_call',
+        callId: context.params.callId,
+        callerUid,
+        callerName,
+        callType: call.type === 'video' ? 'video' : 'voice'
+      });
+  });
+
+// Notify every other group member when a group voice/video call starts.
+exports.notifyGroupCall = functions
+  .region('asia-south1')
+  .firestore.document('groupCalls/{callId}')
+  .onCreate(async (snapshot, context) => {
+    const call = snapshot.data() || {};
+    if (call.status !== 'active' || !call.groupId) return null;
+    const groupSnapshot = await admin.firestore().collection('groupChats').doc(String(call.groupId)).get();
+    if (!groupSnapshot.exists) return null;
+    const group = groupSnapshot.data() || {};
+    const creatorUid = String(call.createdBy || '');
+    const members = (Array.isArray(group.memberUids) ? group.memberUids : [])
+      .filter(uid => typeof uid === 'string' && uid && uid !== creatorUid);
+    const recipients = [];
+    for (const uid of members) {
+      const tokenSnapshot = await admin.database().ref('PrivateTokens/' + uid).once('value');
+      const token = tokenSnapshot.val();
+      if (token) recipients.push({ uid, token });
+    }
+    for (let i = 0; i < recipients.length; i += 500) {
+      const batch = recipients.slice(i, i + 500);
+      const result = await admin.messaging().sendEachForMulticast({
+        tokens: batch.map(item => item.token),
+        notification: {
+          title: String(call.groupName || group.name || 'ConnectX group'),
+          body: (call.type === 'video' ? 'Group video call started' : 'Group voice call started') + ' · Tap to join'
+        },
+        data: {
+          type: 'group_call',
+          callId: context.params.callId,
+          groupId: String(call.groupId),
+          groupName: String(call.groupName || group.name || 'Group'),
+          callType: call.type === 'video' ? 'video' : 'voice'
+        },
+        android: { priority: 'high' }
+      });
+      const invalid = [];
+      result.responses.forEach((response, index) => {
+        if (!response.success && response.error &&
+            ['messaging/registration-token-not-registered', 'messaging/invalid-registration-token'].includes(response.error.code)) {
+          invalid.push(batch[index].uid);
+        }
+      });
+      await Promise.all(invalid.map(uid => admin.database().ref('PrivateTokens/' + uid).remove()));
+    }
+    return null;
+  });
+
