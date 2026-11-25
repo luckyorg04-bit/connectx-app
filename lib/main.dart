@@ -108,7 +108,7 @@ ThemeData _buildTheme(Brightness brightness) {
     scaffoldBackgroundColor: isDark ? const Color(0xFF111B21) : const Color(0xFFFFFFFF),
     appBarTheme: AppBarTheme(
       toolbarHeight: 64,
-      titleTextStyle: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800, letterSpacing: -.35),
+      titleTextStyle: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800, letterSpacing: -.35, color: Colors.white),
       backgroundColor: isDark ? const Color(0xFF1F2C34) : const Color(0xFF087F83),
       foregroundColor: Colors.white,
       elevation: 0,
@@ -137,9 +137,9 @@ ThemeData _buildTheme(Brightness brightness) {
       filled: true,
       fillColor: isDark ? const Color(0xFF202C33) : const Color(0xFFF0F2F5),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         borderSide: const BorderSide(color: primary, width: 1.4),
       ),
     ),
