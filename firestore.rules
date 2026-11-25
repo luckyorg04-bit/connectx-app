@@ -260,27 +260,81 @@ service cloud.firestore {
     }
 
     match /calls/{callId} {
+      function callParticipant() {
+        return signedIn()
+          && (resource.data.callerUid == request.auth.uid
+            || resource.data.calleeUid == request.auth.uid);
+      }
+
       allow create: if signedIn()
+        && request.resource.data.keys().hasAll([
+          'callerUid', 'calleeUid', 'participants', 'type', 'status', 'createdAt'
+        ])
         && request.resource.data.callerUid == request.auth.uid
         && request.resource.data.calleeUid is string
+        && request.resource.data.calleeUid.size() > 0
         && request.resource.data.calleeUid != request.auth.uid
         && request.resource.data.participants is list
-        && request.auth.uid in request.resource.data.participants
-        && request.resource.data.calleeUid in request.resource.data.participants
+        && request.resource.data.participants.size() == 2
+        && request.resource.data.participants.hasAll([request.auth.uid, request.resource.data.calleeUid])
         && request.resource.data.status == 'ringing'
-        && request.resource.data.type in ['voice', 'video'];
-      allow read: if signedIn()
-        && (resource.data.callerUid == request.auth.uid
-          || resource.data.calleeUid == request.auth.uid
-          || request.auth.uid in resource.data.participants);
-      allow update: if signedIn() && (
+        && request.resource.data.type in ['voice', 'video']
+        && request.resource.data.createdAt == request.time;
+
+      allow read: if callParticipant();
+
+      allow update: if callParticipant() && (
         (
           resource.data.callerUid == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['offer', 'status', 'endedAt'])
+          && (
+            (
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['offer'])
+              && resource.data.status == 'ringing'
+              && request.resource.data.offer is map
+              && request.resource.data.offer.sdp is string
+              && request.resource.data.offer.sdp.size() > 0
+              && request.resource.data.offer.type == 'offer'
+            )
+            || (
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['connectedAt'])
+              && resource.data.status == 'accepted'
+              && !('connectedAt' in resource.data)
+              && request.resource.data.connectedAt == request.time
+            )
+            || (
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'endedAt'])
+              && request.resource.data.status in ['cancelled', 'missed', 'failed', 'ended']
+              && resource.data.status in ['ringing', 'accepted']
+              && request.resource.data.endedAt == request.time
+            )
+          )
         )
         || (
           resource.data.calleeUid == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['answer', 'status', 'acceptedAt', 'endedAt'])
+          && (
+            (
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['answer', 'status', 'acceptedAt'])
+              && resource.data.status == 'ringing'
+              && request.resource.data.status == 'accepted'
+              && request.resource.data.answer is map
+              && request.resource.data.answer.sdp is string
+              && request.resource.data.answer.sdp.size() > 0
+              && request.resource.data.answer.type == 'answer'
+              && request.resource.data.acceptedAt == request.time
+            )
+            || (
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['connectedAt'])
+              && resource.data.status == 'accepted'
+              && !('connectedAt' in resource.data)
+              && request.resource.data.connectedAt == request.time
+            )
+            || (
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'endedAt'])
+              && request.resource.data.status in ['declined', 'busy', 'ended']
+              && resource.data.status in ['ringing', 'accepted']
+              && request.resource.data.endedAt == request.time
+            )
+          )
         )
       );
       allow delete: if false;
@@ -291,7 +345,9 @@ service cloud.firestore {
             || get(/databases/$(database)/documents/calls/$(callId)).data.calleeUid == request.auth.uid);
         allow create: if signedIn()
           && get(/databases/$(database)/documents/calls/$(callId)).data.callerUid == request.auth.uid
-          && request.resource.data.senderUid == request.auth.uid;
+          && request.resource.data.senderUid == request.auth.uid
+          && request.resource.data.candidate is string
+          && request.resource.data.candidate.size() > 0;
         allow update, delete: if false;
       }
 
@@ -301,7 +357,9 @@ service cloud.firestore {
             || get(/databases/$(database)/documents/calls/$(callId)).data.calleeUid == request.auth.uid);
         allow create: if signedIn()
           && get(/databases/$(database)/documents/calls/$(callId)).data.calleeUid == request.auth.uid
-          && request.resource.data.senderUid == request.auth.uid;
+          && request.resource.data.senderUid == request.auth.uid
+          && request.resource.data.candidate is string
+          && request.resource.data.candidate.size() > 0;
         allow update, delete: if false;
       }
     }
