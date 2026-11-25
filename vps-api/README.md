@@ -46,3 +46,18 @@ Firestore rules deny access to this document. Install Coturn and store its share
 secret in this document using the instructions in [TURN_SETUP.md](TURN_SETUP.md).
 
 The Flutter app falls back to public STUN servers if TURN is not configured.
+
+
+## Notification delivery ownership
+
+The VPS API is the single notification-delivery worker. It watches Firestore for
+direct messages, group messages, direct calls and group calls, then sends FCM
+notifications. The Firebase Cloud Functions package now contains only the
+authenticated phone-number registration and lookup callables. Do not deploy
+legacy notification-trigger functions alongside this VPS listener, or users
+may receive duplicate notifications.
+
+When deploying the updated Functions source, Firebase may report the old
+notification trigger exports as functions to delete. Review the names carefully
+and remove only the legacy ConnectX notification triggers after confirming the
+VPS notification worker is healthy. Do not delete the phone callables.
