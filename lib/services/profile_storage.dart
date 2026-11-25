@@ -10,7 +10,7 @@ class ProfileStorage {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('Please sign in before changing your profile photo.');
     final token = await user.getIdToken();
-    if (token == null || token.isEmpty) throw Exception('Could not get Firebase sign-in token.');
+    if (token.isEmpty) throw Exception('Could not get Firebase sign-in token.');
 
     final request = http.MultipartRequest(
       'POST',
