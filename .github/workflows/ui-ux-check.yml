@@ -1,5 +1,5 @@
 concurrency:
-  group: connectx-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  group: connectx-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 name: ConnectX UI UX checks
@@ -14,14 +14,6 @@ on:
       - 'pubspec.yaml'
       - 'pubspec.lock'
       - '.github/workflows/ui-ux-check.yml'
-  pull_request:
-    branches:
-      - master
-    paths:
-      - 'lib/**'
-      - 'test/**'
-      - 'pubspec.yaml'
-      - 'pubspec.lock'
 
 permissions:
   contents: read
