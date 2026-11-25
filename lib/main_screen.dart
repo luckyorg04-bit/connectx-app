@@ -141,11 +141,17 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
                   _createGroup();
                 } else if (value == 'settings') {
                   _openNotificationSettings();
+                } else if (value == 'my_qr') {
+                  Navigator.of(context).pushNamed('/my-qr');
+                } else if (value == 'scan_qr') {
+                  Navigator.of(context).pushNamed('/scan-qr');
                 }
               },
               itemBuilder: (context) => const [
                 PopupMenuItem(value: 'new_group', child: Text('New group')),
                 PopupMenuItem(value: 'profile', child: Text('Profile')),
+                PopupMenuItem(value: 'my_qr', child: Text('My QR code')),
+                PopupMenuItem(value: 'scan_qr', child: Text('Scan QR code')),
                 PopupMenuItem(value: 'settings', child: Text('Settings')),
               ],
             ),
