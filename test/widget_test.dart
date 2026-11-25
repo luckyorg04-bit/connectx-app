@@ -76,6 +76,10 @@ void main() {
     expect(validatePhone('9876'), isNotNull);
     expect(PhoneLookupService.normalize('+91 98765 43210'), '919876543210');
     expect(PhoneLookupService.normalize('91-98765-43210'), '919876543210');
+    expect(
+      () => PhoneLookupService.normalize('1234'),
+      throwsA(isA<FormatException>()),
+    );
   });
 
   test('username validation enforces supported format', () {
