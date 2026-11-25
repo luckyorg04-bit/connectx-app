@@ -230,6 +230,11 @@ class AuthPageState extends State<AuthPage> {
       if (_isLogin) {
         credential = await FirebaseAuth.instance.signInWithEmailAndPassword(email: email, password: password);
       } else {
+        final existingPhoneUid = await PhoneLookupService.findUid(_phoneController.text.trim());
+        if (existingPhoneUid != null) {
+          _showError('This phone number is already linked to a ConnectX account.');
+          return;
+        }
         credential = await FirebaseAuth.instance.createUserWithEmailAndPassword(email: email, password: password);
         await credential.user?.updateDisplayName(_nameController.text.trim());
       }
@@ -238,6 +243,9 @@ class AuthPageState extends State<AuthPage> {
         preferredName: _isLogin ? null : _nameController.text.trim(),
         preferredUsername: _isLogin ? null : _usernameController.text.trim(),
       );
+      if (!_isLogin) {
+        await PhoneLookupService.register(credential.user!.uid, _phoneController.text.trim());
+      }
       await _openMain();
     } on FirebaseAuthException catch (error) {
       _showError(_authError(error));
@@ -261,6 +269,14 @@ class AuthPageState extends State<AuthPage> {
       );
       final userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
       await _ensureUserProfile(userCredential.user!);
+      if (await PhoneLookupService.getPrivatePhone(userCredential.user!.uid) == null) {
+        final phone = await _askPhoneNumber();
+        if (phone == null) {
+          await FirebaseAuth.instance.signOut();
+          return;
+        }
+        await PhoneLookupService.register(userCredential.user!.uid, phone);
+      }
       await _openMain();
     } on FirebaseAuthException catch (error) {
       _showError(_authError(error));
