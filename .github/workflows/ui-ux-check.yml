@@ -1,3 +1,7 @@
+concurrency:
+  group: connectx-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 name: ConnectX UI UX checks
 
 on:
