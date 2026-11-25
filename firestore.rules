@@ -32,7 +32,8 @@ service cloud.firestore {
         && request.resource.data.sender == request.auth.uid
         && request.resource.data.message is string
         && request.resource.data.timestamp is int
-        && request.resource.data.isRead is bool;
+        && request.resource.data.isRead is bool
+        && (!('isDelivered' in request.resource.data) || request.resource.data.isDelivered is bool);
 
       allow update: if isParticipant(conversationId) && (
         (
@@ -48,7 +49,15 @@ service cloud.firestore {
           resource.data.sender != request.auth.uid
           && resource.data.isRead == false
           && request.resource.data.isRead == true
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead'])
+          && request.resource.data.isDelivered == true
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead', 'isDelivered'])
+        )
+        ||
+        (
+          resource.data.sender != request.auth.uid
+          && resource.data.isDelivered != true
+          && request.resource.data.isDelivered == true
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isDelivered'])
         )
         ||
         (
