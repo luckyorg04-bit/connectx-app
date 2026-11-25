@@ -17,7 +17,7 @@
 - The phone registration callable replaces a user's previous index entry only after reserving the new number.
 - The VPS API at `https://connecttx.duckdns.org` handles media uploads, TURN credentials and FCM notification listeners. The Functions package is limited to phone lookup/registration callables to avoid two notification workers being deployed from the current source.
 - Group calls now request microphone/camera permissions, initialize audio routing and handle streamless remote tracks.
-- An in-app Profile action now starts a manual account-deletion email request. This is not automatic account deletion.
+- Privacy policy is accessible from Profile inside the app. An in-app Profile action starts a manual account-deletion email request; this is not automatic account deletion.
 
 ## CI and verification
 
