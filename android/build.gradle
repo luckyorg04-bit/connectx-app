@@ -11,9 +11,7 @@ subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
 }
 
-// Normalize legacy Flutter Android plugins for AGP 8 and Java 17.
-// Apply SDK compatibility after each plugin's build script has configured Android;
-// otherwise older plugins can overwrite the SDK value during project evaluation.
+// Normalize legacy Flutter Android library plugins for AGP 8 and Java 17.
 subprojects {
     plugins.withId("com.android.library") {
         def androidExtension = project.extensions.findByName("android")
@@ -33,14 +31,19 @@ subprojects {
                 }
             }
 
-            project.afterEvaluate {
-                def configuredAndroid = project.extensions.findByName("android")
-                configuredAndroid.compileSdkVersion = 36
-                configuredAndroid.compileOptions {
+            // AGP's finalizeDsl hook runs after the plugin's own build.gradle has
+            // finished configuring the DSL, but before variants/tasks read compileSdk.
+            def androidComponents = project.extensions.findByName("androidComponents")
+            if (androidComponents == null) {
+                throw new GradleException("ConnectX: Android Components extension missing for ${project.name}")
+            }
+            androidComponents.finalizeDsl { finalizedAndroid ->
+                finalizedAndroid.compileSdk = 36
+                finalizedAndroid.compileOptions {
                     sourceCompatibility JavaVersion.VERSION_17
                     targetCompatibility JavaVersion.VERSION_17
                 }
-                project.logger.lifecycle("ConnectX: enforced compileSdk 36 for ${project.name}")
+                project.logger.lifecycle("ConnectX: finalized compileSdk 36 for ${project.name}")
             }
 
             if (androidExtension.namespace == null || androidExtension.namespace.toString().trim().isEmpty()) {
