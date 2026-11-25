@@ -44,7 +44,7 @@ class ProfileStorage {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('Please sign in before deleting your profile photo.');
     final token = await user.getIdToken();
-    if (token == null || token.isEmpty) throw Exception('Could not get Firebase sign-in token.');
+    if (token.isEmpty) throw Exception('Could not get Firebase sign-in token.');
     final filename = Uri.decodeComponent(uri.pathSegments.last);
     final response = await http.delete(
       Uri.parse('$_baseUrl/api/profile-photo/${Uri.encodeComponent(filename)}'),
