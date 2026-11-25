@@ -118,27 +118,44 @@ exports.notifyGroupMessage = functions
     return null;
   });
 
-// Notify the callee as soon as a direct voice/video call is created.
+// Send an incoming-call alert only after the caller has published a usable SDP
+// offer. The call document is created before camera/microphone setup; notifying
+// onCreate would let the callee answer before the offer exists.
 exports.notifyIncomingCall = functions
   .region('asia-south1')
   .firestore.document('calls/{callId}')
-  .onCreate(async (snapshot, context) => {
-    const call = snapshot.data() || {};
-    const callerUid = String(call.callerUid || '');
-    const calleeUid = String(call.calleeUid || '');
-    if (!callerUid || !calleeUid || callerUid === calleeUid || call.status !== 'ringing') return null;
-    const callerName = String(call.callerName || 'ConnectX user').slice(0, 80);
-    return sendToUser(calleeUid, callerName,
-      call.type === 'video' ? 'Incoming video call' : 'Incoming voice call', {
+  .onUpdate(async (change, context) => {
+    const before = change.before.data() || {};
+    const call = change.after.data() || {};
+
+    if (before.status !== 'ringing' ||
+        call.status !== 'ringing' ||
+        (before.offer && before.offer.sdp) ||
+        !call.offer ||
+        typeof call.offer.sdp !== 'string' ||
+        !call.offer.sdp.trim()) {
+      return null;
+    }
+
+    if (!call.calleeUid || !call.callerUid || call.calleeUid === call.callerUid) {
+      console.error('Incoming call notification skipped: invalid participants', context.params.callId);
+      return null;
+    }
+
+    return sendToUser(
+      call.calleeUid,
+      String(call.callerName || 'ConnectX user'),
+      call.type === 'video' ? 'Incoming video call' : 'Incoming voice call',
+      {
         type: 'incoming_call',
         callId: context.params.callId,
-        callerUid,
-        callerName,
+        callerUid: call.callerUid,
+        callerName: String(call.callerName || 'ConnectX user'),
         callType: call.type === 'video' ? 'video' : 'voice'
-      });
+      }
+    );
   });
 
-// Notify every other group member when a group voice/video call starts.
 exports.notifyGroupCall = functions
   .region('asia-south1')
   .firestore.document('groupCalls/{callId}')
