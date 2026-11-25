@@ -158,6 +158,10 @@ exports.notifyIncomingCall = functions
       return null;
     }
 
+    const callNotifications = await admin.database()
+      .ref('PrivateUsers/' + call.calleeUid + '/notificationSettings/calls').once('value');
+    if (callNotifications.val() === false) return null;
+
     return sendToUser(
       call.calleeUid,
       String(call.callerName || 'ConnectX user'),
@@ -186,7 +190,11 @@ exports.notifyGroupCall = functions
       .filter(uid => typeof uid === 'string' && uid && uid !== creatorUid);
     const recipients = [];
     for (const uid of members) {
-      const tokenSnapshot = await admin.database().ref('PrivateTokens/' + uid).once('value');
+      const [tokenSnapshot, settingsSnapshot] = await Promise.all([
+        admin.database().ref('PrivateTokens/' + uid).once('value'),
+        admin.database().ref('PrivateUsers/' + uid + '/notificationSettings/calls').once('value')
+      ]);
+      if (settingsSnapshot.val() === false) continue;
       const token = tokenSnapshot.val();
       if (token) recipients.push({ uid, token });
     }
