@@ -22,7 +22,7 @@ jobs:
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          APP_ID="$(sed -n 's/^[[:space:]]*applicationId[[:space:]]*"([^"]*)".*/\1/p' android/app/build.gradle | head -n1)"
+          APP_ID="$(grep -E '^[[:space:]]*applicationId[[:space:]]+"' android/app/build.gradle | head -n1 | sed -E 's/.*applicationId[[:space:]]+"([^"]+)".*/\1/')"
           if [[ -z "$APP_ID" || "$APP_ID" == com.example.* ]]; then
             echo "::error::Set a final unique applicationId in android/app/build.gradle before release."
             exit 1
