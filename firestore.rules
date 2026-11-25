@@ -55,7 +55,7 @@ service cloud.firestore {
         ||
         (
           resource.data.sender != request.auth.uid
-          && resource.data.isDelivered != true
+          && (!('isDelivered' in resource.data) || resource.data.isDelivered != true)
           && request.resource.data.isDelivered == true
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isDelivered'])
         )
