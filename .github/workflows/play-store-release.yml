@@ -57,10 +57,10 @@ jobs:
 
       - name: Verify application and Firebase IDs
         run: |
-          node -e "const c=require('./android/app/google-services.json'); if(c.project_info.project_id!=='connectx-app-f8407') throw Error('Wrong Firebase project'); if(!c.client.some(x=>x.client_info.android_client_info.package_name==='com.connectx.app')) throw Error('Missing Firebase Android client com.connectx.app');"
-          grep -q 'applicationId "com.connectx.app"' android/app/build.gradle
+          node -e "const c=require('./android/app/google-services.json'); if(c.project_info.project_id!=='connectx-app-f8407') throw Error('Wrong Firebase project'); if(!c.client.some(x=>x.client_info.android_client_info.package_name==='com.ghostgroup.connectx')) throw Error('Missing Firebase Android client com.ghostgroup.connectx; register this package in Firebase and replace google-services.json');"
+          grep -q 'applicationId "com.ghostgroup.connectx"' android/app/build.gradle
           grep -q 'targetSdk 36' android/app/build.gradle
-          test -f android/app/src/main/kotlin/com/connectx/app/MainActivity.kt
+          test -f android/app/src/main/kotlin/com/ghostgroup/connectx/MainActivity.kt
 
       - name: Resolve Flutter dependencies
         run: flutter pub get
