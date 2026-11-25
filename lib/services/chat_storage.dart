@@ -17,7 +17,7 @@ class ChatStorage {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('Please sign in before uploading media.');
     final idToken = await user.getIdToken();
-    if (idToken == null || idToken.isEmpty) throw Exception('Could not get Firebase sign-in token.');
+    if (idToken.isEmpty) throw Exception('Could not get Firebase sign-in token.');
 
     final request = http.MultipartRequest('POST', Uri.parse(_uploadEndpoint));
     request.headers['Authorization'] = 'Bearer $idToken';
