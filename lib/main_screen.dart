@@ -1140,6 +1140,26 @@ class _ChannelsPanel extends StatelessWidget {
   }
 }
 
+String _directCallDurationLabel(Map<String, dynamic> data) {
+  final start = data['connectedAt'] ?? data['acceptedAt'];
+  final end = data['endedAt'];
+  DateTime? started;
+  DateTime? ended;
+  if (start is Timestamp) started = start.toDate();
+  if (start is DateTime) started = start;
+  if (end is Timestamp) ended = end.toDate();
+  if (end is DateTime) ended = end;
+  if (started == null) return '';
+  final seconds = ((ended ?? DateTime.now()).difference(started).inSeconds).clamp(0, 86400);
+  final h = seconds ~/ 3600;
+  final m = (seconds ~/ 60) % 60;
+  final s = seconds % 60;
+  final formatted = h > 0
+    ? '${h}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}'
+    : '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  return ' · $formatted';
+}
+
 class _CallsTab extends StatelessWidget {
   const _CallsTab();
 
@@ -1189,7 +1209,8 @@ class _CallsTab extends StatelessWidget {
                     leading: CircleAvatar(child: Icon(video ? Icons.videocam : Icons.call)),
                     title: Text(peerName.toString()),
                     subtitle: Text(ringing ? 'Incoming ${video ? 'video' : 'voice'} call' :
-                      '${incoming ? 'Incoming' : 'Outgoing'} · $status'),
+                      '${incoming ? 'Incoming' : 'Outgoing'} · $status'
+                      '${_directCallDurationLabel(data)}'),
                     trailing: ringing ? IconButton(icon: const Icon(Icons.call, color: Colors.green),
                       onPressed: () => Navigator.of(context).pushNamed('/call', arguments: {
                         'callId': doc.id, 'peerUid': data['callerUid'].toString(),
