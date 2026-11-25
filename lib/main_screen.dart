@@ -875,7 +875,7 @@ class _CommunitiesTab extends StatelessWidget {
           StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
             stream: ref.snapshots(),
             builder: (context, snap) {
-              final data = snap.data?.data() ?? initial;
+              final data = snap.data?.data() ?? <String, dynamic>{};
               final currentMembers = List<String>.from(data['memberUids'] ?? []);
               final isMember = currentMembers.contains(uid);
               final admins = List<String>.from(data['adminUids'] ?? [data['ownerUid']].whereType<String>());
@@ -917,7 +917,7 @@ class _CommunitiesTab extends StatelessWidget {
           Expanded(child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
             stream: ref.snapshots(),
             builder: (context, membership) {
-              final community = membership.data?.data() ?? initial;
+              final community = membership.data?.data() ?? <String, dynamic>{};
               final canRead = List<String>.from(community['memberUids'] ?? []).contains(uid);
               if (!canRead) return const Center(child: Text('Join this community to view its discussions.'));
               return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -941,7 +941,7 @@ class _CommunitiesTab extends StatelessWidget {
           StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
             stream: ref.snapshots(),
             builder: (context, snap) {
-              final data = snap.data?.data() ?? initial;
+              final data = snap.data?.data() ?? <String, dynamic>{};
               final isMember = List<String>.from(data['memberUids'] ?? []).contains(uid);
               final admins = List<String>.from(data['adminUids'] ?? [data['ownerUid']].whereType<String>());
               final isAdmin = admins.contains(uid) || data['ownerUid'] == uid;
