@@ -10,7 +10,7 @@ import 'database_service.dart';
 class PhoneLookupService {
   static String normalize(String value) {
     final trimmed = value.trim();
-    final digits = trimmed.replaceAll(RegExp(r'\\D'), '');
+    final digits = trimmed.replaceAll(RegExp(r'\D'), '');
     if (digits.length < 7 || digits.length > 15) {
       throw const FormatException('Enter a phone number with 7–15 digits, including country code.');
     }
