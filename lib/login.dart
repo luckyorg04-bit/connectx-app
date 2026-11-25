@@ -437,7 +437,7 @@ bool isEmailValid(String email) {
 }
 
 String? validatePhone(String? value) {
-  final digits = (value ?? '').replaceAll(RegExp(r'\\D'), '');
+  final digits = (value ?? '').replaceAll(RegExp(r'\D'), '');
   if (digits.isEmpty) return 'Please enter your phone number';
   if (digits.length < 7 || digits.length > 15) return 'Enter 7–15 digits, including country code';
   return null;
