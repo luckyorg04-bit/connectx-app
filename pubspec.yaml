@@ -29,7 +29,7 @@ dependencies:
   path_provider: ^2.0.14
   geolocator: ^9.0.2
   flutter_webrtc: ^0.9.44
-  flutter_ringtone_player: ^3.2.0
+  flutter_ringtone_player: ^4.0.0+4
   video_player: ^2.6.1
 
 dev_dependencies:
