@@ -50,6 +50,8 @@ test('Realtime Database keeps private profile and phone number private', async (
   await assertFails(set(ref(alice, 'PrivateUsers/alice/phone'), '911111111111'));
   await assertFails(set(ref(alice, 'PhoneLookup/fake-hash'), 'alice'));
   await assertFails(get(ref(alice, 'PhoneLookup/fake-hash')));
+  await assertFails(set(ref(alice, 'PhoneRegistrationRateLimits/alice'), { count: 1 }));
+  await assertFails(get(ref(alice, 'PhoneRegistrationRateLimits/alice')));
 });
 
 test('Realtime Database permits only the intended owner preference writes', async () => {
