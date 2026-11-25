@@ -6,6 +6,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'services/notification_service.dart';
 import 'services/database_service.dart';
 
+// ConnectX authentication screen: sign-in, registration and account recovery.
 class AuthPage extends StatefulWidget {
   const AuthPage({Key? key}) : super(key: key);
   @override
