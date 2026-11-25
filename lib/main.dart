@@ -123,7 +123,7 @@ ThemeData _buildTheme(Brightness brightness) {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(18))),
     ),
     dividerColor: isDark ? const Color(0xFF2B3941) : const Color(0xFFE7ECEF),
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       elevation: 0,
       margin: EdgeInsets.zero,
       color: isDark ? const Color(0xFF202C33) : const Color(0xFFF7FAFA),
