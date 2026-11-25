@@ -40,7 +40,7 @@ class _ConnectQrScreenState extends State<ConnectQrScreen> {
       }
 
       final targetUid = uri.pathSegments.single;
-      if (!RegExp('^[A-Za-z0-9_-]{10,128}$').hasMatch(targetUid)) {
+      if (!RegExp(r'^[A-Za-z0-9_-]{10,128}$').hasMatch(targetUid)) {
         _showMessage('Invalid ConnectX profile code.');
         _handlingScan = false;
         return;
