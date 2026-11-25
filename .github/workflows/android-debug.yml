@@ -1,5 +1,5 @@
 concurrency:
-  group: connectx-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  group: connectx-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 name: ConnectX Android debug build
@@ -14,14 +14,6 @@ on:
       - 'pubspec.yaml'
       - 'pubspec.lock'
       - '.github/workflows/android-debug.yml'
-  pull_request:
-    branches:
-      - master
-    paths:
-      - 'lib/**'
-      - 'android/**'
-      - 'pubspec.yaml'
-      - 'pubspec.lock'
   workflow_dispatch:
 
 permissions:
