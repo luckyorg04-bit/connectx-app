@@ -84,6 +84,12 @@ exports.registerPhoneNumber = functions
       if (oldPhone !== phone) {
         await lookupRef.transaction(current => current === uid ? null : current);
       }
+      try {
+        if (oldPhoneValue == null) await privatePhoneRef.remove();
+        else await privatePhoneRef.set(oldPhoneValue);
+      } catch (restoreError) {
+        console.error('Phone profile rollback failed:', restoreError.message);
+      }
       throw new functions.https.HttpsError('internal', 'Could not save the phone number. Please try again.');
     }
   });
