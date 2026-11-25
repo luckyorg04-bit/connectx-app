@@ -31,6 +31,10 @@ dependencies:
   flutter_webrtc: ^1.6.3
   flutter_ringtone_player: ^4.0.0+4
   video_player: ^2.6.1
+  crypto: ^3.0.6
+  mobile_scanner: ^6.0.2
+  qr_flutter: ^4.1.0
+  share_plus: ^10.1.4
 
 dev_dependencies:
   flutter_test:
