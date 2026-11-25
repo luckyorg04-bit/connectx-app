@@ -12,13 +12,13 @@ subprojects {
 }
 
 // Normalize legacy Flutter Android plugins for AGP 8 and Java 17.
+// Apply SDK compatibility after each plugin's build script has configured Android;
+// otherwise older plugins can overwrite the SDK value during project evaluation.
 subprojects {
     plugins.withId("com.android.library") {
         def androidExtension = project.extensions.findByName("android")
 
         if (androidExtension != null) {
-            // Legacy plugins may omit compileSdk or inherit an obsolete SDK.
-            androidExtension.compileSdkVersion = 36
             androidExtension.buildFeatures.buildConfig = true
 
             if (androidExtension.namespace == null || androidExtension.namespace.toString().trim().isEmpty()) {
@@ -33,9 +33,14 @@ subprojects {
                 }
             }
 
-            androidExtension.compileOptions {
-                sourceCompatibility JavaVersion.VERSION_17
-                targetCompatibility JavaVersion.VERSION_17
+            project.afterEvaluate {
+                def configuredAndroid = project.extensions.findByName("android")
+                configuredAndroid.compileSdkVersion = 36
+                configuredAndroid.compileOptions {
+                    sourceCompatibility JavaVersion.VERSION_17
+                    targetCompatibility JavaVersion.VERSION_17
+                }
+                project.logger.lifecycle("ConnectX: enforced compileSdk 36 for ${project.name}")
             }
 
             if (androidExtension.namespace == null || androidExtension.namespace.toString().trim().isEmpty()) {
