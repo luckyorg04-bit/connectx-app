@@ -6,9 +6,22 @@ allprojects {
 }
 
 rootProject.buildDir = "../build"
+
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
 }
+
+// Enable BuildConfig for Android library plugins (including cloud_firestore).
+subprojects {
+    plugins.withId("com.android.library") {
+        android {
+            buildFeatures {
+                buildConfig = true
+            }
+        }
+    }
+}
+
 subprojects {
     project.evaluationDependsOn(":app")
 }
