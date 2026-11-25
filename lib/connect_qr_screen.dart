@@ -260,7 +260,7 @@ class _ConnectQrScreenState extends State<ConnectQrScreen> {
                   onPressed: uid.isEmpty
                       ? null
                       : () => Share.share(
-                            'Connect with me on ConnectX. Scan my QR code in the ConnectX app.\\n$qrData',
+                            'Connect with me on ConnectX. Scan my QR code in the ConnectX app.\n$qrData',
                           ),
                   icon: const Icon(Icons.share_rounded),
                   label: const Text('Share my code'),
