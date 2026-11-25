@@ -230,13 +230,15 @@ class AuthPageState extends State<AuthPage> {
       if (_isLogin) {
         credential = await FirebaseAuth.instance.signInWithEmailAndPassword(email: email, password: password);
       } else {
+        credential = await FirebaseAuth.instance.createUserWithEmailAndPassword(email: email, password: password);
+        await credential.user?.updateDisplayName(_nameController.text.trim());
         final existingPhoneUid = await PhoneLookupService.findUid(_phoneController.text.trim());
         if (existingPhoneUid != null) {
+          await credential.user!.delete();
+          await FirebaseAuth.instance.signOut();
           _showError('This phone number is already linked to a ConnectX account.');
           return;
         }
-        credential = await FirebaseAuth.instance.createUserWithEmailAndPassword(email: email, password: password);
-        await credential.user?.updateDisplayName(_nameController.text.trim());
       }
       await _ensureUserProfile(
         credential.user!,
@@ -369,12 +371,24 @@ class AuthPageState extends State<AuthPage> {
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: () {
+              onPressed: () async {
                 final validation = validatePhone(controller.text);
                 if (validation != null) {
                   setDialogState(() => errorText = validation);
-                } else {
-                  Navigator.pop(dialogContext, controller.text.trim());
+                  return;
+                }
+                try {
+                  final existingUid = await PhoneLookupService.findUid(controller.text);
+                  final currentUid = FirebaseAuth.instance.currentUser?.uid;
+                  if (existingUid != null && existingUid != currentUid) {
+                    setDialogState(() => errorText = 'This number is already linked to another ConnectX account.');
+                    return;
+                  }
+                  if (dialogContext.mounted) {
+                    Navigator.pop(dialogContext, controller.text.trim());
+                  }
+                } catch (_) {
+                  setDialogState(() => errorText = 'Could not check this number. Try again.');
                 }
               },
               child: const Text('Continue'),
