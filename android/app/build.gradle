@@ -61,14 +61,12 @@ android {
 
     signingConfigs {
         release {
-            if (uploadStoreFile == null || uploadKeyAlias == null ||
-                uploadStorePassword == null || uploadKeyPassword == null) {
-                throw new GradleException("Release signing is not configured. Set ANDROID_KEYSTORE_PATH, ANDROID_KEY_ALIAS, ANDROID_STORE_PASSWORD and ANDROID_KEY_PASSWORD.")
-            }
-            storeFile file(uploadStoreFile)
-            storePassword uploadStorePassword
-            keyAlias uploadKeyAlias
-            keyPassword uploadKeyPassword
+            // Values are supplied only by the protected release workflow.
+            // Keep configuration lazy enough that local debug builds need no upload key.
+            if (uploadStoreFile != null) storeFile file(uploadStoreFile)
+            if (uploadStorePassword != null) storePassword uploadStorePassword
+            if (uploadKeyAlias != null) keyAlias uploadKeyAlias
+            if (uploadKeyPassword != null) keyPassword uploadKeyPassword
         }
     }
 
