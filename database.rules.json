@@ -18,7 +18,18 @@
     "PrivateUsers": {
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",
-        ".write": "auth != null && auth.uid == $uid"
+        "phone": {
+          ".write": false
+        },
+        "chats": {
+          ".write": "auth != null && auth.uid == $uid"
+        },
+        "chatMeta": {
+          ".write": "auth != null && auth.uid == $uid"
+        },
+        "notificationSettings": {
+          ".write": "auth != null && auth.uid == $uid"
+        }
       }
     },
     "PhoneLookup": {
