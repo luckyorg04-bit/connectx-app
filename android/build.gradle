@@ -19,6 +19,11 @@ subprojects {
                 namespace "io.flutter.plugins.firebase.firestore"
             }
         }
+        if (project.name == "flutter_local_notifications") {
+            android {
+                namespace "com.dexterous.flutterlocalnotifications"
+            }
+        }
         android {
             buildFeatures {
                 buildConfig = true
