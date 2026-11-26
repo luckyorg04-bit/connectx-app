@@ -150,9 +150,11 @@ service cloud.firestore {
         && request.resource.data.expiresAt is timestamp
         && request.resource.data.expiresAt > request.time
         && request.resource.data.expiresAt <= request.time + duration.value(24, 'h');
+      // The client query filters expiresAt. Keeping the list rule audience-based
+      // lets Firestore prove access for arrayContains(audienceUids, uid) queries.
       allow read: if signedIn()
-        && request.auth.uid in resource.data.audienceUids
-        && resource.data.expiresAt > request.time;
+        && resource.data.audienceUids is list
+        && request.auth.uid in resource.data.audienceUids;
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
       allow update: if false;
       match /views/{viewerUid} {
