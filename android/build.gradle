@@ -53,6 +53,13 @@ subprojects {
                 androidExtension.namespace = "io.inway.ringtone.player"
             }
 
+            if ((androidExtension.namespace == null || androidExtension.namespace.toString().trim().isEmpty())
+                    && project.name == "flutter_contacts") {
+                // flutter_contacts 1.1.9+2 declares this Android package but omits
+                // namespace in its library Gradle file and manifest.
+                androidExtension.namespace = "co.quis.flutter_contacts"
+            }
+
             if (androidExtension.namespace == null || androidExtension.namespace.toString().trim().isEmpty()) {
                 throw new GradleException(
                     "ConnectX compatibility check: Android library plugin '${project.name}' has no namespace and no package in src/main/AndroidManifest.xml. Upgrade that Flutter plugin to an AGP 8-compatible version."
