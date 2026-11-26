@@ -1,5 +1,6 @@
 import 'package:connectx/main.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -303,47 +304,72 @@ class AuthPageState extends State<AuthPage> {
 
   Future<void> _submitEmailPassword() async {
     if (_isLoading || _isGoogleLoading) return;
-    if (!_formKey.currentState!.validate()) return;
+    final form = _formKey.currentState;
+    if (form == null || !form.validate()) return;
     setState(() => _isLoading = true);
     final email = _emailController.text.trim();
     final password = _passwordController.text;
     try {
-      UserCredential credential;
+      final UserCredential credential;
       if (_isLogin) {
-        credential = await FirebaseAuth.instance.signInWithEmailAndPassword(email: email, password: password).timeout(const Duration(seconds: 25));
+        credential = await FirebaseAuth.instance
+            .signInWithEmailAndPassword(email: email, password: password)
+            .timeout(const Duration(seconds: 25));
       } else {
-        credential = await FirebaseAuth.instance.createUserWithEmailAndPassword(email: email, password: password).timeout(const Duration(seconds: 25));
-        await credential.user?.updateDisplayName(_nameController.text.trim());
-        final existingPhoneUid = await PhoneLookupService.findUid(_phoneController.text.trim());
-        if (existingPhoneUid != null) {
-          await credential.user!.delete();
-          await FirebaseAuth.instance.signOut();
-          _showError('This phone number is already linked to a ConnectX account.');
-          return;
+        credential = await FirebaseAuth.instance
+            .createUserWithEmailAndPassword(email: email, password: password)
+            .timeout(const Duration(seconds: 25));
+        try {
+          await credential.user!
+              .updateDisplayName(_nameController.text.trim())
+              .timeout(const Duration(seconds: 10));
+        } catch (error) {
+          // A display-name update is profile polish, not an authentication gate.
+          debugPrint('ConnectX display-name update failed: $error');
         }
       }
+
+      // Authentication must not depend on the optional phone-index Cloud
+      // Functions. Previously a lookup/registration outage signed users out
+      // after Firebase had already created their account, making the next
+      // signup attempt fail with email-already-in-use.
       await _ensureUserProfile(
         credential.user!,
         preferredName: _isLogin ? null : _nameController.text.trim(),
         preferredUsername: _isLogin ? null : _usernameController.text.trim(),
       );
+
       if (!_isLogin) {
-        await PhoneLookupService.register(credential.user!.uid, _phoneController.text.trim());
-      } else if (await PhoneLookupService.getPrivatePhone(credential.user!.uid) == null) {
-        final phone = await _askPhoneNumber();
-        if (phone == null) {
-          await _cleanupPartialSession();
-          return;
+        try {
+          await PhoneLookupService.register(
+            credential.user!.uid,
+            _phoneController.text.trim(),
+          );
+        } catch (error) {
+          // Keep the newly created account usable even if phone indexing is
+          // unavailable or the number is already linked to another account.
+          debugPrint('ConnectX optional phone registration failed: $error');
         }
-        await PhoneLookupService.register(credential.user!.uid, phone);
       }
+
       await _openMain();
     } on FirebaseAuthException catch (error) {
       await _cleanupPartialSession();
       _showError(_authError(error));
-    } catch (error) {
+    } catch (error, stackTrace) {
+      debugPrint('ConnectX email authentication/profile bootstrap failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
       await _cleanupPartialSession();
-      _showError('Unable to sign in right now. Check your details and connection, then try again.');
+      if (error is FirebaseException) {
+        final message = error.code == 'permission-denied'
+            ? 'Firebase database access was denied while preparing your profile. Please contact support.'
+            : error.code == 'unavailable' || error.code == 'network-request-failed'
+                ? 'Network connection failed. Check your internet and try again.'
+                : 'Your account was authenticated, but profile setup failed (${error.code}). Please try again.';
+        _showError(message);
+      } else {
+        _showError('Unable to complete sign-in. Please check your connection and try again.');
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -360,16 +386,11 @@ class AuthPageState extends State<AuthPage> {
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
-      final userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+      final userCredential = await FirebaseAuth.instance
+          .signInWithCredential(credential)
+          .timeout(const Duration(seconds: 25));
       await _ensureUserProfile(userCredential.user!);
-      if (await PhoneLookupService.getPrivatePhone(userCredential.user!.uid) == null) {
-        final phone = await _askPhoneNumber();
-        if (phone == null) {
-          await _cleanupPartialSession(clearGoogle: true);
-          return;
-        }
-        await PhoneLookupService.register(userCredential.user!.uid, phone);
-      }
+      // Phone registration is optional and must never block account access.
       await _openMain();
     } on FirebaseAuthException catch (error) {
       await _cleanupPartialSession(clearGoogle: true);
@@ -436,68 +457,6 @@ class AuthPageState extends State<AuthPage> {
       'bio': 'Hey there! I am using ConnectX',
       'photoUrl': user.photoURL ?? '',
     }).timeout(const Duration(seconds: 12));
-  }
-
-  Future<String?> _askPhoneNumber() async {
-    final controller = TextEditingController();
-    String? errorText;
-    final result = await showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Add your phone number'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Use your phone number so people can find you on ConnectX. No OTP is required.'),
-              const SizedBox(height: 14),
-              TextField(
-                controller: controller,
-                keyboardType: TextInputType.phone,
-                decoration: InputDecoration(
-                  hintText: '+91 98765 43210',
-                  labelText: 'Phone number',
-                  errorText: errorText,
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                final validation = validatePhone(controller.text);
-                if (validation != null) {
-                  setDialogState(() => errorText = validation);
-                  return;
-                }
-                try {
-                  final existingUid = await PhoneLookupService.findUid(controller.text);
-                  final currentUid = FirebaseAuth.instance.currentUser?.uid;
-                  if (existingUid != null && existingUid != currentUid) {
-                    setDialogState(() => errorText = 'This number is already linked to another ConnectX account.');
-                    return;
-                  }
-                  if (dialogContext.mounted) {
-                    Navigator.pop(dialogContext, controller.text.trim());
-                  }
-                } catch (_) {
-                  setDialogState(() => errorText = 'Could not check this number. Try again.');
-                }
-              },
-              child: const Text('Continue'),
-            ),
-          ],
-        ),
-      ),
-    );
-    controller.dispose();
-    return result;
   }
 
   Future<void> _resetPassword() async {
@@ -580,7 +539,16 @@ class AuthPageState extends State<AuthPage> {
       case 'account-exists-with-different-credential':
         return 'This email already uses another sign-in method. Sign in with that method first.';
       case 'network-request-failed':
+      case 'network-error':
         return 'Network error. Check your internet connection.';
+      case 'operation-not-allowed':
+        return 'Email/password sign-in is disabled in Firebase Authentication. Enable the Email/Password provider in Firebase Console.';
+      case 'too-many-requests':
+        return 'Too many attempts. Wait a while and try again.';
+      case 'user-disabled':
+        return 'This account has been disabled. Contact support.';
+      case 'invalid-login-credentials':
+        return 'Invalid email or password.';
       default:
         return error.message ?? 'Authentication failed. Please try again.';
     }
