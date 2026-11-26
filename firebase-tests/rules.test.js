@@ -88,7 +88,7 @@ test('Firestore direct messages are limited to conversation participants', async
 });
 
 
-test('Firestore active statuses are readable by every signed-in ConnectX user', async () => {
+test('Firestore statuses are readable only by their published audience', async () => {
   const alice = env.authenticatedContext('alice').firestore();
   const bob = env.authenticatedContext('bob').firestore();
   const charlie = env.authenticatedContext('charlie').firestore();
@@ -98,12 +98,20 @@ test('Firestore active statuses are readable by every signed-in ConnectX user', 
     ownerUid: 'alice',
     statusText: 'Hello ConnectX',
     mediaType: 'text',
-    audienceUids: ['alice'],
+    audienceUids: ['alice', 'bob'],
     expiresAt: new Date(Date.now() + 60 * 60 * 1000),
   }));
   await assertSucceeds(getDoc(doc(bob, 'statuses/status-1')));
-  await assertSucceeds(getDoc(doc(charlie, 'statuses/status-1')));
-  await assertSucceeds(getDocs(query(collection(bob, 'statuses'), where('expiresAt', '>', new Date()))));
+  await assertFails(getDoc(doc(charlie, 'statuses/status-1')));
+  await assertSucceeds(getDocs(query(
+    collection(bob, 'statuses'),
+    where('audienceUids', 'array-contains', 'bob'),
+    where('expiresAt', '>', new Date()),
+  )));
+  await assertFails(getDocs(query(
+    collection(charlie, 'statuses'),
+    where('expiresAt', '>', new Date()),
+  )));
 });
 
 test('Firestore direct call records are restricted to their participants', async () => {
