@@ -309,7 +309,32 @@ class AuthPageState extends State<AuthPage> {
     setState(() => _isLoading = true);
     final email = _emailController.text.trim();
     final password = _passwordController.text;
+    var accountCreatedThisAttempt = false;
     try {
+      // If Firebase account creation succeeded earlier but profile bootstrap
+      // was interrupted, retry profile setup instead of creating the account
+      // again (which would return email-already-in-use).
+      final pendingUser = FirebaseAuth.instance.currentUser;
+      if (!_isLogin &&
+          pendingUser != null &&
+          (pendingUser.email ?? '').trim().toLowerCase() == email.toLowerCase()) {
+        await _ensureUserProfile(
+          pendingUser,
+          preferredName: _nameController.text.trim(),
+          preferredUsername: _usernameController.text.trim(),
+        );
+        try {
+          await PhoneLookupService.register(
+            pendingUser.uid,
+            _phoneController.text.trim(),
+          );
+        } catch (error) {
+          debugPrint('ConnectX optional phone registration retry failed: $error');
+        }
+        await _openMain();
+        return;
+      }
+
       final UserCredential credential;
       if (_isLogin) {
         credential = await FirebaseAuth.instance
@@ -319,6 +344,7 @@ class AuthPageState extends State<AuthPage> {
         credential = await FirebaseAuth.instance
             .createUserWithEmailAndPassword(email: email, password: password)
             .timeout(const Duration(seconds: 25));
+        accountCreatedThisAttempt = true;
         try {
           await credential.user!
               .updateDisplayName(_nameController.text.trim())
@@ -354,12 +380,16 @@ class AuthPageState extends State<AuthPage> {
 
       await _openMain();
     } on FirebaseAuthException catch (error) {
-      await _cleanupPartialSession();
+      // Never discard a newly created Firebase account because an optional
+      // profile-side operation failed. A subsequent tap can resume setup.
+      if (!accountCreatedThisAttempt) await _cleanupPartialSession();
       _showError(_authError(error));
     } catch (error, stackTrace) {
       debugPrint('ConnectX email authentication/profile bootstrap failed: $error');
       debugPrintStack(stackTrace: stackTrace);
-      await _cleanupPartialSession();
+      // Keep a newly created account signed in so the next attempt can resume
+      // the idempotent profile bootstrap instead of stranding its email.
+      if (!accountCreatedThisAttempt) await _cleanupPartialSession();
       if (error is FirebaseException) {
         final message = error.code == 'permission-denied'
             ? 'Firebase database access was denied while preparing your profile. Please contact support.'
