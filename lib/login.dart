@@ -4,6 +4,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'services/notification_service.dart';
+import 'services/app_preferences.dart';
 import 'services/database_service.dart';
 import 'services/phone_lookup_service.dart';
 
@@ -416,16 +417,26 @@ class AuthPageState extends State<AuthPage> {
   }
 
   Future<void> _openMain() async {
+    await AppPreferences.load();
     await NotificationService.initialize();
     currentRoute = '/main';
     if (!mounted) return;
     await Navigator.of(context).pushNamedAndRemoveUntil('/main', (route) => false);
   }
 
-  void _showError(String message) {
+  Future<void> _showError(String message) async {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.info_outline_rounded),
+        title: const Text('ConnectX'),
+        content: Text(message),
+        actions: [FilledButton(
+          onPressed: () => Navigator.pop(dialogContext),
+          child: const Text('OK'),
+        )],
+      ),
     );
   }
 
