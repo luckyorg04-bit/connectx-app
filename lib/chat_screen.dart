@@ -5,6 +5,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:http/http.dart' as http;
+import 'widgets/connectx_gif_picker.dart';
 import 'package:record/record.dart';
 import 'services/chat_storage.dart';
 import 'package:connectx/main.dart';
@@ -400,13 +402,39 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
   }
 
   Future<void> _pickGif() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom, allowedExtensions: ['gif'], withData: true);
-    if (result == null || result.files.isEmpty) return;
-    final file = result.files.first;
-    if (file.bytes == null) return;
-    await _uploadBytes(bytes: file.bytes!, fileName: file.name,
-      contentType: 'image/gif', type: 'image');
+    final selected = await ConnectXGifPicker.show(context);
+    if (selected == null || !mounted || _sending) return;
+    setState(() => _sending = true);
+    try {
+      await _ensureCanMessage();
+      final response = await http.get(Uri.parse(selected.url))
+          .timeout(const Duration(seconds: 30));
+      if (response.statusCode != 200 || response.bodyBytes.isEmpty) {
+        throw Exception('GIF download failed');
+      }
+      if (response.bodyBytes.length > 25 * 1024 * 1024) {
+        throw Exception('GIF is larger than 25 MB');
+      }
+      final mediaUrl = await ChatStorage.upload(
+        conversationId: assignUsers(_uid, user!.key),
+        fileName: 'connectx_gif_${DateTime.now().millisecondsSinceEpoch}.gif',
+        bytes: response.bodyBytes,
+        contentType: 'image/gif',
+        viewOnce: false,
+      );
+      await _sendStructuredMessage(
+        type: 'gif',
+        text: selected.attribution,
+        mediaUrl: mediaUrl,
+        fileName: selected.title,
+      );
+    } catch (error) {
+      if (mounted) showConnectXErrorDialog(
+        context, 'GIF could not be sent. Please try another GIF or check your connection.',
+      );
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
   }
 
   Future<void> _pickDocument() async {
