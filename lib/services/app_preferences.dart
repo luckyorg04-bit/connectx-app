@@ -35,6 +35,12 @@ class AppPreferences {
     }
   }
 
+  static void reset() {
+    themeMode.value = ThemeMode.system;
+    languageCode = 'en';
+    locale.value = const Locale('en');
+  }
+
   static Future<void> saveTheme(ThemeMode mode) async {
     await _settingsRef().update({
       'themeMode': mode == ThemeMode.light
