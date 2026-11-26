@@ -1,6 +1,7 @@
 import 'package:connectx/models/user.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'chat_screen.dart';
 import 'connect_qr_screen.dart';
@@ -48,7 +49,9 @@ class MyApp extends StatelessWidget {
     _user = user;
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: AppPreferences.themeMode,
-      builder: (context, selectedThemeMode, _) => MaterialApp(
+      builder: (context, selectedThemeMode, _) => ValueListenableBuilder<Locale>(
+        valueListenable: AppPreferences.locale,
+        builder: (context, selectedLocale, _) => MaterialApp(
       navigatorKey: appNavigatorKey,
       builder: (context, child) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -70,6 +73,9 @@ class MyApp extends StatelessWidget {
       theme: _buildTheme(Brightness.light),
       darkTheme: _buildTheme(Brightness.dark),
       themeMode: selectedThemeMode,
+      locale: selectedLocale,
+      supportedLocales: const [Locale('en'), Locale('hi')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       initialRoute: _user != null
           ? "/chat"
           : FirebaseAuth.instance.currentUser != null
@@ -105,6 +111,7 @@ class MyApp extends StatelessWidget {
           )
         ];
       },
+        ),
       ),
     );
   }
