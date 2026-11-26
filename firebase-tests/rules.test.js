@@ -139,6 +139,19 @@ test('Firestore group call list query is restricted to participants', async () =
   )));
 });
 
+test('Firestore group creation requires the creator and at least one other member', async () => {
+  const alice = env.authenticatedContext('alice').firestore();
+
+  await assertFails(setDoc(doc(alice, 'groupChats/solo-group'), {
+    name: 'Solo', createdBy: 'alice',
+    memberUids: ['alice'], adminUids: ['alice'],
+  }));
+  await assertSucceeds(setDoc(doc(alice, 'groupChats/team-group'), {
+    name: 'Team', description: 'Project team', createdBy: 'alice',
+    memberUids: ['alice', 'bob'], adminUids: ['alice'],
+  }));
+});
+
 test('Firestore group messages require membership and sender identity', async () => {
   const bob = env.authenticatedContext('bob').firestore();
   const charlie = env.authenticatedContext('charlie').firestore();
