@@ -185,13 +185,15 @@ service cloud.firestore {
         && request.resource.data.expiresAt <= request.time + duration.value(24, 'h');
       // Status metadata is visible to signed-in users. Media downloads are
       // separately authorized by the VPS against the captured audience list.
-      allow read: if signedIn();
+      allow read: if signedIn()
+        && request.auth.uid in resource.data.audienceUids;
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
       allow update: if false;
       match /views/{viewerUid} {
         allow create: if signedIn()
           && request.auth.uid == viewerUid
           && get(/databases/$(database)/documents/statuses/$(statusId)).data.expiresAt > request.time
+          && request.auth.uid in get(/databases/$(database)/documents/statuses/$(statusId)).data.audienceUids
           && request.resource.data.viewerUid == request.auth.uid;
         allow read: if signedIn()
           && get(/databases/$(database)/documents/statuses/$(statusId)).data.ownerUid == request.auth.uid;
