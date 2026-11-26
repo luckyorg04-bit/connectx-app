@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:connectx/models/user.dart';
 import 'package:connectx/services/chat_storage.dart';
+import 'package:connectx/services/database_service.dart';
 
 class ChatContactInfoScreen extends StatefulWidget {
   final User1 user;
@@ -130,7 +131,7 @@ class _ChatContactInfoScreenState extends State<ChatContactInfoScreen> {
         IconButton(tooltip: 'Chat wallpaper', icon: const Icon(Icons.wallpaper_outlined), onPressed: _chooseWallpaper),
       ]),
       body: StreamBuilder<DatabaseEvent>(
-        stream: FirebaseDatabase.instance.ref('PublicUsers').child(widget.user.key).onValue,
+        stream: ConnectXDatabase.instance.ref('PublicUsers').child(widget.user.key).onValue,
         builder: (context, snapshot) {
           final raw = snapshot.data?.snapshot.value;
           if (raw is Map) {
