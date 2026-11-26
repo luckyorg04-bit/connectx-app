@@ -10,6 +10,12 @@ service cloud.firestore {
       return signedIn() && request.auth.uid in conversationId.split(',');
     }
 
+    function otherParticipant(conversationId) {
+      return conversationId.split(',')[0] == request.auth.uid
+        ? conversationId.split(',')[1]
+        : conversationId.split(',')[0];
+    }
+
     function isGroupMember(groupId) {
       return signedIn()
         && exists(/databases/$(database)/documents/groupChats/$(groupId))
@@ -64,19 +70,21 @@ service cloud.firestore {
         ||
         (
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions'])
-          && request.resource.data.get('reactions', {}) is map
+          && request.resource.data.reactions is map
           && resource.data.get('reactions', {}) is map
-          && request.resource.data.get('reactions', {}).diff(resource.data.get('reactions', {}))
-            .affectedKeys().hasOnly([request.auth.uid])
+          && request.resource.data.reactions.keys().size() <= 2
+          && request.resource.data.reactions.get(otherParticipant(conversationId), null)
+            == resource.data.get('reactions', {}).get(otherParticipant(conversationId), null)
           && (
-            !resource.data.get('reactions', {}).keys().hasAny([request.auth.uid])
-            || !request.resource.data.get('reactions', {}).keys().hasAny([request.auth.uid])
-          )
-          && (
-            !request.resource.data.get('reactions', {}).keys().hasAny([request.auth.uid])
+            (
+              !resource.data.get('reactions', {}).keys().hasAny([request.auth.uid])
+              && request.resource.data.reactions.keys().hasAny([request.auth.uid])
+              && request.resource.data.reactions.get(request.auth.uid, '') is string
+              && request.resource.data.reactions.get(request.auth.uid, '').size() <= 8
+            )
             || (
-              request.resource.data.get('reactions', {})[request.auth.uid] is string
-              && request.resource.data.get('reactions', {})[request.auth.uid].size() <= 8
+              resource.data.get('reactions', {}).keys().hasAny([request.auth.uid])
+              && !request.resource.data.reactions.keys().hasAny([request.auth.uid])
             )
           )
         )
@@ -178,8 +186,6 @@ service cloud.firestore {
       // Status metadata is visible to signed-in users. Media downloads are
       // separately authorized by the VPS against the captured audience list.
       allow read: if signedIn()
-        && resource.data.keys().hasAny(['audienceUids'])
-        && resource.data.audienceUids is list
         && request.auth.uid in resource.data.audienceUids;
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
       allow update: if false;
@@ -187,8 +193,6 @@ service cloud.firestore {
         allow create: if signedIn()
           && request.auth.uid == viewerUid
           && get(/databases/$(database)/documents/statuses/$(statusId)).data.expiresAt > request.time
-          && get(/databases/$(database)/documents/statuses/$(statusId)).data.keys().hasAny(['audienceUids'])
-          && get(/databases/$(database)/documents/statuses/$(statusId)).data.audienceUids is list
           && request.auth.uid in get(/databases/$(database)/documents/statuses/$(statusId)).data.audienceUids
           && request.resource.data.viewerUid == request.auth.uid;
         allow read: if signedIn()
