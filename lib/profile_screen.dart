@@ -41,13 +41,42 @@ class ProfileScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(26),
               ),
               child: Column(children: [
-                CircleAvatar(
-                  radius: 48,
-                  backgroundColor: colors.onPrimary.withOpacity(.16),
-                  backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
-                  child: photoUrl.isEmpty
-                      ? Text(_initials(name), style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: colors.onPrimary))
-                      : null,
+                InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: photoUrl.isEmpty ? null : () => showDialog<void>(
+                    context: context,
+                    builder: (dialogContext) => Dialog(
+                      insetPadding: const EdgeInsets.all(18),
+                      child: Stack(children: [
+                        InteractiveViewer(
+                          minScale: 0.7,
+                          maxScale: 4,
+                          child: Image.network(photoUrl, fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) => const SizedBox(
+                              height: 220,
+                              child: Center(child: Text('Profile photo could not be loaded.')),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          right: 4,
+                          top: 4,
+                          child: IconButton.filledTonal(
+                            onPressed: () => Navigator.pop(dialogContext),
+                            icon: const Icon(Icons.close),
+                          ),
+                        ),
+                      ]),
+                    ),
+                  ),
+                  child: CircleAvatar(
+                    radius: 48,
+                    backgroundColor: colors.onPrimary.withOpacity(.16),
+                    backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+                    child: photoUrl.isEmpty
+                        ? Text(_initials(name), style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: colors.onPrimary))
+                        : null,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 Text(name, textAlign: TextAlign.center,
