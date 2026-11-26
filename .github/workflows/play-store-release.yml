@@ -7,6 +7,7 @@ on:
       - release/connectx-whatsapp-style-1.1.0
     paths:
       - 'lib/**'
+      - 'test/**'
       - 'android/**'
       - 'assets/**'
       - 'pubspec.yaml'
