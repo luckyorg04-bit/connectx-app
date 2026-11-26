@@ -38,7 +38,9 @@ service cloud.firestore {
       allow update: if isParticipant(conversationId) && (
         (
           resource.data.sender == request.auth.uid
-          && request.time.toMillis() - resource.data.timestamp <= 900000
+          && resource.data.timestamp is int
+          && request.time.seconds * 1000 >= resource.data.timestamp
+          && request.time.seconds * 1000 - resource.data.timestamp <= 900000
           && request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['message', 'isEdited', 'editedAt'])
           && request.resource.data.message is string
@@ -72,10 +74,19 @@ service cloud.firestore {
               'reactions' in resource.data
               && request.resource.data.reactions.diff(resource.data.reactions)
                 .affectedKeys().hasOnly([request.auth.uid])
+              && (
+                !resource.data.reactions.keys().hasAny([request.auth.uid])
+                || !request.resource.data.reactions.keys().hasAny([request.auth.uid])
+              )
             )
           )
-          && request.resource.data.reactions[request.auth.uid] is string
-          && request.resource.data.reactions[request.auth.uid].size() <= 8
+          && (
+            !request.resource.data.reactions.keys().hasAny([request.auth.uid])
+            || (
+              request.resource.data.reactions[request.auth.uid] is string
+              && request.resource.data.reactions[request.auth.uid].size() <= 8
+            )
+          )
         )
         ||
         (
