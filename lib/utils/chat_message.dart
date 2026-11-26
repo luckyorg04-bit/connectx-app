@@ -347,10 +347,10 @@ class _ChatMessageState extends State<ChatMessage> {
     final message = widget.message;
     final isMe = widget.isMe;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final bubble = isMe ? (dark ? const Color(0xFF005C4B) : const Color(0xFFD9FDD3))
-        : (dark ? const Color(0xFF202C33) : Colors.white);
-    final textColor = dark ? const Color(0xFFE9EDEF) : const Color(0xFF111B21);
-    final secondary = dark ? const Color(0xFFB7C4CC) : const Color(0xFF667781);
+    final bubble = isMe ? (dark ? const Color(0xFF005B4A) : const Color(0xFFE7FFDB))
+        : (dark ? const Color(0xFF141D24) : Colors.white);
+    final textColor = dark ? const Color(0xFFDAE4ED) : const Color(0xFF111B21);
+    final secondary = dark ? const Color(0xFFBCCAC2) : const Color(0xFF667781);
     final time = DateFormat('h:mm a').format(DateTime.fromMillisecondsSinceEpoch(message.timestamp));
 
     final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -358,7 +358,7 @@ class _ChatMessageState extends State<ChatMessage> {
         _readReceiptAttempts.add(message.messageId!)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         FirebaseFirestore.instance.collection('messages').doc(assignUsers(uid, message.sender))
-            .collection('chats').doc(message.messageId).update({'isRead': true}).catchError((_) {});
+            .collection('chats').doc(message.messageId).update({'isRead': true, 'isDelivered': true}).catchError((_) {});
       });
     }
 
@@ -412,7 +412,7 @@ class _ChatMessageState extends State<ChatMessage> {
               Text(time, style: TextStyle(fontSize: 10, color: secondary)),
               if (isMe) ...[
                 const SizedBox(width: 3),
-                Icon(message.isRead ? Icons.done_all_rounded : Icons.done_rounded,
+                Icon(message.isRead || message.isDelivered ? Icons.done_all_rounded : Icons.done_rounded,
                   size: 15, color: message.isRead ? const Color(0xFF53BDEB) : secondary),
               ],
             ]),

@@ -1,22 +1,22 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'services/chat_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectx/models/chat.dart';
 import 'package:connectx/utils/user_list.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:video_player/video_player.dart';
 import 'package:flutter/material.dart';
+import 'utils/app_feedback.dart';
 import 'main.dart';
 import 'app_navigator.dart';
 import 'models/user.dart';
 import 'profile_screen.dart';
 import 'services/notification_service.dart';
 import 'services/database_service.dart';
-import 'services/profile_storage.dart';
+import 'services/app_preferences.dart';
 
 List<User1> users = [];
 List<Chat> chats = [];
@@ -112,20 +112,32 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
             IconButton(
               tooltip: 'Edit profile',
               icon: const Icon(Icons.edit_outlined),
-              onPressed: _openEditProfile,
+              onPressed: () => Navigator.of(context).pushNamed('/edit-profile'),
             ),
             IconButton(
-              tooltip: 'Log out',
-              icon: const Icon(Icons.logout_rounded),
-              onPressed: _logout,
+              tooltip: _isLoggingOut ? 'Logging out' : 'Log out',
+              icon: _isLoggingOut
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.logout_rounded),
+              onPressed: _isLoggingOut ? null : _logout,
             ),
           ] else ...[
-            if (_selectedTab == 0)
+            if (_selectedTab == 0) ...[
               IconButton(
-                tooltip: 'Search',
+                tooltip: 'Create status',
+                icon: const Icon(Icons.camera_alt_outlined),
+                onPressed: () => _UpdatesTab()._create(context),
+              ),
+              IconButton(
+                tooltip: 'Search contacts',
                 icon: const Icon(Icons.search_rounded),
                 onPressed: () => Navigator.of(context).pushNamed('/main/new'),
               ),
+            ],
             if (_selectedTab == 1)
               IconButton(
                 tooltip: 'Create status',
@@ -140,32 +152,23 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
                 } else if (value == 'new_group') {
                   _createGroup();
                 } else if (value == 'settings') {
-                  _openNotificationSettings();
+                  Navigator.of(context).pushNamed('/settings');
+                } else if (value == 'my_qr') {
+                  Navigator.of(context).pushNamed('/my-qr');
+                } else if (value == 'scan_qr') {
+                  Navigator.of(context).pushNamed('/scan-qr');
                 }
               },
               itemBuilder: (context) => const [
                 PopupMenuItem(value: 'new_group', child: Text('New group')),
                 PopupMenuItem(value: 'profile', child: Text('Profile')),
+                PopupMenuItem(value: 'my_qr', child: Text('My QR code')),
+                PopupMenuItem(value: 'scan_qr', child: Text('Scan QR code')),
                 PopupMenuItem(value: 'settings', child: Text('Settings')),
               ],
             ),
           ],
         ],
-        bottom: _showProfile
-            ? null
-            : TabBar(
-                controller: _tabController,
-                indicatorColor: Colors.white,
-                indicatorWeight: 3,
-                labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-                unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
-                tabs: const [
-                  Tab(text: 'CHATS'),
-                  Tab(text: 'UPDATES'),
-                  Tab(text: 'COMMUNITIES'),
-                  Tab(text: 'CALLS'),
-                ],
-              ),
       ),
       body: _showProfile
           ? const ProfileScreen()
@@ -176,6 +179,37 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
                 const _UpdatesTab(),
                 const _CommunitiesTab(),
                 const _CallsTab(),
+              ],
+            ),
+      bottomNavigationBar: _showProfile
+          ? null
+          : NavigationBar(
+              selectedIndex: _selectedTab,
+              onDestinationSelected: (index) {
+                _tabController.animateTo(index);
+                setState(() => _selectedTab = index);
+              },
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Icons.chat_bubble_outline_rounded),
+                  selectedIcon: Icon(Icons.chat_rounded),
+                  label: 'Chats',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.circle_outlined),
+                  selectedIcon: Icon(Icons.donut_large_rounded),
+                  label: 'Updates',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.groups_outlined),
+                  selectedIcon: Icon(Icons.groups_rounded),
+                  label: 'Communities',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.call_outlined),
+                  selectedIcon: Icon(Icons.call_rounded),
+                  label: 'Calls',
+                ),
               ],
             ),
       floatingActionButton: _showProfile
@@ -252,6 +286,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
 
   Future<void> _createGroup() async {
     final nameController = TextEditingController();
+    final descriptionController = TextEditingController();
     final selected = <String>{};
     final available = users.where((person) =>
       person.key != FirebaseAuth.instance.currentUser!.uid).toList();
@@ -262,19 +297,25 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
           title: const Text('Create group'),
           content: SizedBox(
             width: double.maxFinite,
-            height: 360,
+            height: (MediaQuery.of(context).size.height * .58).clamp(280.0, 420.0).toDouble(),
             child: Column(children: [
               TextField(
                 controller: nameController,
                 maxLength: 40,
                 decoration: const InputDecoration(labelText: 'Group name'),
               ),
+              TextField(
+                controller: descriptionController,
+                maxLength: 512,
+                maxLines: 2,
+                decoration: const InputDecoration(labelText: 'Group description (optional)'),
+              ),
               const SizedBox(height: 8),
               const Align(alignment: Alignment.centerLeft,
                 child: Text('Add members', style: TextStyle(fontWeight: FontWeight.w600))),
               Expanded(
                 child: available.isEmpty
-                  ? const Center(child: Text('No other contacts yet. You can create the group now and add members later.'))
+                  ? const Center(child: Text('Start a chat with at least one person before creating a group.'))
                   : ListView(children: available.map((person) => CheckboxListTile(
                       value: selected.contains(person.key),
                       title: Text(person.name),
@@ -290,21 +331,24 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
           actions: [
             TextButton(onPressed: () => Navigator.pop(dialogContext, false),
               child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(dialogContext, true),
+            FilledButton(onPressed: selected.isEmpty ? null : () => Navigator.pop(dialogContext, true),
               child: const Text('Create')),
           ],
         ),
       ),
     );
     final groupName = nameController.text.trim();
+    final groupDescription = descriptionController.text.trim();
     nameController.dispose();
-    if (confirmed != true || groupName.isEmpty) return;
+    descriptionController.dispose();
+    if (confirmed != true || groupName.isEmpty || selected.isEmpty) return;
     final uid = FirebaseAuth.instance.currentUser!.uid;
     final members = <String>{uid, ...selected}.toList();
     try {
       final doc = FirebaseFirestore.instance.collection('groupChats').doc();
       await doc.set({
         'name': groupName,
+        'description': groupDescription,
         'createdBy': uid,
         'adminUids': [uid],
         'memberUids': members,
@@ -317,204 +361,43 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
         );
       }
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not create group: $error')),
-      );
+      showConnectXErrorDialog(context, 'Could not create group. Check your connection and try again.');
     }
   }
 
-  Future<void> _openNotificationSettings() async {
-    final uid = FirebaseAuth.instance.currentUser!.uid;
-    final ref = ConnectXDatabase.instance.ref('PrivateUsers').child(uid).child('notificationSettings');
-    final snap = await ref.get();
-    final saved = Map<String, dynamic>.from(snap.value is Map ? snap.value as Map : {});
-    bool messages = saved['messages'] != false;
-    bool groups = saved['groups'] != false;
-    bool calls = saved['calls'] != false;
-    final confirmed = await showDialog<bool>(context: context, builder: (dialogContext) =>
-      StatefulBuilder(builder: (context, setDialogState) => AlertDialog(
-        title: const Text('Notification settings'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          SwitchListTile(title: const Text('Direct messages'), value: messages,
-            onChanged: (v) => setDialogState(() => messages = v)),
-          SwitchListTile(title: const Text('Group messages'), value: groups,
-            onChanged: (v) => setDialogState(() => groups = v)),
-          SwitchListTile(title: const Text('Voice and video calls'), value: calls,
-            onChanged: (v) => setDialogState(() => calls = v)),
-        ]),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Save')),
-        ],
-      )));
-    if (confirmed == true) {
-      await ref.set({'messages': messages, 'groups': groups, 'calls': calls});
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Notification preferences saved.')));
-    }
-  }
-
-  Future<void> _openEditProfile() async {
-    final uid = FirebaseAuth.instance.currentUser!.uid;
-    final ref = ConnectXDatabase.instance.ref("PublicUsers").child(uid);
-    final snapshot = await ref.get();
-    if (!mounted) return;
-
-    final nameController = TextEditingController(
-      text: snapshot.child('name').value?.toString() ??
-          FirebaseAuth.instance.currentUser?.displayName ?? '',
-    );
-    final bioController = TextEditingController(
-      text: snapshot.child('bio').value?.toString() ??
-          snapshot.child('about').value?.toString() ?? '',
-    );
-    final currentPhotoUrl = snapshot.child('photoUrl').value?.toString() ??
-        FirebaseAuth.instance.currentUser?.photoURL ?? '';
-    XFile? pickedPhoto;
-    var removePhoto = false;
-
-    final shouldSave = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => AlertDialog(
-          title: const Text('Edit profile'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircleAvatar(
-                  radius: 42,
-                  backgroundImage: pickedPhoto != null
-                      ? FileImage(File(pickedPhoto!.path)) as ImageProvider<Object>
-                      : (!removePhoto && currentPhotoUrl.isNotEmpty
-                          ? NetworkImage(currentPhotoUrl) as ImageProvider<Object>
-                          : null),
-                  child: pickedPhoto == null && (removePhoto || currentPhotoUrl.isEmpty)
-                      ? const Icon(Icons.person, size: 42)
-                      : null,
-                ),
-                Wrap(
-                  alignment: WrapAlignment.center,
-                  children: [
-                    TextButton.icon(
-                      icon: const Icon(Icons.photo_camera_outlined),
-                      label: const Text('Change photo'),
-                      onPressed: () async {
-                        final image = await ImagePicker().pickImage(
-                          source: ImageSource.gallery,
-                          imageQuality: 85,
-                          maxWidth: 1200,
-                        );
-                        if (image != null) {
-                          setDialogState(() {
-                            pickedPhoto = image;
-                            removePhoto = false;
-                          });
-                        }
-                      },
-                    ),
-                    if (currentPhotoUrl.isNotEmpty || pickedPhoto != null)
-                      TextButton.icon(
-                        icon: const Icon(Icons.delete_outline),
-                        label: const Text('Remove photo'),
-                        onPressed: () => setDialogState(() {
-                          pickedPhoto = null;
-                          removePhoto = true;
-                        }),
-                      ),
-                  ],
-                ),
-                TextField(
-                  controller: nameController,
-                  maxLength: 40,
-                  decoration: const InputDecoration(
-                    labelText: 'Name',
-                    prefixIcon: Icon(Icons.person_outline),
-                  ),
-                ),
-                TextField(
-                  controller: bioController,
-                  maxLength: 160,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Bio',
-                    prefixIcon: Icon(Icons.edit_outlined),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Save'),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (shouldSave == true && nameController.text.trim().isNotEmpty) {
-      try {
-        var photoUrl = currentPhotoUrl;
-        var oldPhotoToDelete = '';
-        if (pickedPhoto != null) {
-          photoUrl = await ProfileStorage.upload(pickedPhoto!);
-          oldPhotoToDelete = currentPhotoUrl;
-        } else if (removePhoto) {
-          photoUrl = '';
-          oldPhotoToDelete = currentPhotoUrl;
-        }
-
-        final name = nameController.text.trim();
-        await ref.update({
-          'name': name,
-          'bio': bioController.text.trim(),
-          'photoUrl': photoUrl,
-          'about': null,
-        });
-        await FirebaseAuth.instance.currentUser?.updateDisplayName(name);
-        await FirebaseAuth.instance.currentUser?.updatePhotoURL(
-          photoUrl.isEmpty ? null : photoUrl,
-        );
-        if (oldPhotoToDelete.isNotEmpty && oldPhotoToDelete != photoUrl) {
-          try {
-            await ProfileStorage.delete(oldPhotoToDelete);
-          } catch (error) {
-            // The new profile remains saved; an orphaned old image can be cleaned later.
-            debugPrint('ConnectX old profile photo cleanup failed: $error');
-          }
-        }
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Profile updated')),
-          );
-        }
-      } catch (error) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Profile update failed: $error')),
-          );
-        }
-      }
-    }
-
-    nameController.dispose();
-    bioController.dispose();
-  }
+  bool _isLoggingOut = false;
 
   Future<void> _logout() async {
+    if (_isLoggingOut) return;
+    setState(() => _isLoggingOut = true);
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid != null) {
-      await ConnectXDatabase.instance.ref("PublicUsers").child(uid).child("online").set(false);
+    // Presence and notification cleanup are best-effort. They must never
+    // prevent Firebase Auth from signing the user out.
+    try {
+      if (uid != null) {
+        await ConnectXDatabase.instance
+            .ref('PublicUsers')
+            .child(uid)
+            .update({'online': false, 'lastSeen': ServerValue.timestamp})
+            .timeout(const Duration(seconds: 4));
+      }
+    } catch (error) {
+      debugPrint('ConnectX logout presence cleanup failed: $error');
     }
-    await NotificationService.dispose();
-    await FirebaseAuth.instance.signOut();
-    currentRoute = "/login";
+    try {
+      await NotificationService.dispose().timeout(const Duration(seconds: 4));
+    } catch (error) {
+      debugPrint('ConnectX logout notification cleanup failed: $error');
+    }
+    try {
+      await FirebaseAuth.instance.signOut().timeout(const Duration(seconds: 8));
+    } catch (error) {
+      debugPrint('ConnectX Firebase sign-out failed: $error');
+      if (mounted) setState(() => _isLoggingOut = false);
+      return;
+    }
+    AppPreferences.reset();
+    currentRoute = '/login';
     if (!mounted) return;
     await Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
   }
@@ -590,7 +473,7 @@ class _GroupsList extends StatelessWidget {
           stream: FirebaseFirestore.instance.collection('groupChats')
               .where('memberUids', arrayContains: uid).snapshots(),
           builder: (context, snapshot) {
-            if (snapshot.hasError) return Center(child: Text('Unable to load groups: ${snapshot.error}'));
+            if (snapshot.hasError) return const _SectionEmptyState(icon: Icons.cloud_off_outlined, title: 'Groups are unavailable', description: 'ConnectX could not load your groups. Check your connection and try again.') ;
             if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
             final groups = snapshot.data!.docs;
             if (groups.isEmpty) return const _SectionEmptyState(
@@ -632,27 +515,12 @@ class _UpdatesTab extends StatelessWidget {
         ListTile(leading: const Icon(Icons.videocam), title: const Text('Video status'), onTap: () => Navigator.pop(c, 'video')),
       ])));
     if (kind == null) return;
-    final audience = await showDialog<List<String>>(context: context, builder: (dialogContext) {
-      final selected = <String>{uid, ...users.where((u) => u.key != uid).map((u) => u.key)};
-      return StatefulBuilder(builder: (context, setDialogState) => AlertDialog(
-        title: const Text('Status privacy'),
-        content: SizedBox(width: double.maxFinite, height: 340, child: Column(children: [
-          const Text('Select the contacts who can view this status.'),
-          Expanded(child: ListView(children: users.where((u) => u.key != uid).map((person) =>
-            CheckboxListTile(dense: true, value: selected.contains(person.key),
-              title: Text(person.name), subtitle: Text('@${person.username}'),
-              onChanged: (value) => setDialogState(() {
-                if (value == true) selected.add(person.key); else selected.remove(person.key);
-              }),
-            )).toList())),
-        ])),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, selected.toList()), child: const Text('Done')),
-        ],
-      ));
-    });
-    if (audience == null) return;
+    // WhatsApp-style default: share with all known ConnectX users; no per-status
+    // audience picker. Keep the owner in the list for the Firestore rule.
+    final audience = <String>{
+      uid,
+      ...users.where((u) => u.key != uid).map((u) => u.key),
+    }.take(500).toList();
     String text = '';
     String? url, fileName;
     if (kind == 'text') {
@@ -693,14 +561,27 @@ class _UpdatesTab extends StatelessWidget {
           audienceUids: audience,
         );
       } catch (error) {
-        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Upload failed: $error')));
+        showConnectXErrorDialog(context, 'Media upload failed. Check your connection and try again.');
         return;
       }
+    }
+    var statusOwnerName = FirebaseAuth.instance.currentUser?.displayName ?? 'ConnectX user';
+    var statusOwnerPhotoUrl = FirebaseAuth.instance.currentUser?.photoURL ?? '';
+    try {
+      final profileSnapshot = await ConnectXDatabase.instance
+          .ref('PublicUsers').child(uid).get();
+      final savedName = profileSnapshot.child('name').value?.toString() ?? '';
+      final savedPhotoUrl = profileSnapshot.child('photoUrl').value?.toString() ?? '';
+      if (savedName.trim().isNotEmpty) statusOwnerName = savedName.trim();
+      if (savedPhotoUrl.isNotEmpty) statusOwnerPhotoUrl = savedPhotoUrl;
+    } catch (error) {
+      debugPrint('ConnectX status profile lookup failed: $error');
     }
     try {
       await FirebaseFirestore.instance.collection('statuses').add({
         'ownerUid': uid,
-        'userName': FirebaseAuth.instance.currentUser?.displayName ?? 'ConnectX user',
+        'userName': statusOwnerName,
+        'userPhotoUrl': statusOwnerPhotoUrl,
         'statusText': text,
         'mediaType': kind,
         if (url != null) 'mediaUrl': url,
@@ -711,7 +592,7 @@ class _UpdatesTab extends StatelessWidget {
       });
       if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Status shared for 24 hours.')));
     } catch (error) {
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not share status: $error')));
+      showConnectXErrorDialog(context, 'Status could not be shared. Please try again.');
     }
   }
 
@@ -741,8 +622,7 @@ class _UpdatesTab extends StatelessWidget {
           Image.network(statusMediaUrl, fit: BoxFit.contain,
             errorBuilder: (_, __, ___) => const Text('Unable to load photo'))
         else if (type == 'video' && statusMediaUrl != null)
-          ListTile(leading: const Icon(Icons.play_circle), title: Text((data['fileName'] ?? 'Video status').toString()),
-            onTap: () { final uri = Uri.tryParse(statusMediaUrl!); if (uri != null) launchUrl(uri, mode: LaunchMode.externalApplication); })
+          _StatusVideoPlayer(url: statusMediaUrl)
         else
           Padding(padding: const EdgeInsets.all(24), child: SelectableText((data['statusText'] ?? '').toString(), style: const TextStyle(fontSize: 20))),
         if (data['ownerUid'] == uid)
@@ -775,9 +655,9 @@ class _UpdatesTab extends StatelessWidget {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance.collection('statuses')
         .where('audienceUids', arrayContains: uid)
-        .where('expiresAt', isGreaterThan: Timestamp.now()).snapshots(),
+         .where('expiresAt', isGreaterThan: Timestamp.now()).snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) return Center(child: Text('Unable to load updates: ${snapshot.error}'));
+        if (snapshot.hasError) return const _SectionEmptyState(icon: Icons.cloud_off_outlined, title: 'Updates are unavailable', description: 'ConnectX could not load updates. Check your connection or try again later.');
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         final now = Timestamp.now();
         final docs = snapshot.data!.docs.where((d) => d.data()['expiresAt'] is Timestamp &&
@@ -789,7 +669,13 @@ class _UpdatesTab extends StatelessWidget {
         Widget statusTile(QueryDocumentSnapshot<Map<String, dynamic>> d, bool own) {
           final data = d.data(), type = (d.data()['mediaType'] ?? 'text').toString();
           return ListTile(
-            leading: CircleAvatar(child: Icon(type == 'video' ? Icons.videocam : type == 'image' ? Icons.image : Icons.text_fields)),
+            leading: CircleAvatar(
+              backgroundImage: (data['userPhotoUrl'] ?? '').toString().isNotEmpty
+                  ? NetworkImage(data['userPhotoUrl'].toString()) : null,
+              child: (data['userPhotoUrl'] ?? '').toString().isEmpty
+                  ? Icon(type == 'video' ? Icons.videocam : type == 'image' ? Icons.image : Icons.text_fields)
+                  : null,
+            ),
             title: Text(own ? (data['statusText'] ?? data['fileName'] ?? 'My status').toString() : (data['userName'] ?? 'Contact').toString(), maxLines: 1, overflow: TextOverflow.ellipsis),
             subtitle: own
               ? StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(stream: d.reference.collection('views').snapshots(),
@@ -857,9 +743,7 @@ class _CommunitiesTab extends StatelessWidget {
         const SnackBar(content: Text('Community created.')),
       );
     } catch (error) {
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not create community: $error')),
-      );
+      showConnectXErrorDialog(context, 'Community could not be created. Please try again.');
     }
   }
 
@@ -895,9 +779,7 @@ class _CommunitiesTab extends StatelessWidget {
                           ? FieldValue.arrayRemove([uid])
                           : FieldValue.arrayUnion([uid])});
                       } catch (error) {
-                        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Membership update failed: $error')),
-                        );
+                        showConnectXErrorDialog(context, 'Membership could not be updated. Please try again.');
                       }
                     },
                     icon: Icon(data['ownerUid'] == uid ? Icons.verified_user
@@ -967,9 +849,7 @@ class _CommunitiesTab extends StatelessWidget {
                         });
                         controller.clear();
                       } catch (error) {
-                        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Post failed: $error')),
-                        );
+                        showConnectXErrorDialog(context, 'Your post could not be published. Please try again.');
                       }
                     },
                     icon: const Icon(Icons.send_rounded),
@@ -1072,9 +952,7 @@ class _ChannelsPanel extends StatelessWidget {
                       : FieldValue.arrayUnion([uid])});
                     if (c.mounted) Navigator.pop(c);
                   } catch (error) {
-                    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Could not update channel membership: $error')),
-                    );
+                    showConnectXErrorDialog(context, 'Channel membership could not be updated. Please try again.');
                   }
                 },
                 child: Text(List<String>.from(data['memberUids'] ?? []).contains(uid) ? 'Unfollow' : 'Follow'),
@@ -1135,93 +1013,241 @@ class _ChannelsPanel extends StatelessWidget {
 class _CallsTab extends StatelessWidget {
   const _CallsTab();
 
+  Future<void> _startCall(BuildContext context, User1 person, bool video) async {
+    try {
+      final callId = FirebaseFirestore.instance.collection('calls').doc().id;
+      await Navigator.of(context).pushNamed('/call', arguments: {
+        'callId': callId,
+        'peerUid': person.key,
+        'peerName': person.name,
+        'isCaller': true,
+        'isVideo': video,
+      });
+    } catch (error) {
+      debugPrint('ConnectX start call failed: $error');
+      if (context.mounted) {
+        showConnectXErrorDialog(context, 'Could not start this call. Please try again.');
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser!.uid;
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance.collection('calls')
-        .where('participants', arrayContains: uid).snapshots(),
-      builder: (context, directSnapshot) {
-        if (directSnapshot.hasError) return Center(child: Text('Unable to load calls: ${directSnapshot.error}'));
-        if (!directSnapshot.hasData) return const Center(child: CircularProgressIndicator());
-        final directCalls = directSnapshot.data!.docs.toList()
-          ..sort((a, b) {
-            final aa = a.data()['createdAt'], bb = b.data()['createdAt'];
-            return (bb is Timestamp ? bb : Timestamp(0, 0))
-              .compareTo(aa is Timestamp ? aa : Timestamp(0, 0));
-          });
-        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance.collection('groupCalls')
-            .where('participants', arrayContains: uid).snapshots(),
-          builder: (context, groupSnapshot) {
-            if (groupSnapshot.hasError) return Center(child: Text('Unable to load group calls: ${groupSnapshot.error}'));
-            if (!groupSnapshot.hasData) return const Center(child: CircularProgressIndicator());
-            final groupCalls = groupSnapshot.data!.docs.toList()
+    final contacts = users.where((person) => person.key != uid).toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 90),
+      children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 18, 16, 8),
+          child: Text('Start a call', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        ),
+        if (contacts.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(20),
+            child: Text('ConnectX users will appear here when available.'),
+          )
+        else
+          ...contacts.map((person) => ListTile(
+            leading: CircleAvatar(
+              backgroundImage: person.photoUrl.isNotEmpty ? NetworkImage(person.photoUrl) : null,
+              child: person.photoUrl.isEmpty
+                  ? Text(person.name.isNotEmpty ? person.name[0].toUpperCase() : 'C')
+                  : null,
+            ),
+            title: Text(person.name),
+            subtitle: Text(person.online ? 'Online' : '@${person.username}'),
+            trailing: Wrap(spacing: 0, children: [
+              IconButton(
+                tooltip: 'Voice call',
+                icon: const Icon(Icons.call_outlined),
+                onPressed: () => _startCall(context, person, false),
+              ),
+              IconButton(
+                tooltip: 'Video call',
+                icon: const Icon(Icons.videocam_outlined),
+                onPressed: () => _startCall(context, person, true),
+              ),
+            ]),
+          )),
+        const Divider(height: 24),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Text('Recent calls', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        ),
+        StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance.collection('calls')
+              .where('participants', arrayContains: uid).snapshots(),
+          builder: (context, directSnapshot) {
+            if (directSnapshot.hasError) {
+              debugPrint('ConnectX calls query failed: ${directSnapshot.error}');
+              return const Padding(
+                padding: EdgeInsets.all(18),
+                child: Text('Call history is temporarily unavailable. You can still call a contact above.'),
+              );
+            }
+            if (!directSnapshot.hasData) {
+              return const Padding(
+                padding: EdgeInsets.all(18),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            final directCalls = directSnapshot.data!.docs.toList()
               ..sort((a, b) {
                 final aa = a.data()['createdAt'], bb = b.data()['createdAt'];
                 return (bb is Timestamp ? bb : Timestamp(0, 0))
-                  .compareTo(aa is Timestamp ? aa : Timestamp(0, 0));
+                    .compareTo(aa is Timestamp ? aa : Timestamp(0, 0));
               });
-            if (directCalls.isEmpty && groupCalls.isEmpty) {
-              return const _SectionEmptyState(icon: Icons.call_outlined,
-                title: 'No calls yet', description: 'Your voice, video and group call history will appear here.');
-            }
-            return ListView(padding: const EdgeInsets.only(bottom: 90), children: [
-              if (directCalls.isNotEmpty) ...[
-                const Padding(padding: EdgeInsets.all(16), child: Text('Recent calls',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
-                ...directCalls.map((doc) {
-                  final data = doc.data();
-                  final incoming = data['calleeUid'] == uid;
-                  final ringing = data['status'] == 'ringing' && incoming;
-                  final video = data['type'] == 'video';
-                  final peerName = (incoming ? data['callerName'] : data['calleeName']) ?? 'ConnectX user';
-                  final status = (data['status'] ?? 'unknown').toString();
-                  return ListTile(
-                    leading: CircleAvatar(child: Icon(video ? Icons.videocam : Icons.call)),
-                    title: Text(peerName.toString()),
-                    subtitle: Text(ringing ? 'Incoming ${video ? 'video' : 'voice'} call' :
-                      '${incoming ? 'Incoming' : 'Outgoing'} · $status'),
-                    trailing: ringing ? IconButton(icon: const Icon(Icons.call, color: Colors.green),
-                      onPressed: () => Navigator.of(context).pushNamed('/call', arguments: {
-                        'callId': doc.id, 'peerUid': data['callerUid'].toString(),
-                        'peerName': peerName.toString(), 'isCaller': false, 'isVideo': video,
-                      })) : null,
-                  );
-                }),
-              ],
-              if (groupCalls.isNotEmpty) ...[
-                const Padding(padding: EdgeInsets.fromLTRB(16, 20, 16, 8), child: Text('Group calls',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
-                ...groupCalls.map((doc) {
-                  final data = doc.data();
-                  final expiry = data['expiresAt'];
-                  final active = data['status'] == 'active'
-                    && expiry is Timestamp && expiry.toDate().isAfter(DateTime.now());
-                  final type = data['type'] == 'video' ? 'Video' : 'Voice';
-                  final activeUids = List<String>.from(data['activeUids'] ?? []);
-                  return ListTile(
-                    leading: CircleAvatar(child: Icon(type == 'Video' ? Icons.video_call : Icons.groups)),
-                    title: Text((data['groupName'] ?? 'Group call').toString()),
-                    subtitle: Text('$type group call · ${active ? 'Active (${activeUids.length} joined)' : (data['status'] ?? 'Ended')}'),
-                    trailing: active ? IconButton(
-                      tooltip: 'Join group call',
-                      icon: const Icon(Icons.call, color: Colors.green),
-                      onPressed: () => Navigator.of(context).pushNamed('/group-call', arguments: {
-                        'callId': doc.id,
-                        'groupId': data['groupId'].toString(),
-                        'groupName': (data['groupName'] ?? 'Group').toString(),
-                        'callType': data['type'] ?? 'voice',
-                        'isCreator': false,
-                        'isGroupCall': true,
-                      }),
-                    ) : null,
-                  );
-                }),
-              ],
-            ]);
+            return Column(children: directCalls.map((doc) {
+              final data = doc.data();
+              final incoming = data['calleeUid'] == uid;
+              final video = data['type'] == 'video';
+              final peerName = (incoming ? data['callerName'] : data['calleeName'])?.toString() ?? 'ConnectX user';
+              final ringing = data['status'] == 'ringing' && incoming;
+              final peerUid = (incoming ? data['callerUid'] : data['calleeUid'])?.toString() ?? '';
+              final person = contacts.where((u) => u.key == peerUid).cast<User1?>().firstWhere(
+                (u) => u != null, orElse: () => null);
+              return ListTile(
+                leading: CircleAvatar(
+                  backgroundImage: person?.photoUrl.isNotEmpty == true ? NetworkImage(person!.photoUrl) : null,
+                  child: person?.photoUrl.isNotEmpty == true ? null : Icon(video ? Icons.videocam : Icons.call),
+                ),
+                title: Text(peerName),
+                subtitle: Text(ringing ? 'Incoming ${video ? 'video' : 'voice'} call' :
+                    '${incoming ? 'Incoming' : 'Outgoing'} · ${data['status'] ?? 'unknown'}'),
+                trailing: ringing ? IconButton(
+                  icon: const Icon(Icons.call, color: Colors.green),
+                  onPressed: () => Navigator.of(context).pushNamed('/call', arguments: {
+                    'callId': doc.id, 'peerUid': peerUid, 'peerName': peerName,
+                    'isCaller': false, 'isVideo': video,
+                  }),
+                ) : null,
+              );
+            }).toList());
           },
+        ),
+        const Divider(height: 24),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Text('Group calls', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        ),
+        StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance.collection('groupCalls')
+              .where('participants', arrayContains: uid).snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              debugPrint('ConnectX group calls query failed: ${snapshot.error}');
+              return const Padding(
+                padding: EdgeInsets.all(18),
+                child: Text('Group call history is temporarily unavailable.'),
+              );
+            }
+            if (!snapshot.hasData) {
+              return const Padding(
+                padding: EdgeInsets.all(18),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            final docs = snapshot.data!.docs.toList()
+              ..sort((a, b) {
+                final aa = a.data()['createdAt'], bb = b.data()['createdAt'];
+                return (bb is Timestamp ? bb : Timestamp(0, 0))
+                    .compareTo(aa is Timestamp ? aa : Timestamp(0, 0));
+              });
+            if (docs.isEmpty) return const Padding(
+              padding: EdgeInsets.all(18),
+              child: Text('No group calls yet.'),
+            );
+            return Column(children: docs.map((doc) {
+              final data = doc.data();
+              final expiry = data['expiresAt'];
+              final active = data['status'] == 'active' &&
+                  expiry is Timestamp && expiry.toDate().isAfter(DateTime.now());
+              final type = data['type'] == 'video' ? 'Video' : 'Voice';
+              return ListTile(
+                leading: CircleAvatar(child: Icon(type == 'Video' ? Icons.video_call : Icons.groups)),
+                title: Text((data['groupName'] ?? 'Group call').toString()),
+                subtitle: Text('$type group call · ${active ? 'Active' : (data['status'] ?? 'Ended')}'),
+                trailing: active ? IconButton(
+                  tooltip: 'Join group call',
+                  icon: const Icon(Icons.call, color: Colors.green),
+                  onPressed: () => Navigator.of(context).pushNamed('/group-call', arguments: {
+                    'callId': doc.id,
+                    'groupId': data['groupId'].toString(),
+                    'groupName': (data['groupName'] ?? 'Group').toString(),
+                    'callType': data['type'] ?? 'voice',
+                    'isCreator': false,
+                    'isGroupCall': true,
+                  }),
+                ) : null,
+              );
+            }).toList());
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _StatusVideoPlayer extends StatefulWidget {
+  final String url;
+  const _StatusVideoPlayer({required this.url});
+
+  @override
+  State<_StatusVideoPlayer> createState() => _StatusVideoPlayerState();
+}
+
+class _StatusVideoPlayerState extends State<_StatusVideoPlayer> {
+  late final VideoPlayerController _controller;
+  late final Future<void> _initialized;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url));
+    _initialized = _controller.initialize().then((_) {
+      _controller.setLooping(true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<void>(
+      future: _initialized,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) return const Padding(
+          padding: EdgeInsets.all(20),
+          child: Text('This video could not be played.'),
         );
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const SizedBox(height: 220, child: Center(child: CircularProgressIndicator()));
+        }
+        return Column(mainAxisSize: MainAxisSize.min, children: [
+          AspectRatio(
+            aspectRatio: _controller.value.aspectRatio,
+            child: VideoPlayer(_controller),
+          ),
+          IconButton(
+            iconSize: 42,
+            onPressed: () {
+              setState(() {
+                if (_controller.value.isPlaying) {
+                  _controller.pause();
+                } else {
+                  _controller.play();
+                }
+              });
+            },
+            icon: Icon(_controller.value.isPlaying ? Icons.pause_circle : Icons.play_circle),
+          ),
+        ]);
       },
     );
   }

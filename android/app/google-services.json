@@ -73,6 +73,22 @@
       },
       "oauth_client": [
         {
+          "client_id": "606601921652-d7achbhkq4r8ofrbbpgump723do0lcsa.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.ghostgroup.connectx",
+            "certificate_hash": "90181376dcefd42a93e447c77fc7f3bd02e2bbbd"
+          }
+        },
+        {
+          "client_id": "606601921652-lnclv6giok8djqv4blbclhijp98povn2.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.ghostgroup.connectx",
+            "certificate_hash": "6972f3fde00ed7466c495cd7d52e6534d211d918"
+          }
+        },
+        {
           "client_id": "606601921652-j45k2pq748m063om48den48q8ea3vc2s.apps.googleusercontent.com",
           "client_type": 3
         }

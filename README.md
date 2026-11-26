@@ -1,41 +1,44 @@
-# 🚀 Flutter Chat App with Firebase 📱💬
+# ConnectX — Messaging and Calling
 
-A real-time chat application built with Flutter and Firebase, featuring user authentication, messaging, push notifications, user online status, and message history.
+ConnectX is a Flutter-based communication app with real-time messaging, voice and video calls, group conversations, status updates, profile management, QR-based connection, and push notifications.
 
-## 🔍 Features
+## Core capabilities
 
-- 🔒 User authentication with Firebase Authentication
-- 💬 Real-time messaging with Firebase Cloud Firestore
-- 📩 Push notifications with Firebase Cloud Messaging
-- 💻 User online status
-- 📜 Message history
-- 🚀 Clean and scalable codebase
+- Email/password and Google authentication
+- Direct and group messaging with delivery/read indicators
+- Image, video, file, voice-note, location and contact sharing
+- Voice and video calls, including group calls
+- Status updates and QR-code profile sharing
+- Username and phone-number discovery
+- Light, dark and system theme preferences
+- English and Hindi language preference
 
-## 🛠️ Technologies used
+## Technology
 
-- [Flutter](https://flutter.dev/)
-- [Firebase Authentication](https://firebase.google.com/docs/auth)
-- [Firebase Cloud Firestore](https://firebase.google.com/docs/firestore)
-- [Firebase Cloud Messaging](https://firebase.google.com/docs/cloud-messaging)
+- Flutter / Dart
+- Firebase Authentication
+- Firebase Realtime Database
+- Cloud Firestore
+- Firebase Cloud Messaging
+- WebRTC for voice/video media
+- ConnectX VPS API for media and TURN services
 
-## 🚀 Getting started
+## Android application
 
-1. Clone this repository.
+- Display name: ConnectX
+- Package ID: `com.ghostgroup.connectx`
+- Firebase project: `connectx-app-f8407`
 
-`git clone https://github.com/yashdagar/Flutter-Chat-App-with-Firebase.git`
+## Development
 
-2. Create a new Firebase project and configure it for iOS and/or Android platforms. See [these instructions](https://firebase.google.com/docs/flutter/setup).
+1. Install the Flutter stable SDK.
+2. Configure the Firebase Android client for `com.ghostgroup.connectx`.
+3. Resolve dependencies with `flutter pub get`.
+4. Run checks with `flutter analyze` and `flutter test`.
+5. Build a local debug APK with `flutter build apk --debug`.
 
-3. Add your Firebase configuration files to the project.
+Release builds use the protected GitHub Actions signing workflow. Do not commit upload keystores, passwords, Firebase service-account keys, or other secrets.
 
-4. Run the app.
+## Release and compliance notes
 
-`flutter run`
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a pull request.
-
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Review [RELEASE_READINESS.md](RELEASE_READINESS.md) before a production rollout. CI success does not replace physical-device testing, Firebase deployment review, Play Console declarations, privacy-policy verification, or account-deletion compliance.

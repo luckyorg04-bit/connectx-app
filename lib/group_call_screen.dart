@@ -2,7 +2,9 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'utils/app_feedback.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'services/rtc_config.dart';
 
 class GroupCallScreen extends StatefulWidget {
@@ -29,8 +31,9 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   bool _initialized = false;
   bool _muted = false;
   bool _cameraOff = false;
+  bool _speakerOn = true;
+  final Set<String> _creatingPeers = <String>{};
   bool _leaving = false;
-  String? _error;
 
   String get _uid => FirebaseAuth.instance.currentUser!.uid;
   DocumentReference<Map<String, dynamic>> get _callRef =>
@@ -89,18 +92,34 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
           await _callRef.update({'status': 'ended', 'endedAt': FieldValue.serverTimestamp()});
         } catch (_) {}
       }
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted) showConnectXErrorDialog(context, 'The group call could not be started. Please try again.');
     }
   }
 
   Future<void> _prepareMedia() async {
+    final microphone = await Permission.microphone.request();
+    if (!microphone.isGranted) {
+      throw Exception('Microphone permission is required for group calls.');
+    }
+    if (_callType == 'video') {
+      final camera = await Permission.camera.request();
+      if (!camera.isGranted) {
+        throw Exception('Camera permission is required for group video calls.');
+      }
+    }
     _localStream = await navigator.mediaDevices.getUserMedia({
-      'audio': true,
+      'audio': {'echoCancellation': true, 'noiseSuppression': true, 'autoGainControl': true},
       'video': _callType == 'video'
         ? {'facingMode': 'user', 'width': {'ideal': 640}, 'height': {'ideal': 480}}
         : false,
     });
     _localRenderer.srcObject = _localStream;
+    try {
+      await Helper.setSpeakerphoneOn(true);
+      _speakerOn = true;
+    } catch (error) {
+      debugPrint('ConnectX group call speaker initialization failed: $error');
+    }
     if (mounted) setState(() {});
   }
 
@@ -120,7 +139,9 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   }
 
   Future<void> _createPeer(String peerUid) async {
-    if (_peers.containsKey(peerUid) || _localStream == null) return;
+    if (_peers.containsKey(peerUid) || _creatingPeers.contains(peerUid) || _localStream == null) return;
+    _creatingPeers.add(peerUid);
+    try {
     final pairId = _pairId(peerUid);
     final pairRef = _callRef.collection('pairs').doc(pairId);
     final isOfferer = _uid.compareTo(peerUid) < 0;
@@ -132,10 +153,23 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     for (final track in _localStream!.getTracks()) {
       await peer.addTrack(track, _localStream!);
     }
-    peer.onTrack = (event) {
-      if (event.streams.isNotEmpty) {
-        renderer.srcObject = event.streams.first;
+    peer.onTrack = (event) async {
+      try {
+        event.track.enabled = true;
+        MediaStream stream;
+        if (event.streams.isNotEmpty) {
+          stream = event.streams.first;
+        } else {
+          final existing = renderer.srcObject;
+          stream = existing ?? await createLocalMediaStream('connectx-group-$peerUid');
+          if (existing == null) renderer.srcObject = stream;
+          await stream.addTrack(event.track);
+        }
+        renderer.srcObject = stream;
         if (mounted) setState(() {});
+      } catch (error) {
+        debugPrint('ConnectX group remote track attach failed: $error');
+        if (mounted) showConnectXErrorDialog(context, 'A participant audio or video stream could not be displayed.');
       }
     };
     peer.onIceCandidate = (candidate) async {
@@ -177,7 +211,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
           }
         }
       } catch (error) {
-        if (mounted) setState(() => _error = 'Call connection error: $error');
+        if (mounted) showConnectXErrorDialog(context, 'The group call connection was interrupted. Check your internet and try again.');
       }
     });
     _candidateSubscriptions[peerUid] = pairRef.collection('candidates').snapshots().listen((snapshot) async {
@@ -206,6 +240,9 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
         'createdAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     }
+    } finally {
+      _creatingPeers.remove(peerUid);
+    }
   }
 
   Future<void> _flushCandidates(String peerUid, RTCPeerConnection peer) async {
@@ -223,6 +260,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     await renderer?.dispose();
     _pendingCandidates.remove(peerUid);
     _remoteDescriptionReady.remove(peerUid);
+    _creatingPeers.remove(peerUid);
     if (mounted) setState(() {});
   }
 
@@ -240,6 +278,17 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       track.enabled = !_cameraOff;
     }
     if (mounted) setState(() {});
+  }
+
+  Future<void> _toggleSpeaker() async {
+    final next = !_speakerOn;
+    try {
+      await Helper.setSpeakerphoneOn(next);
+      _speakerOn = next;
+      if (mounted) setState(() {});
+    } catch (error) {
+      if (mounted) showConnectXErrorDialog(context, 'Audio output could not be changed. Check microphone and audio permissions.');
+    }
   }
 
   Future<void> _leave() async {
@@ -310,8 +359,6 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       body: WillPopScope(
         onWillPop: () async { await _leave(); return false; },
         child: SafeArea(child: Column(children: [
-          if (_error != null)
-            Padding(padding: const EdgeInsets.all(10), child: Text(_error!, style: const TextStyle(color: Colors.redAccent))),
           Expanded(child: GridView.count(
             padding: const EdgeInsets.all(12),
             crossAxisCount: tiles.length <= 2 ? 1 : 2,
@@ -325,6 +372,9 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
               CircleAvatar(backgroundColor: _muted ? Colors.red : Colors.white24,
                 child: IconButton(onPressed: _toggleMute,
                   icon: Icon(_muted ? Icons.mic_off : Icons.mic, color: Colors.white))),
+              CircleAvatar(backgroundColor: _speakerOn ? Colors.white24 : Colors.red,
+                child: IconButton(onPressed: _toggleSpeaker,
+                  icon: Icon(_speakerOn ? Icons.volume_up : Icons.hearing, color: Colors.white))),
               if (_callType == 'video')
                 CircleAvatar(backgroundColor: _cameraOff ? Colors.red : Colors.white24,
                   child: IconButton(onPressed: _toggleCamera,

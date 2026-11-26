@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:connectx/main_screen.dart' show users;
 import 'package:flutter/material.dart';
+import 'utils/app_feedback.dart';
 
 class GroupChatScreen extends StatefulWidget {
   const GroupChatScreen({Key? key}) : super(key: key);
@@ -47,14 +48,17 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     final selected = <String>{...members};
     final selectedAdmins = <String>{...admins, creator};
     final nameController = TextEditingController(text: (data['name'] ?? _groupName).toString());
+    final descriptionController = TextEditingController(text: (data['description'] ?? '').toString());
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: const Text('Manage group'),
-          content: SizedBox(width: double.maxFinite, height: 430, child: Column(children: [
+          content: SizedBox(width: double.maxFinite, height: (MediaQuery.of(context).size.height * .66).clamp(300.0, 460.0).toDouble(), child: Column(children: [
             TextField(controller: nameController, maxLength: 40,
               decoration: const InputDecoration(labelText: 'Group name')),
+            TextField(controller: descriptionController, maxLength: 512, maxLines: 2,
+              decoration: const InputDecoration(labelText: 'Group description')),
             const Align(alignment: Alignment.centerLeft,
               child: Text('Members and admins', style: TextStyle(fontWeight: FontWeight.w600))),
             Expanded(child: ListView(children: users.where((u) => u.key != uid || selected.contains(uid)).map((person) {
@@ -91,7 +95,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       ),
     );
     final newName = nameController.text.trim();
+    final newDescription = descriptionController.text.trim();
     nameController.dispose();
+    descriptionController.dispose();
     if (confirmed != true || newName.isEmpty) return;
     selected.add(creator);
     selectedAdmins.add(creator);
@@ -99,13 +105,14 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     try {
       await ref.update({
         'name': newName,
+        'description': newDescription,
         'memberUids': selected.toList(),
         'adminUids': selectedAdmins.where(selected.contains).toList(),
       });
       if (mounted) setState(() => _groupName = newName);
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Group settings updated.')));
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not update group: $error')));
+      showConnectXErrorDialog(context, 'Group settings could not be updated. Please try again.');
     }
   }
 
@@ -145,9 +152,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         'callType': callType, 'isCreator': true,
       });
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not start group call: $error')),
-      );
+      showConnectXErrorDialog(context, 'Group call could not be started. Please try again.');
     }
   }
 
@@ -192,9 +197,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         'createdAt': FieldValue.serverTimestamp(),
       });
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Poll not sent: $error')),
-      );
+      showConnectXErrorDialog(context, 'Poll could not be sent. Please try again.');
     }
   }
 
@@ -231,9 +234,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       });
       _controller.clear();
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Message not sent: $error')),
-      );
+      showConnectXErrorDialog(context, 'Message could not be sent. Please try again.');
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -287,7 +288,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
             stream: _messages.orderBy('createdAt', descending: true).limit(100).snapshots(),
             builder: (context, snapshot) {
-              if (snapshot.hasError) return Center(child: Text('Unable to load group messages: ${snapshot.error}'));
+              if (snapshot.hasError) return const Center(child: Text('Group messages are temporarily unavailable. Please try again.'));
               if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
               if (snapshot.data!.docs.isEmpty) return const Center(child: Text('No messages yet. Start the group conversation.'));
               return ListView.builder(
@@ -308,7 +309,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                       padding: const EdgeInsets.all(11),
                       constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * .8),
                       decoration: BoxDecoration(
-                        color: mine ? const Color(0xFFD9FDD3) : Theme.of(context).colorScheme.surface,
+                        color: mine ? Theme.of(context).colorScheme.primaryContainer : Theme.of(context).colorScheme.surfaceContainerHighest,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -320,7 +321,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                           ]),
                           Align(alignment: Alignment.centerLeft,
                             child: Text((data['text'] ?? '').toString(),
-                              style: const TextStyle(color: Color(0xFF111B21), fontSize: 16, fontWeight: FontWeight.w600))),
+                              style: TextStyle(color: Theme.of(context).colorScheme.onPrimaryContainer, fontSize: 16, fontWeight: FontWeight.w600))),
                           ...pollOptions.asMap().entries.map((option) {
                             final count = pollVotes.values.where((value) => value == option.key).length;
                             final selected = pollVotes[uid] == option.key;
@@ -350,10 +351,10 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                         else
                           Align(alignment: Alignment.centerLeft,
                             child: Text((data['text'] ?? '').toString(),
-                              style: const TextStyle(color: Color(0xFF111B21), fontSize: 16))),
+                              style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 16))),
                         if (created != null)
                           Text(TimeOfDay.fromDateTime(created.toDate()).format(context),
-                            style: const TextStyle(fontSize: 10, color: Colors.black54)),
+                            style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                       ]),
                     ),
                   );

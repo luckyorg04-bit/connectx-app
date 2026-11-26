@@ -13,6 +13,7 @@ import 'package:connectx/utils/chat_message.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
+import 'utils/app_feedback.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'models/user.dart';
 import 'models/message.dart';
@@ -76,7 +77,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
       final data = doc.data();
       if (data['sender'] == _uid || data['isRead'] == true) continue;
       if (!_readReceiptInFlight.add(doc.id)) continue;
-      doc.reference.update({'isRead': true}).catchError((Object error) {
+      doc.reference.update({'isRead': true, 'isDelivered': true}).catchError((Object error) {
         debugPrint('ConnectX read receipt update failed: $error');
       }).whenComplete(() {
         _readReceiptInFlight.remove(doc.id);
@@ -185,6 +186,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
         'pollOptions': choices,
         'pollVotes': <String, dynamic>{},
         'isRead': false,
+          'isDelivered': false,
         'timestamp': DateTime.now().millisecondsSinceEpoch,
         'sender': _uid,
         'isEdited': false,
@@ -194,7 +196,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
       });
       await _updateChatIndex();
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Poll not sent: $error')));
+      showConnectXErrorDialog(context, 'Poll could not be sent. Please try again.');
     }
   }
 
@@ -221,6 +223,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
           'message': text,
           'type': 'text',
           'isRead': false,
+          'isDelivered': false,
           'timestamp': now,
           'sender': _uid,
           'replyTo': _replyingTo?.message,
@@ -239,9 +242,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
         _editing = null;
       });
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
-      );
+      showConnectXErrorDialog(context, 'Message could not be sent. Please try again.');
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -313,6 +314,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
       'contactName': contactName,
       'contactPhone': contactPhone,
       'isRead': false,
+          'isDelivered': false,
       'timestamp': DateTime.now().millisecondsSinceEpoch,
       'sender': _uid,
       'isEdited': false,
@@ -357,9 +359,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
       );
       if (mounted && _sendViewOnce) setState(() => _sendViewOnce = false);
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Upload failed: $error')),
-      );
+      showConnectXErrorDialog(context, 'Media upload failed. Check your connection and try again.');
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -380,9 +380,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
         type: video ? 'video' : 'image',
       );
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unable to select media: $error')),
-      );
+      showConnectXErrorDialog(context, 'Media could not be selected. Please try again.');
     }
   }
 
@@ -416,9 +414,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
     if (result == null || result.files.isEmpty) return;
     final file = result.files.first;
     if (file.bytes == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not read this file. Please select it again.')),
-      );
+      showConnectXErrorDialog(context, 'Could not read this file. Please select it again.');
       return;
     }
     final ext = (file.extension ?? '').toLowerCase();
@@ -453,9 +449,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
         longitude: position.longitude,
       );
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Location sharing failed: $error')),
-      );
+      showConnectXErrorDialog(context, 'Location could not be shared. Check location permission and try again.');
     }
   }
 
@@ -493,8 +487,8 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
     if (!_recording) {
       final allowed = await _recorder.hasPermission();
       if (!allowed) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Microphone permission is required.')),
+        if (mounted) showConnectXErrorDialog(
+          context, 'Microphone permission is required to record a voice message.',
         );
         return;
       }
@@ -557,7 +551,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (context) => SafeArea(child: SizedBox(height: 420,
+      builder: (context) => SafeArea(child: SizedBox(height: (MediaQuery.of(context).size.height * .68).clamp(280.0, 520.0).toDouble(),
         child: items.isEmpty
           ? const Center(child: Text('No starred messages found.'))
           : ListView(children: items.map((doc) {
@@ -740,6 +734,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
       'contactName': message.contactName,
       'contactPhone': message.contactPhone,
       'isRead': false,
+          'isDelivered': false,
       'timestamp': DateTime.now().millisecondsSinceEpoch,
       'sender': _uid,
       'isForwarded': true,
@@ -756,7 +751,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
     final currentUser = FirebaseAuth.instance.currentUser!;
     return Scaffold(
       backgroundColor: Theme.of(context).brightness == Brightness.dark
-          ? const Color(0xFF0B141A) : const Color(0xFFEFEAE2),
+          ? const Color(0xFF0B141B) : const Color(0xFFEFEAE2),
       appBar: AppBar(
         automaticallyImplyLeading: false,
         title: Row(children: [
@@ -804,7 +799,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
         Expanded(child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
           stream: _messageStream,
           builder: (context, snapshot) {
-            if (snapshot.hasError) return Center(child: Text('Could not load messages: ${snapshot.error}'));
+            if (snapshot.hasError) return const Center(child: Text('Messages are temporarily unavailable. Check your connection and try again.'));
             if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
             final docs = snapshot.data!.docs.where((doc) {
               final expiry = doc.data()['expiresAt'];
@@ -851,7 +846,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
             ]),
           ),
         SafeArea(child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
           child: Row(children: [
             PopupMenuButton<String>(
               padding: EdgeInsets.zero,
@@ -890,7 +885,9 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
                 hintText: _recording ? 'Recording voice note…' : _sendViewOnce ? 'View-once media mode' : 'Message',
                 filled: true,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(26), borderSide: BorderSide.none),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 1.4)),
               ),
             )),
             const SizedBox(width: 6),

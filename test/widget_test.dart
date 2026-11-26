@@ -3,6 +3,7 @@ import 'package:connectx/chat_screen.dart';
 import 'package:connectx/login.dart';
 import 'package:connectx/models/message.dart';
 import 'package:connectx/models/user.dart';
+import 'package:connectx/services/phone_lookup_service.dart';
 
 void main() {
   test('conversation IDs are stable regardless of participant order', () {
@@ -14,6 +15,7 @@ void main() {
     final original = Message(
       message: 'photo.jpg',
       isRead: true,
+      isDelivered: true,
       timestamp: 1732440000000,
       sender: 'sender-1',
       messageId: 'message-1',
@@ -30,6 +32,7 @@ void main() {
 
     expect(restored.message, original.message);
     expect(restored.isRead, isTrue);
+    expect(restored.isDelivered, isTrue);
     expect(restored.sender, original.sender);
     expect(restored.messageId, original.messageId);
     expect(restored.replyToId, original.replyToId);
@@ -38,6 +41,19 @@ void main() {
     expect(restored.fileName, original.fileName);
     expect(restored.isForwarded, isTrue);
     expect(restored.reactions['receiver-1'], '❤️');
+  });
+
+  test('delivery receipt is separate from read receipt', () {
+    final original = Message(
+      message: 'Hello',
+      isRead: false,
+      isDelivered: true,
+      timestamp: 1732440000000,
+      sender: 'sender-1',
+    );
+    final restored = Message.fromJson(original.toJson());
+    expect(restored.isDelivered, isTrue);
+    expect(restored.isRead, isFalse);
   });
 
   test('email validation rejects malformed addresses', () {
@@ -68,6 +84,17 @@ void main() {
     final next = DateTime(2026, 11, 25, 0, 1).millisecondsSinceEpoch;
     expect(isNewDay(false, first, next), isTrue);
     expect(isNewDay(false, first, first + 30000), isFalse);
+  });
+
+  test('phone validation accepts international phone numbers without OTP', () {
+    expect(validatePhone('+91 98765 43210'), isNull);
+    expect(validatePhone('9876'), isNotNull);
+    expect(PhoneLookupService.normalize('+91 98765 43210'), '919876543210');
+    expect(PhoneLookupService.normalize('91-98765-43210'), '919876543210');
+    expect(
+      () => PhoneLookupService.normalize('1234'),
+      throwsA(isA<FormatException>()),
+    );
   });
 
   test('username validation enforces supported format', () {

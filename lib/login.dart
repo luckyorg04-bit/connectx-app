@@ -4,7 +4,9 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'services/notification_service.dart';
+import 'services/app_preferences.dart';
 import 'services/database_service.dart';
+import 'services/phone_lookup_service.dart';
 
 class AuthPage extends StatefulWidget {
   const AuthPage({Key? key}) : super(key: key);
@@ -19,6 +21,7 @@ class AuthPageState extends State<AuthPage> {
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
 
   bool _isLogin = true;
   bool _isLoading = false;
@@ -31,6 +34,7 @@ class AuthPageState extends State<AuthPage> {
     _passwordController.dispose();
     _nameController.dispose();
     _usernameController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
@@ -96,6 +100,21 @@ class AuthPageState extends State<AuthPage> {
                           border: OutlineInputBorder(),
                         ),
                         validator: validateUsername,
+                      ),
+                      const SizedBox(height: 14),
+                    ],
+                    if (!_isLogin) ...[
+                      TextFormField(
+                        controller: _phoneController,
+                        keyboardType: TextInputType.phone,
+                        textInputAction: TextInputAction.next,
+                        decoration: const InputDecoration(
+                          labelText: 'Phone number (include country code)',
+                          hintText: '+91 98765 43210',
+                          prefixIcon: Icon(Icons.phone_outlined),
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: validatePhone,
                       ),
                       const SizedBox(height: 14),
                     ],
@@ -214,17 +233,34 @@ class AuthPageState extends State<AuthPage> {
       } else {
         credential = await FirebaseAuth.instance.createUserWithEmailAndPassword(email: email, password: password);
         await credential.user?.updateDisplayName(_nameController.text.trim());
+        final existingPhoneUid = await PhoneLookupService.findUid(_phoneController.text.trim());
+        if (existingPhoneUid != null) {
+          await credential.user!.delete();
+          await FirebaseAuth.instance.signOut();
+          _showError('This phone number is already linked to a ConnectX account.');
+          return;
+        }
       }
       await _ensureUserProfile(
         credential.user!,
         preferredName: _isLogin ? null : _nameController.text.trim(),
         preferredUsername: _isLogin ? null : _usernameController.text.trim(),
       );
+      if (!_isLogin) {
+        await PhoneLookupService.register(credential.user!.uid, _phoneController.text.trim());
+      } else if (await PhoneLookupService.getPrivatePhone(credential.user!.uid) == null) {
+        final phone = await _askPhoneNumber();
+        if (phone == null) {
+          await FirebaseAuth.instance.signOut();
+          return;
+        }
+        await PhoneLookupService.register(credential.user!.uid, phone);
+      }
       await _openMain();
     } on FirebaseAuthException catch (error) {
       _showError(_authError(error));
     } catch (error) {
-      _showError('Unable to sign in right now. Please try again. $error');
+      _showError('Unable to sign in right now. Check your details and connection, then try again.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -243,11 +279,19 @@ class AuthPageState extends State<AuthPage> {
       );
       final userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
       await _ensureUserProfile(userCredential.user!);
+      if (await PhoneLookupService.getPrivatePhone(userCredential.user!.uid) == null) {
+        final phone = await _askPhoneNumber();
+        if (phone == null) {
+          await FirebaseAuth.instance.signOut();
+          return;
+        }
+        await PhoneLookupService.register(userCredential.user!.uid, phone);
+      }
       await _openMain();
     } on FirebaseAuthException catch (error) {
       _showError(_authError(error));
     } catch (error) {
-      _showError('Google sign-in failed. Check your internet and try again. $error');
+      _showError('Google sign-in could not be completed. Check your connection and try again.');
     } finally {
       if (mounted) setState(() => _isGoogleLoading = false);
     }
@@ -256,26 +300,39 @@ class AuthPageState extends State<AuthPage> {
   Future<void> _ensureUserProfile(User user, {String? preferredName, String? preferredUsername}) async {
     final ref = ConnectXDatabase.instance.ref('PublicUsers').child(user.uid);
     final existing = await ref.get();
-    if (existing.exists) {
-      final currentData = existing.value is Map
-          ? Map<dynamic, dynamic>.from(existing.value as Map)
-          : <dynamic, dynamic>{};
-      if (currentData['bio'] == null || currentData.containsKey('about')) {
-        await ref.update({
-          'bio': currentData['bio']?.toString() ??
-              currentData['about']?.toString() ?? 'Hey there! I am using ConnectX',
-          'about': null,
-        });
-      }
-      return;
-    }
-
     final emailPrefix = (user.email ?? 'connectx_user')
         .split('@')
         .first
         .toLowerCase()
         .replaceAll(RegExp(r'[^a-z0-9_.]'), '');
     final safePrefix = emailPrefix.isEmpty ? 'connectx' : emailPrefix;
+    if (existing.exists) {
+      final currentData = existing.value is Map
+          ? Map<dynamic, dynamic>.from(existing.value as Map)
+          : <dynamic, dynamic>{};
+      // Older accounts may predate the required PublicUsers schema. Repair
+      // missing fields on sign-in so profile edits and presence updates pass
+      // the current Realtime Database validation rules.
+      final updates = <String, dynamic>{};
+      if (currentData['name'] is! String || (currentData['name'] as String).trim().isEmpty) {
+        updates['name'] = user.displayName?.trim().isNotEmpty == true
+            ? user.displayName!.trim()
+            : safePrefix;
+      }
+      if (currentData['username'] is! String || (currentData['username'] as String).trim().isEmpty) {
+        updates['username'] = '${safePrefix}_${user.uid.substring(0, user.uid.length < 8 ? user.uid.length : 8)}';
+      }
+      if (currentData['key'] != user.uid) updates['key'] = user.uid;
+      if (currentData['online'] is! bool) updates['online'] = true;
+      if (currentData['lastSeen'] is! num) updates['lastSeen'] = ServerValue.timestamp;
+      if (currentData['bio'] is! String) {
+        updates['bio'] = currentData['about']?.toString() ?? 'Hey there! I am using ConnectX';
+      }
+      if (currentData['photoUrl'] is! String) updates['photoUrl'] = user.photoURL ?? '';
+      if (currentData.containsKey('about')) updates['about'] = null;
+      if (updates.isNotEmpty) await ref.update(updates);
+      return;
+    }
     final username = (preferredUsername?.trim().isNotEmpty ?? false)
         ? preferredUsername!.trim().toLowerCase()
         : '${safePrefix}_${user.uid.substring(0, 4)}';
@@ -296,6 +353,68 @@ class AuthPageState extends State<AuthPage> {
     });
   }
 
+  Future<String?> _askPhoneNumber() async {
+    final controller = TextEditingController();
+    String? errorText;
+    final result = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Add your phone number'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Use your phone number so people can find you on ConnectX. No OTP is required.'),
+              const SizedBox(height: 14),
+              TextField(
+                controller: controller,
+                keyboardType: TextInputType.phone,
+                decoration: InputDecoration(
+                  hintText: '+91 98765 43210',
+                  labelText: 'Phone number',
+                  errorText: errorText,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final validation = validatePhone(controller.text);
+                if (validation != null) {
+                  setDialogState(() => errorText = validation);
+                  return;
+                }
+                try {
+                  final existingUid = await PhoneLookupService.findUid(controller.text);
+                  final currentUid = FirebaseAuth.instance.currentUser?.uid;
+                  if (existingUid != null && existingUid != currentUid) {
+                    setDialogState(() => errorText = 'This number is already linked to another ConnectX account.');
+                    return;
+                  }
+                  if (dialogContext.mounted) {
+                    Navigator.pop(dialogContext, controller.text.trim());
+                  }
+                } catch (_) {
+                  setDialogState(() => errorText = 'Could not check this number. Try again.');
+                }
+              },
+              child: const Text('Continue'),
+            ),
+          ],
+        ),
+      ),
+    );
+    controller.dispose();
+    return result;
+  }
+
   Future<void> _resetPassword() async {
     final email = _emailController.text.trim();
     if (!isEmailValid(email)) {
@@ -311,7 +430,18 @@ class AuthPageState extends State<AuthPage> {
   }
 
   Future<void> _openMain() async {
-    await NotificationService.initialize();
+    // Local preferences and push notifications are optional startup services.
+    // A failure in either must not strand an authenticated user on the login page.
+    try {
+      await AppPreferences.load().timeout(const Duration(seconds: 5));
+    } catch (error) {
+      debugPrint('ConnectX preferences startup failed: $error');
+    }
+    try {
+      await NotificationService.initialize().timeout(const Duration(seconds: 8));
+    } catch (error) {
+      debugPrint('ConnectX notification startup failed: $error');
+    }
     currentRoute = '/main';
     if (!mounted) return;
     await Navigator.of(context).pushNamedAndRemoveUntil('/main', (route) => false);
@@ -319,8 +449,17 @@ class AuthPageState extends State<AuthPage> {
 
   void _showError(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.info_outline_rounded),
+        title: const Text('ConnectX'),
+        content: Text(message),
+        actions: [FilledButton(
+          onPressed: () => Navigator.pop(dialogContext),
+          child: const Text('OK'),
+        )],
+      ),
     );
   }
 
@@ -350,6 +489,13 @@ bool isEmailValid(String email) {
   final emailRegExp = RegExp(
       r'^(([^<>()[\]\\.,;:\s@\"]+(\.[^<>()[\]\\.,;:\s@\"]+)*)|(\".+\"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$');
   return emailRegExp.hasMatch(email);
+}
+
+String? validatePhone(String? value) {
+  final digits = (value ?? '').replaceAll(RegExp(r'\D'), '');
+  if (digits.isEmpty) return 'Please enter your phone number';
+  if (digits.length < 7 || digits.length > 15) return 'Enter 7–15 digits, including country code';
+  return null;
 }
 
 String? validateEmail(String? value) {

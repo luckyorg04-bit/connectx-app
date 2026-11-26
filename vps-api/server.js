@@ -121,8 +121,10 @@ app.post('/api/upload', authenticate, upload.single('file'), (req, res) => {
   let audienceUids = [];
   if (resourceType === 'status') {
     try { audienceUids = JSON.parse(String(req.body.audienceUids || '[]')); } catch (_) { audienceUids = null; }
-    if (!Array.isArray(audienceUids) || !audienceUids.includes(req.user.uid) ||
-        audienceUids.length > 500 || audienceUids.some(uid => typeof uid !== 'string' || uid.length > 128)) {
+    if (!Array.isArray(audienceUids) || audienceUids.length < 1 ||
+        audienceUids.length > 500 || !audienceUids.includes(req.user.uid) ||
+        audienceUids.some(uid => typeof uid !== 'string' || uid.length < 1 || uid.length > 128) ||
+        new Set(audienceUids).size !== audienceUids.length) {
       fs.unlink(req.file.path, () => {});
       return res.status(400).json({ success: false, error: 'A valid status audience is required' });
     }

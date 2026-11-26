@@ -1,6 +1,6 @@
 {
   "name": "connectx-functions",
-  "description": "Secure FCM delivery for ConnectX chat messages",
+  "description": "Authenticated ConnectX phone registration and lookup callables",
   "private": true,
   "engines": {
     "node": "20"

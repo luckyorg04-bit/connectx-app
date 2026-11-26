@@ -4,11 +4,13 @@
     ".write": false,
     "PublicUsers": {
       ".read": "auth != null",
-      ".indexOn": ["username"],
+      ".indexOn": [
+        "username"
+      ],
       "$uid": {
         ".write": "auth != null && auth.uid == $uid",
-        ".validate": "newData.hasChildren(['name', 'username', 'key', 'online', 'lastSeen', 'bio', 'photoUrl']) && newData.child('key').val() == $uid && newData.child('name').isString() && newData.child('username').isString() && newData.child('online').isBoolean() && newData.child('lastSeen').isNumber() && newData.child('bio').isString() && newData.child('photoUrl').isString()"
-        ,"$other": {
+        ".validate": "newData.hasChildren(['name', 'username', 'key', 'online', 'lastSeen', 'bio', 'photoUrl']) && newData.child('key').val() == $uid && newData.child('name').isString() && newData.child('username').isString() && newData.child('online').isBoolean() && newData.child('lastSeen').isNumber() && newData.child('bio').isString() && newData.child('photoUrl').isString()",
+        "$other": {
           ".validate": "$other == 'name' || $other == 'username' || $other == 'key' || $other == 'online' || $other == 'lastSeen' || $other == 'bio' || $other == 'photoUrl'"
         }
       }
@@ -16,7 +18,39 @@
     "PrivateUsers": {
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",
-        ".write": "auth != null && auth.uid == $uid"
+        "phone": {
+          ".write": false
+        },
+        "chats": {
+          ".write": "auth != null && auth.uid == $uid"
+        },
+        "chatMeta": {
+          ".write": "auth != null && auth.uid == $uid"
+        },
+        "notificationSettings": {
+          ".write": "auth != null && auth.uid == $uid"
+        },
+        "appSettings": {
+          ".write": "auth != null && auth.uid == $uid"
+        }
+      }
+    },
+    "PhoneLookup": {
+      "$phoneHash": {
+        ".read": false,
+        ".write": false
+      }
+    },
+    "PhoneLookupRateLimits": {
+      "$uid": {
+        ".read": false,
+        ".write": false
+      }
+    },
+    "PhoneRegistrationRateLimits": {
+      "$uid": {
+        ".read": false,
+        ".write": false
       }
     },
     "PrivateTokens": {

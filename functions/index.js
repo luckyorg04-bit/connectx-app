@@ -5,184 +5,116 @@ admin.initializeApp({
   databaseURL: 'https://connectx-app-f8407-default-rtdb.firebaseio.com'
 });
 
-async function sendToUser(uid, title, body, data) {
-  const snapshot = await admin.database().ref('PrivateTokens/' + uid).once('value');
-  const token = snapshot.val();
-  if (!token) return null;
+// Phone lookup is performed only by authenticated callable functions. The
+// phone index is never readable or writable directly by mobile clients.
+const crypto = require('crypto');
 
-  try {
-    return await admin.messaging().send({
-      token,
-      notification: { title, body },
-      data: Object.fromEntries(
-        Object.entries(data).map(([key, value]) => [key, String(value)])
-      ),
-      android: { priority: 'high' }
-    });
-  } catch (error) {
-    if (error.code === 'messaging/registration-token-not-registered' ||
-        error.code === 'messaging/invalid-registration-token') {
-      await admin.database().ref('PrivateTokens/' + uid).remove();
-      return null;
-    }
-    throw error;
+function normalizePhoneNumber(value) {
+  if (typeof value !== 'string') {
+    throw new functions.https.HttpsError('invalid-argument', 'A phone number is required.');
   }
+  const digits = value.replace(/\D/g, '');
+  if (digits.length < 7 || digits.length > 15) {
+    throw new functions.https.HttpsError('invalid-argument', 'Enter a valid phone number with country code.');
+  }
+  return digits;
 }
 
-exports.notifyDirectMessage = functions
+function phoneLookupHash(phone) {
+  return crypto.createHash('sha256').update(phone, 'utf8').digest('hex');
+}
+
+function authenticatedUid(context) {
+  if (!context.auth || !context.auth.uid) {
+    throw new functions.https.HttpsError('unauthenticated', 'Sign in to use phone search.');
+  }
+  return context.auth.uid;
+}
+
+exports.registerPhoneNumber = functions
   .region('asia-south1')
-  .firestore.document('messages/{conversationId}/chats/{messageId}')
-  .onCreate(async (snapshot, context) => {
-    const message = snapshot.data();
-    const participants = context.params.conversationId.split(',');
-    const recipientUid = participants.find(uid => uid !== message.sender);
-    if (!recipientUid) return null;
+  .https.onCall(async (data, context) => {
+    const uid = authenticatedUid(context);
+    const phone = normalizePhoneNumber(data && data.phone);
+    const hash = phoneLookupHash(phone);
+    const lookupRef = admin.database().ref('PhoneLookup/' + hash);
+    const privatePhoneRef = admin.database().ref('PrivateUsers/' + uid + '/phone');
+    const oldPhoneSnapshot = await privatePhoneRef.once('value');
+    const oldPhoneValue = oldPhoneSnapshot.val();
+    const oldPhone = typeof oldPhoneValue === 'string'
+      ? oldPhoneValue.replace(/\D/g, '')
+      : '';
 
-    // Keep both chat lists in sync using trusted Admin SDK writes. Mobile
-    // clients are intentionally not allowed to write another user's profile.
-    const indexTimestamp = Number(message.timestamp) || Date.now();
-    await Promise.all([
-      admin.database().ref('PrivateUsers/' + message.sender + '/chats/personal/' + recipientUid)
-        .set(indexTimestamp),
-      admin.database().ref('PrivateUsers/' + recipientUid + '/chats/personal/' + message.sender)
-        .set(indexTimestamp)
-    ]);
+    if (oldPhone === phone) return { success: true, unchanged: true };
 
-    const senderSnapshot = await admin.database()
-      .ref('PublicUsers/' + message.sender).once('value');
-    const senderName = senderSnapshot.child('name').val() || 'New message';
-    const body = message.type === 'text'
-      ? String(message.message || 'New message')
-      : message.type === 'image' ? '📷 Photo'
-      : message.type === 'video' ? '🎥 Video'
-      : message.type === 'audio' ? '🎤 Voice message'
-      : message.type === 'location' ? '📍 Location'
-      : message.type === 'contact' ? '👤 Contact'
-      : '📎 ' + String(message.fileName || 'Attachment');
-
-    return sendToUser(recipientUid, senderName, body, {
-      type: 'direct_message',
-      conversationId: context.params.conversationId,
-      messageId: context.params.messageId
+    const registrationRateRef = admin.database().ref('PhoneRegistrationRateLimits/' + uid);
+    const now = Date.now();
+    const rateResult = await registrationRateRef.transaction(current => {
+      const previous = current && typeof current === 'object' ? current : {};
+      const windowStart = Number(previous.windowStart) || now;
+      const count = now - windowStart >= 3600000 ? 1 : (Number(previous.count) || 0) + 1;
+      if (count > 5) return;
+      return { windowStart: count === 1 ? now : windowStart, count };
     });
-  });
-
-exports.notifyGroupMessage = functions
-  .region('asia-south1')
-  .firestore.document('groupChats/{groupId}/messages/{messageId}')
-  .onCreate(async (snapshot, context) => {
-    const message = snapshot.data();
-    const groupSnapshot = await admin.firestore()
-      .collection('groupChats').doc(context.params.groupId).get();
-    if (!groupSnapshot.exists) return null;
-
-    const group = groupSnapshot.data();
-    const memberUids = Array.isArray(group.memberUids) ? group.memberUids : [];
-    const senderUid = message.senderUid;
-    const senderSnapshot = await admin.database()
-      .ref('PublicUsers/' + senderUid).once('value');
-    const senderName = senderSnapshot.child('name').val() || 'A member';
-    const title = String(group.name || 'ConnectX group');
-    const body = senderName + ': ' + String(message.text || 'New group message');
-    const recipients = memberUids.filter(uid => uid !== senderUid);
-
-    const tokens = [];
-    for (const uid of recipients) {
-      const userSnapshot = await admin.database().ref('PrivateTokens/' + uid).once('value');
-      const token = userSnapshot.val();
-      if (token) tokens.push({ uid, token });
+    if (!rateResult.committed) {
+      throw new functions.https.HttpsError('resource-exhausted', 'Too many phone registration attempts. Try again later.');
     }
-    if (!tokens.length) return null;
 
-    const response = await admin.messaging().sendEachForMulticast({
-      tokens: tokens.map(item => item.token),
-      notification: { title, body },
-      data: {
-        type: 'group_message',
-        groupId: context.params.groupId,
-        messageId: context.params.messageId
-      },
-      android: { priority: 'high' }
+    // Reserve the new number atomically before changing the user's private
+    // profile. A different UID can never take an already-reserved number.
+    const reservation = await lookupRef.transaction(current => {
+      if (current === null || current === uid) return uid;
+      return;
     });
 
-    const invalid = [];
-    response.responses.forEach((result, index) => {
-      if (!result.success && (
-        result.error.code === 'messaging/registration-token-not-registered' ||
-        result.error.code === 'messaging/invalid-registration-token'
-      )) invalid.push(tokens[index].uid);
+    if (!reservation.committed) {
+      throw new functions.https.HttpsError('already-exists', 'This phone number is already linked to another ConnectX account.');
+    }
+
+    try {
+      await privatePhoneRef.set(phone);
+      if (oldPhone && oldPhone !== phone) {
+        await admin.database().ref('PhoneLookup/' + phoneLookupHash(oldPhone))
+          .transaction(current => current === uid ? null : current);
+      }
+      return { success: true };
+    } catch (error) {
+      // Release only the reservation created by this account. Never remove a
+      // mapping that another account may have acquired.
+      if (oldPhone !== phone) {
+        await lookupRef.transaction(current => current === uid ? null : current);
+      }
+      try {
+        if (oldPhoneValue == null) await privatePhoneRef.remove();
+        else await privatePhoneRef.set(oldPhoneValue);
+      } catch (restoreError) {
+        console.error('Phone profile rollback failed:', restoreError.message);
+      }
+      throw new functions.https.HttpsError('internal', 'Could not save the phone number. Please try again.');
+    }
+  });
+
+exports.lookupPhoneNumber = functions
+  .region('asia-south1')
+  .https.onCall(async (data, context) => {
+    const uid = authenticatedUid(context);
+    const phone = normalizePhoneNumber(data && data.phone);
+    const now = Date.now();
+    const rateRef = admin.database().ref('PhoneLookupRateLimits/' + uid);
+
+    const rateResult = await rateRef.transaction(current => {
+      const previous = current && typeof current === 'object' ? current : {};
+      const windowStart = Number(previous.windowStart) || now;
+      const count = now - windowStart >= 60000 ? 1 : (Number(previous.count) || 0) + 1;
+      if (count > 12) return;
+      return { windowStart: count === 1 ? now : windowStart, count };
     });
-    await Promise.all(invalid.map(uid =>
-      admin.database().ref('PrivateTokens/' + uid).remove()
-    ));
-    return null;
-  });
 
-// Notify the callee as soon as a direct voice/video call is created.
-exports.notifyIncomingCall = functions
-  .region('asia-south1')
-  .firestore.document('calls/{callId}')
-  .onCreate(async (snapshot, context) => {
-    const call = snapshot.data() || {};
-    const callerUid = String(call.callerUid || '');
-    const calleeUid = String(call.calleeUid || '');
-    if (!callerUid || !calleeUid || callerUid === calleeUid || call.status !== 'ringing') return null;
-    const callerName = String(call.callerName || 'ConnectX user').slice(0, 80);
-    return sendToUser(calleeUid, callerName,
-      call.type === 'video' ? 'Incoming video call' : 'Incoming voice call', {
-        type: 'incoming_call',
-        callId: context.params.callId,
-        callerUid,
-        callerName,
-        callType: call.type === 'video' ? 'video' : 'voice'
-      });
-  });
-
-// Notify every other group member when a group voice/video call starts.
-exports.notifyGroupCall = functions
-  .region('asia-south1')
-  .firestore.document('groupCalls/{callId}')
-  .onCreate(async (snapshot, context) => {
-    const call = snapshot.data() || {};
-    if (call.status !== 'active' || !call.groupId) return null;
-    const groupSnapshot = await admin.firestore().collection('groupChats').doc(String(call.groupId)).get();
-    if (!groupSnapshot.exists) return null;
-    const group = groupSnapshot.data() || {};
-    const creatorUid = String(call.createdBy || '');
-    const members = (Array.isArray(group.memberUids) ? group.memberUids : [])
-      .filter(uid => typeof uid === 'string' && uid && uid !== creatorUid);
-    const recipients = [];
-    for (const uid of members) {
-      const tokenSnapshot = await admin.database().ref('PrivateTokens/' + uid).once('value');
-      const token = tokenSnapshot.val();
-      if (token) recipients.push({ uid, token });
+    if (!rateResult.committed) {
+      throw new functions.https.HttpsError('resource-exhausted', 'Too many phone searches. Try again in a minute.');
     }
-    for (let i = 0; i < recipients.length; i += 500) {
-      const batch = recipients.slice(i, i + 500);
-      const result = await admin.messaging().sendEachForMulticast({
-        tokens: batch.map(item => item.token),
-        notification: {
-          title: String(call.groupName || group.name || 'ConnectX group'),
-          body: (call.type === 'video' ? 'Group video call started' : 'Group voice call started') + ' · Tap to join'
-        },
-        data: {
-          type: 'group_call',
-          callId: context.params.callId,
-          groupId: String(call.groupId),
-          groupName: String(call.groupName || group.name || 'Group'),
-          callType: call.type === 'video' ? 'video' : 'voice'
-        },
-        android: { priority: 'high' }
-      });
-      const invalid = [];
-      result.responses.forEach((response, index) => {
-        if (!response.success && response.error &&
-            ['messaging/registration-token-not-registered', 'messaging/invalid-registration-token'].includes(response.error.code)) {
-          invalid.push(batch[index].uid);
-        }
-      });
-      await Promise.all(invalid.map(uid => admin.database().ref('PrivateTokens/' + uid).remove()));
-    }
-    return null;
-  });
 
+    const snapshot = await admin.database().ref('PhoneLookup/' + phoneLookupHash(phone)).once('value');
+    const targetUid = snapshot.val();
+    return { uid: typeof targetUid === 'string' ? targetUid : null };
+  });

@@ -1,0 +1,70 @@
+name: ConnectX APK Build (Debug)
+
+on:
+  push:
+    branches:
+      - release/connectx-ui-only-1.0.4
+    paths:
+      - 'lib/**'
+      - 'android/**'
+      - 'assets/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/workflows/build-apk.yml'
+      - '.github/workflows/play-store-release.yml'
+      - '.github/workflows/ui-ux-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: connectx-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-debug-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.35.5'
+          channel: stable
+          cache: true
+
+      - name: Verify package and version
+        shell: bash
+        run: |
+          grep -q 'applicationId "com.ghostgroup.connectx"' android/app/build.gradle
+          grep -q '^version: 1.0.5+6$' pubspec.yaml
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Run static analysis
+        run: flutter analyze --no-pub --no-fatal-infos
+
+      - name: Run Flutter tests
+        run: flutter test --no-pub
+
+      - name: Build installable debug APK
+        run: flutter build apk --debug --no-pub
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ConnectX-1.0.5-6-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
