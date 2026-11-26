@@ -185,8 +185,38 @@ class UserListState extends State<UserList> {
           if (mounted) _refresh();
         }, child: SizedBox(height:76, child: Row(children:[
           const SizedBox(width:12),
-          CircleAvatar(radius:25, backgroundImage: contact.photoUrl.isNotEmpty ? NetworkImage(contact.photoUrl) : null,
-            child: contact.photoUrl.isEmpty ? Text(contact.username.isEmpty ? 'C' : contact.username[0].toUpperCase()) : null),
+          GestureDetector(
+            onTap: contact.photoUrl.isEmpty ? null : () => showDialog<void>(
+              context: context,
+              builder: (dialogContext) => Dialog(
+                insetPadding: const EdgeInsets.all(18),
+                child: Stack(children: [
+                  InteractiveViewer(
+                    minScale: 0.7,
+                    maxScale: 4,
+                    child: Image.network(contact.photoUrl, fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => const SizedBox(
+                        height: 220,
+                        child: Center(child: Text('Profile photo could not be loaded.')),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 4, right: 4,
+                    child: IconButton.filledTonal(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ),
+                ]),
+              ),
+            ),
+            child: CircleAvatar(radius:25,
+              backgroundImage: contact.photoUrl.isNotEmpty ? NetworkImage(contact.photoUrl) : null,
+              child: contact.photoUrl.isEmpty
+                  ? Text(contact.username.isEmpty ? 'C' : contact.username[0].toUpperCase())
+                  : null),
+          ),
           const SizedBox(width:12),
           Expanded(child: Column(mainAxisAlignment:MainAxisAlignment.center,crossAxisAlignment:CrossAxisAlignment.start,children:[
             Row(children:[
