@@ -259,7 +259,7 @@ class AuthPageState extends State<AuthPage> {
     } on FirebaseAuthException catch (error) {
       _showError(_authError(error));
     } catch (error) {
-      _showError('Unable to sign in right now. Please try again. $error');
+      _showError('Unable to sign in right now. Check your details and connection, then try again.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -290,7 +290,7 @@ class AuthPageState extends State<AuthPage> {
     } on FirebaseAuthException catch (error) {
       _showError(_authError(error));
     } catch (error) {
-      _showError('Google sign-in failed. Check your internet and try again. $error');
+      _showError('Google sign-in could not be completed. Check your connection and try again.');
     } finally {
       if (mounted) setState(() => _isGoogleLoading = false);
     }
