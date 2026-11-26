@@ -92,7 +92,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
           await _callRef.update({'status': 'ended', 'endedAt': FieldValue.serverTimestamp()});
         } catch (_) {}
       }
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted) setState(() => _error = 'The group call could not be started. Please try again.');
     }
   }
 
@@ -211,7 +211,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
           }
         }
       } catch (error) {
-        if (mounted) setState(() => _error = 'Call connection error: $error');
+        if (mounted) setState(() => _error = 'The group call connection was interrupted. Check your internet and try again.');
       }
     });
     _candidateSubscriptions[peerUid] = pairRef.collection('candidates').snapshots().listen((snapshot) async {
@@ -287,7 +287,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       _speakerOn = next;
       if (mounted) setState(() {});
     } catch (error) {
-      if (mounted) setState(() => _error = 'Could not change audio output: $error');
+      if (mounted) setState(() => _error = 'Audio output could not be changed. Check microphone and audio permissions.');
     }
   }
 
