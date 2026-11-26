@@ -1,6 +1,7 @@
 import 'package:connectx/utils/user_list.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'utils/app_feedback.dart';
 
 import 'models/user.dart';
 import 'services/database_service.dart';
@@ -73,9 +74,7 @@ class _ChatScreenState extends State<NewChatScreen> {
     } catch (error) {
       debugPrint('ConnectX user search failed: $error');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Search could not be completed. Check your connection and try again.')),
-        );
+        showConnectXErrorDialog(context, 'Search could not be completed. Check your connection and try again.');
       }
     } finally {
       if (mounted) setState(() => _loading = false);
