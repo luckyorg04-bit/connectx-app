@@ -15,6 +15,7 @@ import 'services/notification_service.dart';
 import 'call_screen.dart';
 import 'app_navigator.dart';
 import 'settings_screen.dart';
+import 'edit_profile_screen.dart';
 import 'services/app_preferences.dart';
 
 bool _globalErrorDialogVisible = false;
@@ -122,6 +123,7 @@ class MyApp extends StatelessWidget {
         '/login': (context) => const AuthPage(),
         '/main': (context) => const MainScreen(),
         '/settings': (context) => const SettingsScreen(),
+        '/edit-profile': (context) => const EditProfileScreen(),
         '/chat': (context) => const ChatScreen(),
         '/group': (context) => const GroupChatScreen(),
         '/group-call': (context) => const GroupCallScreen(),
