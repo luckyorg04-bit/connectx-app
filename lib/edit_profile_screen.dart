@@ -83,7 +83,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         'name': name,
         'bio': _about.text.trim(),
         'photoUrl': nextPhotoUrl,
-        'about': null,
       });
 
       // RTDB profile is authoritative. Auth metadata is a best-effort mirror.
