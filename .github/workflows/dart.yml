@@ -6,7 +6,7 @@ concurrency:
 
 on:
   push:
-    branches: ["master", "release/connectx-ui-only-1.0.4"]
+    branches: ["master", "release/connectx-whatsapp-style-1.1.0"]
   pull_request:
     branches: ["master"]
 
