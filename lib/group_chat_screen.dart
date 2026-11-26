@@ -111,7 +111,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       if (mounted) setState(() => _groupName = newName);
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Group settings updated.')));
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not update group: $error')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Group settings could not be updated. Please try again.')));
     }
   }
 
@@ -152,7 +152,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       });
     } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not start group call: $error')),
+        const SnackBar(content: Text('Group call could not be started. Please try again.')),
       );
     }
   }
@@ -199,7 +199,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       });
     } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Poll not sent: $error')),
+        const SnackBar(content: Text('Poll could not be sent. Please try again.')),
       );
     }
   }
@@ -238,7 +238,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       _controller.clear();
     } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Message not sent: $error')),
+        const SnackBar(content: Text('Message could not be sent. Please try again.')),
       );
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -293,7 +293,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
             stream: _messages.orderBy('createdAt', descending: true).limit(100).snapshots(),
             builder: (context, snapshot) {
-              if (snapshot.hasError) return Center(child: Text('Unable to load group messages: ${snapshot.error}'));
+              if (snapshot.hasError) return const Center(child: Text('Group messages are temporarily unavailable. Please try again.'));
               if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
               if (snapshot.data!.docs.isEmpty) return const Center(child: Text('No messages yet. Start the group conversation.'));
               return ListView.builder(
