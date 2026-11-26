@@ -412,7 +412,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
   Future<void> _logout() async {
     if (_isLoggingOut) return;
     setState(() => _isLoggingOut = true);
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final uid = currentUser?.uid;
+    final isGoogleSession = currentUser?.providerData.any((provider) => provider.providerId == 'google.com') ?? false;
     // Presence and notification cleanup are best-effort. They must never
     // prevent Firebase Auth from signing the user out.
     try {
@@ -442,10 +444,12 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
     } catch (error) {
       debugPrint('ConnectX logout notification cleanup failed: $error');
     }
-    try {
-      await GoogleSignIn().signOut().timeout(const Duration(seconds: 4));
-    } catch (error) {
-      debugPrint('ConnectX Google session cleanup failed: $error');
+    if (isGoogleSession) {
+      try {
+        await GoogleSignIn().signOut().timeout(const Duration(seconds: 4));
+      } catch (error) {
+        debugPrint('ConnectX Google session cleanup failed: $error');
+      }
     }
     try {
       await FirebaseAuth.instance.signOut().timeout(const Duration(seconds: 8));
@@ -459,6 +463,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
       return;
     }
     AppPreferences.reset();
+    pendingCallArguments = null;
+    pendingDirectChatUid = null;
     currentRoute = '/login';
     if (!mounted) return;
     await Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
