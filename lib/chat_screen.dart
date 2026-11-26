@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter_contacts/flutter_contacts.dart';
 import 'widgets/connectx_gif_picker.dart';
 import 'package:record/record.dart';
 import 'services/chat_storage.dart';
@@ -482,32 +483,70 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
   }
 
   Future<void> _shareContact() async {
-    final name = TextEditingController();
-    final phone = TextEditingController();
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Share contact'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(controller: name, decoration: const InputDecoration(labelText: 'Contact name')),
-          TextField(controller: phone, keyboardType: TextInputType.phone,
-            decoration: const InputDecoration(labelText: 'Phone number')),
-        ]),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Share')),
-        ],
-      ),
-    );
-    if (confirmed == true && name.text.trim().isNotEmpty && phone.text.trim().isNotEmpty) {
-      await _sendStructuredMessage(type: 'contact',
-        text: '${name.text.trim()} • ${phone.text.trim()}',
-        contactName: name.text.trim(), contactPhone: phone.text.trim());
+    try {
+      // Ask only for read access. Nothing is uploaded until the user chooses
+      // one contact and explicitly taps Send.
+      final granted = await FlutterContacts.requestPermission(readonly: true);
+      if (!granted) {
+        if (mounted) showConnectXErrorDialog(
+          context, 'Contacts permission is needed to choose a contact. You can allow it in app settings.',
+        );
+        return;
+      }
+      final contacts = await FlutterContacts.getContacts(
+        withProperties: true,
+        withPhoto: false,
+      );
+      if (!mounted) return;
+      final selected = await showModalBottomSheet<Contact>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        builder: (sheetContext) => _ConnectXContactPicker(contacts: contacts),
+      );
+      if (selected == null || !mounted) return;
+      final name = selected.displayName.trim();
+      final phones = selected.phones
+          .map((phone) => phone.number.trim())
+          .where((phone) => phone.isNotEmpty)
+          .toSet()
+          .toList();
+      if (name.isEmpty || phones.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('This contact has no phone number to share.')),
+        );
+        return;
+      }
+      final phone = phones.length == 1 ? phones.first : await showModalBottomSheet<String>(
+        context: context,
+        builder: (sheetContext) => SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const ListTile(title: Text('Choose phone number')),
+            ...phones.map((number) => ListTile(
+              leading: const Icon(Icons.phone_outlined),
+              title: Text(number),
+              onTap: () => Navigator.pop(sheetContext, number),
+            )),
+          ]),
+        ),
+      );
+      if (phone == null || phone.isEmpty) return;
+      if (mounted) setState(() => _sending = true);
+      try {
+        await _sendStructuredMessage(
+          type: 'contact',
+          text: '$name • $phone',
+          contactName: name,
+          contactPhone: phone,
+        );
+      } finally {
+        if (mounted) setState(() => _sending = false);
+      }
+    } catch (error) {
+      if (mounted) showConnectXErrorDialog(
+        context, 'Contacts could not be loaded. Check permission and try again.',
+      );
     }
-    name.dispose();
-    phone.dispose();
   }
 
   Future<void> _toggleVoiceRecording() async {
@@ -956,6 +995,104 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
   }
 }
 
+
+
+/// WhatsApp-style local contact picker. Only the selected contact is shared.
+class _ConnectXContactPicker extends StatefulWidget {
+  final List<Contact> contacts;
+  const _ConnectXContactPicker({required this.contacts});
+
+  @override
+  State<_ConnectXContactPicker> createState() => _ConnectXContactPickerState();
+}
+
+class _ConnectXContactPickerState extends State<_ConnectXContactPicker> {
+  final TextEditingController _search = TextEditingController();
+  Contact? _selected;
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _search.text.trim().toLowerCase();
+    final contacts = widget.contacts.where((contact) {
+      final name = contact.displayName.toLowerCase();
+      final phones = contact.phones.map((phone) => phone.number).join(' ');
+      return query.isEmpty || name.contains(query) || phones.toLowerCase().contains(query);
+    }).toList()
+      ..sort((a, b) => a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()));
+    return SafeArea(
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * .82,
+        child: Column(children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 12, 8),
+            child: Row(children: [
+              const Expanded(child: Text('Share contact',
+                style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700))),
+              IconButton(onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close)),
+            ]),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            child: TextField(
+              controller: _search,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                hintText: 'Search contacts',
+                prefixIcon: const Icon(Icons.search),
+                filled: true,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none),
+              ),
+            ),
+          ),
+          Expanded(
+            child: contacts.isEmpty
+                ? const Center(child: Text('No contacts found'))
+                : ListView.builder(
+                    itemCount: contacts.length,
+                    itemBuilder: (context, index) {
+                      final contact = contacts[index];
+                      final numbers = contact.phones.map((p) => p.number)
+                          .where((p) => p.trim().isNotEmpty).toSet().toList();
+                      final chosen = _selected?.id == contact.id;
+                      final first = contact.displayName.trim().isEmpty
+                          ? '?' : contact.displayName.trim().characters.first.toUpperCase();
+                      return ListTile(
+                        selected: chosen,
+                        leading: CircleAvatar(child: Text(first)),
+                        title: Text(contact.displayName.isEmpty ? 'Unnamed contact' : contact.displayName),
+                        subtitle: Text(numbers.isEmpty ? 'No phone number' : numbers.join(' · '),
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                        trailing: chosen ? const Icon(Icons.check_circle, color: Color(0xFF008069))
+                            : null,
+                        onTap: numbers.isEmpty ? null : () => setState(() => _selected = contact),
+                      );
+                    },
+                  ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
+            child: SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _selected == null ? null : () => Navigator.pop(context, _selected),
+                icon: const Icon(Icons.send_rounded),
+                label: Text(_selected == null ? 'Select a contact' : 'Send contact'),
+              ),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+}
 
 class _ChatWallpaperPainter extends CustomPainter {
   final bool dark;
