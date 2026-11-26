@@ -484,10 +484,17 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
           'photoUrl': photoUrl,
           'about': null,
         });
-        await FirebaseAuth.instance.currentUser?.updateDisplayName(name);
-        await FirebaseAuth.instance.currentUser?.updatePhotoURL(
-          photoUrl.isEmpty ? null : photoUrl,
-        );
+        // PublicUsers is the app's profile source of truth. Auth profile
+        // metadata is a best-effort mirror and must not turn a successful
+        // database update into a false "upload failed" result.
+        try {
+          await FirebaseAuth.instance.currentUser?.updateDisplayName(name);
+          await FirebaseAuth.instance.currentUser?.updatePhotoURL(
+            photoUrl.isEmpty ? null : photoUrl,
+          );
+        } catch (authError) {
+          debugPrint('ConnectX Auth profile metadata sync failed: $authError');
+        }
         if (oldPhotoToDelete.isNotEmpty && oldPhotoToDelete != photoUrl) {
           try {
             await ProfileStorage.delete(oldPhotoToDelete);
@@ -501,7 +508,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
             context: context,
             builder: (dialogContext) => AlertDialog(
               icon: const Icon(Icons.check_circle_rounded, color: Color(0xFF008069), size: 42),
-              title: const Text('Profile updated successfully'),
+              title: Text(pickedPhoto != null ? 'Profile photo uploaded successfully' : 'Profile updated successfully'),
               content: const Text('Your profile details and photo have been saved.'),
               actions: [FilledButton(
                 onPressed: () => Navigator.pop(dialogContext),
