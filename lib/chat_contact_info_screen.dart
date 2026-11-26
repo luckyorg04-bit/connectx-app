@@ -139,7 +139,6 @@ class _ChatContactInfoScreenState extends State<ChatContactInfoScreen> {
           final name = (_profile['name'] ?? widget.user.name).toString();
           final username = (_profile['username'] ?? widget.user.username).toString();
           final bio = (_profile['bio'] ?? _profile['about'] ?? widget.user.bio).toString();
-          final phone = (_profile['phoneNumber'] ?? _profile['phone'] ?? _profile['mobile'] ?? _profile['number'] ?? '').toString();
           final photo = (_profile['photoUrl'] ?? widget.user.photoUrl).toString();
           return ListView(padding: const EdgeInsets.fromLTRB(20, 22, 20, 30), children: [
             Center(child: CircleAvatar(
@@ -156,8 +155,8 @@ class _ChatContactInfoScreenState extends State<ChatContactInfoScreen> {
               ListTile(leading: const Icon(Icons.info_outline), title: const Text('About / Bio'),
                 subtitle: Text(bio.isEmpty ? 'No bio added' : bio)),
               const Divider(height: 1),
-              ListTile(leading: const Icon(Icons.phone_outlined), title: const Text('Phone number'),
-                subtitle: Text(phone.isEmpty ? 'Not available on profile' : phone)),
+              const ListTile(leading: Icon(Icons.phone_outlined), title: Text('Phone number'),
+                subtitle: Text('Private — this user has not shared a phone number publicly.')),
               const Divider(height: 1),
               ListTile(leading: const Icon(Icons.alternate_email), title: const Text('Username'), subtitle: Text('@$username')),
               const Divider(height: 1),
