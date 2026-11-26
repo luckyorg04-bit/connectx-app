@@ -272,9 +272,7 @@ service cloud.firestore {
       function callParticipant() {
         return signedIn()
           && resource.data.participants is list
-          && request.auth.uid in resource.data.participants
-          && (resource.data.callerUid == request.auth.uid
-            || resource.data.calleeUid == request.auth.uid);
+          && request.auth.uid in resource.data.participants;
       }
 
       allow create: if signedIn()
