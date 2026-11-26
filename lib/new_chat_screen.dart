@@ -58,7 +58,7 @@ class _ChatScreenState extends State<NewChatScreen> {
             .ref('PublicUsers')
             .orderByChild('username')
             .startAt(normalized)
-            .endAt('$normalized\\uf8ff')
+            .endAt('$normalized\uf8ff')
             .once();
         matches = event.snapshot.children
             .map(User1.getFromSnapshot)
