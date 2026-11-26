@@ -1471,7 +1471,7 @@ class _StatusStoryViewer extends StatefulWidget {
 
 class _StatusStoryViewerState extends State<_StatusStoryViewer> {
   late final PageController _pageController;
-  late final Future<String?> _authToken;
+  late final Future<String?>? _authToken;
   Timer? _progressTimer;
   int _index = 0;
   double _progress = 0;
@@ -1480,7 +1480,6 @@ class _StatusStoryViewerState extends State<_StatusStoryViewer> {
   QueryDocumentSnapshot<Map<String, dynamic>> get _current => widget.statuses[_index];
 
   Duration get _duration {
-    final type = (_current.data()['mediaType'] ?? 'text').toString();
     return Duration(seconds: type == 'video' ? 30 : 7);
   }
 
