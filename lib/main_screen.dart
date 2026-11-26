@@ -1480,6 +1480,7 @@ class _StatusStoryViewerState extends State<_StatusStoryViewer> {
   QueryDocumentSnapshot<Map<String, dynamic>> get _current => widget.statuses[_index];
 
   Duration get _duration {
+    final type = (_current.data()['mediaType'] ?? 'text').toString();
     return Duration(seconds: type == 'video' ? 30 : 7);
   }
 
@@ -1573,8 +1574,6 @@ class _StatusStoryViewerState extends State<_StatusStoryViewer> {
   Widget build(BuildContext context) {
     final data = _current.data();
     final ownerName = (data['userName'] ?? 'ConnectX user').toString();
-    final type = (data['mediaType'] ?? 'text').toString();
-    final rawMediaUrl = data['mediaUrl']?.toString();
 
     return Scaffold(
       backgroundColor: Colors.black,
