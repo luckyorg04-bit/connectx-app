@@ -85,6 +85,9 @@ test('Firestore direct messages are limited to conversation participants', async
     sender: 'bob', message: 'Spoofed sender', timestamp: Date.now(),
     isRead: false, isDelivered: false,
   }));
+  await assertSucceeds(updateDoc(message, { 'reactions.alice': '❤️' }));
+  await assertSucceeds(updateDoc(message, { 'reactions.bob': '👍' }));
+  await assertFails(updateDoc(message, { 'reactions.alice': '😂' }));
 });
 
 
