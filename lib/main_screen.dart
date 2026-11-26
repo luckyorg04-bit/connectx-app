@@ -9,6 +9,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:video_player/video_player.dart';
 import 'package:flutter/material.dart';
+import 'utils/app_feedback.dart';
 import 'main.dart';
 import 'app_navigator.dart';
 import 'models/user.dart';
@@ -353,9 +354,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
         );
       }
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not create group. Check your connection and try again.')),
-      );
+      showConnectXErrorDialog(context, 'Could not create group. Check your connection and try again.');
     }
   }
 
@@ -530,7 +529,7 @@ class _UpdatesTab extends StatelessWidget {
           audienceUids: [uid],
         );
       } catch (error) {
-        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Media upload failed. Check your connection and try again.')));
+        showConnectXErrorDialog(context, 'Media upload failed. Check your connection and try again.');
         return;
       }
     }
@@ -558,7 +557,7 @@ class _UpdatesTab extends StatelessWidget {
       });
       if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Status shared for 24 hours.')));
     } catch (error) {
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Status could not be shared. Please try again.')));
+      showConnectXErrorDialog(context, 'Status could not be shared. Please try again.');
     }
   }
 
@@ -708,9 +707,7 @@ class _CommunitiesTab extends StatelessWidget {
         const SnackBar(content: Text('Community created.')),
       );
     } catch (error) {
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Community could not be created. Please try again.')),
-      );
+      showConnectXErrorDialog(context, 'Community could not be created. Please try again.');
     }
   }
 
@@ -746,9 +743,7 @@ class _CommunitiesTab extends StatelessWidget {
                           ? FieldValue.arrayRemove([uid])
                           : FieldValue.arrayUnion([uid])});
                       } catch (error) {
-                        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Membership could not be updated. Please try again.')),
-                        );
+                        showConnectXErrorDialog(context, 'Membership could not be updated. Please try again.');
                       }
                     },
                     icon: Icon(data['ownerUid'] == uid ? Icons.verified_user
@@ -818,9 +813,7 @@ class _CommunitiesTab extends StatelessWidget {
                         });
                         controller.clear();
                       } catch (error) {
-                        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Your post could not be published. Please try again.')),
-                        );
+                        showConnectXErrorDialog(context, 'Your post could not be published. Please try again.');
                       }
                     },
                     icon: const Icon(Icons.send_rounded),
@@ -923,9 +916,7 @@ class _ChannelsPanel extends StatelessWidget {
                       : FieldValue.arrayUnion([uid])});
                     if (c.mounted) Navigator.pop(c);
                   } catch (error) {
-                    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Channel membership could not be updated. Please try again.')),
-                    );
+                    showConnectXErrorDialog(context, 'Channel membership could not be updated. Please try again.');
                   }
                 },
                 child: Text(List<String>.from(data['memberUids'] ?? []).contains(uid) ? 'Unfollow' : 'Follow'),
@@ -999,9 +990,7 @@ class _CallsTab extends StatelessWidget {
     } catch (error) {
       debugPrint('ConnectX start call failed: $error');
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not start this call. Please try again.')),
-        );
+        showConnectXErrorDialog(context, 'Could not start this call. Please try again.');
       }
     }
   }
