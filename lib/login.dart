@@ -40,180 +40,261 @@ class AuthPageState extends State<AuthPage> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final foreground = isDark ? const Color(0xFFE9EDEF) : const Color(0xFF111B21);
+    final muted = isDark ? const Color(0xFFB7C4C9) : const Color(0xFF667781);
+    final fieldFill = isDark ? const Color(0xFF202C33) : const Color(0xFFF0F2F5);
+    final cardColor = isDark ? const Color(0xFF111B21) : Colors.white;
+    final busy = _isLoading || _isGoogleLoading;
+
+    InputDecoration fieldDecoration(String label, IconData icon) => InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon, color: muted),
+      filled: true,
+      fillColor: fieldFill,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFF008069), width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFFBA1A1A)),
+      ),
+    );
+
     return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF0B141A) : const Color(0xFFF0F2F5),
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 28, 24, 28),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Container(
-                      width: 76,
-                      height: 76,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: colors.primary,
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      child: const Icon(Icons.forum_rounded, color: Colors.white, size: 42),
-                    ),
-                    const SizedBox(height: 24),
-                    Text('ConnectX',
-                        style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              color: colors.primary,
-                            )),
-                    const SizedBox(height: 8),
-                    Text(
-                      _isLogin ? 'Connect with people who matter.' : 'Create your ConnectX account.',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: colors.onSurfaceVariant),
-                    ),
-                    const SizedBox(height: 30),
-                    if (!_isLogin) ...[
-                      TextFormField(
-                        controller: _nameController,
-                        textCapitalization: TextCapitalization.words,
-                        textInputAction: TextInputAction.next,
-                        decoration: const InputDecoration(
-                          labelText: 'Your name',
-                          prefixIcon: Icon(Icons.person_outline_rounded),
-                          border: OutlineInputBorder(),
+        child: SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          child: Column(
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(26, 34, 26, 38),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF008069),
+                  borderRadius: BorderRadius.vertical(bottom: Radius.circular(30)),
+                ),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 480),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Container(
+                          width: 54,
+                          height: 54,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(.16),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: Colors.white.withOpacity(.22)),
+                          ),
+                          child: const Icon(Icons.forum_rounded, color: Colors.white, size: 30),
                         ),
-                        validator: (value) => value == null || value.trim().isEmpty
-                            ? 'Please enter your name'
-                            : null,
+                        const SizedBox(width: 14),
+                        const Text('ConnectX', style: TextStyle(
+                          color: Colors.white, fontSize: 29, fontWeight: FontWeight.w800,
+                          letterSpacing: -.7,
+                        )),
+                      ]),
+                      const SizedBox(height: 24),
+                      Text(
+                        _isLogin ? 'Welcome back' : 'Join ConnectX',
+                        style: const TextStyle(color: Colors.white, fontSize: 25, fontWeight: FontWeight.w700),
                       ),
-                      const SizedBox(height: 14),
-                      TextFormField(
-                        controller: _usernameController,
-                        textInputAction: TextInputAction.next,
-                        autocorrect: false,
-                        decoration: const InputDecoration(
-                          labelText: 'Username',
-                          prefixIcon: Icon(Icons.alternate_email_rounded),
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: validateUsername,
+                      const SizedBox(height: 7),
+                      Text(
+                        _isLogin
+                            ? 'Pick up where your conversations left off.'
+                            : 'Create your account and connect with your people.',
+                        style: TextStyle(color: Colors.white.withOpacity(.88), fontSize: 14, height: 1.4),
                       ),
-                      const SizedBox(height: 14),
                     ],
-                    if (!_isLogin) ...[
-                      TextFormField(
-                        controller: _phoneController,
-                        keyboardType: TextInputType.phone,
-                        textInputAction: TextInputAction.next,
-                        decoration: const InputDecoration(
-                          labelText: 'Phone number (include country code)',
-                          hintText: '+91 98765 43210',
-                          prefixIcon: Icon(Icons.phone_outlined),
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: validatePhone,
-                      ),
-                      const SizedBox(height: 14),
-                    ],
-                    TextFormField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      textInputAction: TextInputAction.next,
-                      autocorrect: false,
-                      decoration: const InputDecoration(
-                        labelText: 'Email address',
-                        prefixIcon: Icon(Icons.email_outlined),
-                        border: OutlineInputBorder(),
-                      ),
-                      validator: validateEmail,
-                    ),
-                    const SizedBox(height: 14),
-                    TextFormField(
-                      controller: _passwordController,
-                      obscureText: _obscurePassword,
-                      textInputAction: TextInputAction.done,
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        prefixIcon: const Icon(Icons.lock_outline_rounded),
-                        border: const OutlineInputBorder(),
-                        suffixIcon: IconButton(
-                          tooltip: _obscurePassword ? 'Show password' : 'Hide password',
-                          icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                        ),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) return 'Please enter your password';
-                        if (!_isLogin && value.length < 6) return 'Password must be at least 6 characters';
-                        return null;
-                      },
-                      onFieldSubmitted: (_) => _submitEmailPassword(),
-                    ),
-                    if (_isLogin)
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          onPressed: _isLoading || _isGoogleLoading ? null : _resetPassword,
-                          child: const Text('Forgot password?'),
-                        ),
-                      )
-                    else
-                      const SizedBox(height: 18),
-                    const SizedBox(height: 8),
-                    FilledButton(
-                      onPressed: _isLoading || _isGoogleLoading ? null : _submitEmailPassword,
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size.fromHeight(52),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                      child: _isLoading
-                          ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : Text(_isLogin ? 'Login' : 'Create account'),
-                    ),
-                    const SizedBox(height: 18),
-                    Row(children: [
-                      Expanded(child: Divider(color: colors.outlineVariant)),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        child: Text('OR', style: TextStyle(color: colors.onSurfaceVariant)),
-                      ),
-                      Expanded(child: Divider(color: colors.outlineVariant)),
-                    ]),
-                    const SizedBox(height: 18),
-                    OutlinedButton.icon(
-                      onPressed: _isLoading || _isGoogleLoading ? null : _continueWithGoogle,
-                      icon: _isGoogleLoading
-                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Text('G', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Color(0xFF4285F4))),
-                      label: const Text('Continue with Google'),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(52),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                    ),
-                    const SizedBox(height: 22),
-                    TextButton(
-                      onPressed: _isLoading || _isGoogleLoading
-                          ? null
-                          : () => setState(() {
-                                _isLogin = !_isLogin;
-                                _formKey.currentState?.reset();
-                              }),
-                      child: Text(_isLogin ? "Don't have an account? Sign up" : 'Already have an account? Login'),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'By continuing, you agree to use ConnectX responsibly.',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 480),
+                  child: Container(
+                    margin: const EdgeInsets.fromLTRB(18, 20, 18, 28),
+                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+                    decoration: BoxDecoration(
+                      color: cardColor,
+                      borderRadius: BorderRadius.circular(22),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(isDark ? .12 : .055),
+                          blurRadius: 22,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: Form(
+                      key: _formKey,
+                      child: AutofillGroup(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              _isLogin ? 'Sign in to continue' : 'Your account details',
+                              style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: foreground),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              _isLogin ? 'Use your email and password.' : 'A few details to get you started.',
+                              style: TextStyle(fontSize: 13, color: muted),
+                            ),
+                            const SizedBox(height: 22),
+                            if (!_isLogin) ...[
+                              TextFormField(
+                                controller: _nameController,
+                                textCapitalization: TextCapitalization.words,
+                                textInputAction: TextInputAction.next,
+                                autofillHints: const [AutofillHints.name],
+                                decoration: fieldDecoration('Full name', Icons.person_outline_rounded),
+                                validator: (value) => value == null || value.trim().isEmpty
+                                    ? 'Please enter your name' : null,
+                              ),
+                              const SizedBox(height: 13),
+                              TextFormField(
+                                controller: _usernameController,
+                                textInputAction: TextInputAction.next,
+                                autocorrect: false,
+                                decoration: fieldDecoration('Username', Icons.alternate_email_rounded),
+                                validator: validateUsername,
+                              ),
+                              const SizedBox(height: 13),
+                              TextFormField(
+                                controller: _phoneController,
+                                keyboardType: TextInputType.phone,
+                                textInputAction: TextInputAction.next,
+                                autofillHints: const [AutofillHints.telephoneNumber],
+                                decoration: fieldDecoration('Phone number with country code', Icons.phone_outlined).copyWith(
+                                  hintText: '+91 98765 43210',
+                                ),
+                                validator: validatePhone,
+                              ),
+                              const SizedBox(height: 13),
+                            ],
+                            TextFormField(
+                              controller: _emailController,
+                              keyboardType: TextInputType.emailAddress,
+                              textInputAction: TextInputAction.next,
+                              autocorrect: false,
+                              autofillHints: const [AutofillHints.email],
+                              decoration: fieldDecoration('Email address', Icons.mail_outline_rounded),
+                              validator: validateEmail,
+                            ),
+                            const SizedBox(height: 13),
+                            TextFormField(
+                              controller: _passwordController,
+                              obscureText: _obscurePassword,
+                              textInputAction: TextInputAction.done,
+                              autofillHints: _isLogin
+                                  ? const [AutofillHints.password]
+                                  : const [AutofillHints.newPassword],
+                              decoration: fieldDecoration('Password', Icons.lock_outline_rounded).copyWith(
+                                suffixIcon: IconButton(
+                                  tooltip: _obscurePassword ? 'Show password' : 'Hide password',
+                                  icon: Icon(_obscurePassword
+                                      ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                                ),
+                              ),
+                              validator: (value) {
+                                if (value == null || value.isEmpty) return 'Please enter your password';
+                                if (!_isLogin && value.length < 6) return 'Use at least 6 characters';
+                                return null;
+                              },
+                              onFieldSubmitted: (_) => _submitEmailPassword(),
+                            ),
+                            if (_isLogin)
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton(
+                                  onPressed: busy ? null : _resetPassword,
+                                  child: const Text('Forgot password?'),
+                                ),
+                              )
+                            else
+                              const SizedBox(height: 18),
+                            const SizedBox(height: 5),
+                            FilledButton(
+                              onPressed: busy ? null : _submitEmailPassword,
+                              style: FilledButton.styleFrom(
+                                backgroundColor: const Color(0xFF008069),
+                                foregroundColor: Colors.white,
+                                disabledBackgroundColor: const Color(0xFF008069).withOpacity(.55),
+                                minimumSize: const Size.fromHeight(54),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              ),
+                              child: _isLoading
+                                  ? const SizedBox(width: 21, height: 21,
+                                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                  : Text(_isLogin ? 'Sign in' : 'Create account',
+                                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                            ),
+                            const SizedBox(height: 18),
+                            Row(children: [
+                              Expanded(child: Divider(color: muted.withOpacity(.35))),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                child: Text('OR', style: TextStyle(color: muted, fontSize: 11, fontWeight: FontWeight.w700)),
+                              ),
+                              Expanded(child: Divider(color: muted.withOpacity(.35))),
+                            ]),
+                            const SizedBox(height: 16),
+                            OutlinedButton.icon(
+                              onPressed: busy ? null : _continueWithGoogle,
+                              icon: _isGoogleLoading
+                                  ? const SizedBox(width: 18, height: 18,
+                                      child: CircularProgressIndicator(strokeWidth: 2))
+                                  : const Text('G', style: TextStyle(
+                                      fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF4285F4))),
+                              label: const Text('Continue with Google'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: foreground,
+                                minimumSize: const Size.fromHeight(52),
+                                side: BorderSide(color: muted.withOpacity(.35)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              ),
+                            ),
+                            const SizedBox(height: 18),
+                            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                              Flexible(child: Text(
+                                _isLogin ? "Don't have an account?" : 'Already have an account?',
+                                style: TextStyle(color: muted, fontSize: 13),
+                              )),
+                              TextButton(
+                                onPressed: busy ? null : () => setState(() {
+                                  _isLogin = !_isLogin;
+                                  _formKey.currentState?.reset();
+                                }),
+                                child: Text(_isLogin ? 'Sign up' : 'Sign in',
+                                  style: const TextStyle(color: Color(0xFF008069), fontWeight: FontWeight.w700)),
+                              ),
+                            ]),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(28, 0, 28, 22),
+                child: Text(
+                  'ConnectX · Your conversations, together',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: muted, fontSize: 11),
+                ),
+              ),
+            ],
           ),
         ),
       ),
