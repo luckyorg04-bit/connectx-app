@@ -5,7 +5,7 @@ on:
   push:
     branches:
       - release/connectx-whatsapp-style-1.1.0
-      - fix/connectx-status-profile-1.1.2
+      - fix/connectx-status-feed-profile-1.1.2
     paths:
       - 'lib/**'
       - 'test/**'
