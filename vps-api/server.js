@@ -121,8 +121,10 @@ app.post('/api/upload', authenticate, upload.single('file'), (req, res) => {
   let audienceUids = [];
   if (resourceType === 'status') {
     try { audienceUids = JSON.parse(String(req.body.audienceUids || '[]')); } catch (_) { audienceUids = null; }
-    if (!Array.isArray(audienceUids) || !audienceUids.includes(req.user.uid) ||
-        audienceUids.some(uid => typeof uid !== 'string' || uid.length > 128)) {
+    if (!Array.isArray(audienceUids) || audienceUids.length < 1 ||
+        audienceUids.length > 500 || !audienceUids.includes(req.user.uid) ||
+        audienceUids.some(uid => typeof uid !== 'string' || uid.length < 1 || uid.length > 128) ||
+        new Set(audienceUids).size !== audienceUids.length) {
       fs.unlink(req.file.path, () => {});
       return res.status(400).json({ success: false, error: 'A valid status audience is required' });
     }
@@ -213,8 +215,10 @@ app.get('/media/:filename', async (req, res) => {
       if (Number(meta.expiresAt || 0) <= Date.now()) {
         return res.status(410).json({ success: false, error: 'This status has expired' });
       }
-      // Active status media is available to any authenticated ConnectX user,
-      // matching the Firestore status feed visibility rule.
+      const audience = Array.isArray(meta.audienceUids) ? meta.audienceUids : [];
+      if (!audience.includes(viewer.uid)) {
+        return res.status(403).json({ success: false, error: 'You are not allowed to view this status' });
+      }
     }
     if (meta.viewOnce === true) {
       if (viewOnceLocks.has(filename)) {
