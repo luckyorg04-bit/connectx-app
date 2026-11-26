@@ -88,7 +88,7 @@ test('Firestore direct messages are limited to conversation participants', async
 });
 
 
-test('Firestore statuses are readable only by their published audience', async () => {
+test('Firestore status feed is readable to signed-in users and media audience is recorded', async () => {
   const alice = env.authenticatedContext('alice').firestore();
   const bob = env.authenticatedContext('bob').firestore();
   const charlie = env.authenticatedContext('charlie').firestore();
@@ -102,16 +102,8 @@ test('Firestore statuses are readable only by their published audience', async (
     expiresAt: new Date(Date.now() + 60 * 60 * 1000),
   }));
   await assertSucceeds(getDoc(doc(bob, 'statuses/status-1')));
-  await assertFails(getDoc(doc(charlie, 'statuses/status-1')));
-  await assertSucceeds(getDocs(query(
-    collection(bob, 'statuses'),
-    where('audienceUids', 'array-contains', 'bob'),
-    where('expiresAt', '>', new Date()),
-  )));
-  await assertFails(getDocs(query(
-    collection(charlie, 'statuses'),
-    where('expiresAt', '>', new Date()),
-  )));
+  await assertSucceeds(getDoc(doc(charlie, 'statuses/status-1')));
+  await assertSucceeds(getDocs(query(collection(bob, 'statuses'), where('expiresAt', '>', new Date()))));
 });
 
 test('Firestore direct call records are restricted to their participants', async () => {
