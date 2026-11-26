@@ -798,7 +798,6 @@ class _UpdatesTab extends StatelessWidget {
         Widget statusAvatar(
           QueryDocumentSnapshot<Map<String, dynamic>> latest, {
           required bool own,
-          required int count,
         }) {
           final data = latest.data();
           final photoUrl = (data['userPhotoUrl'] ?? '').toString();
@@ -858,7 +857,6 @@ class _UpdatesTab extends StatelessWidget {
         }
 
         Widget statusRow({
-          required String ownerUid,
           required List<QueryDocumentSnapshot<Map<String, dynamic>>> items,
           required bool own,
         }) {
@@ -870,7 +868,7 @@ class _UpdatesTab extends StatelessWidget {
               : '${items.length} updates · ${timeLabel(latest)}';
           return ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
-            leading: statusAvatar(latest, own: own, count: items.length),
+            leading: statusAvatar(latest, own: own),
             title: Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
             subtitle: own
                 ? StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -940,7 +938,7 @@ class _UpdatesTab extends StatelessWidget {
                 ),
               )
             else
-              statusRow(ownerUid: uid, items: mine, own: true),
+              statusRow(items: mine, own: true),
             const Divider(height: 24, indent: 16, endIndent: 16),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -958,7 +956,6 @@ class _UpdatesTab extends StatelessWidget {
               )
             else
               ...otherGroups.map((group) => statusRow(
-                    ownerUid: group.key,
                     items: group.value,
                     own: false,
                   )),
