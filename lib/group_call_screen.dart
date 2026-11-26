@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'utils/app_feedback.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'services/rtc_config.dart';
@@ -92,7 +93,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
           await _callRef.update({'status': 'ended', 'endedAt': FieldValue.serverTimestamp()});
         } catch (_) {}
       }
-      if (mounted) setState(() => _error = 'The group call could not be started. Please try again.');
+      if (mounted) showConnectXErrorDialog(context, 'The group call could not be started. Please try again.');
     }
   }
 
@@ -211,7 +212,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
           }
         }
       } catch (error) {
-        if (mounted) setState(() => _error = 'The group call connection was interrupted. Check your internet and try again.');
+        if (mounted) showConnectXErrorDialog(context, 'The group call connection was interrupted. Check your internet and try again.');
       }
     });
     _candidateSubscriptions[peerUid] = pairRef.collection('candidates').snapshots().listen((snapshot) async {
@@ -287,7 +288,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       _speakerOn = next;
       if (mounted) setState(() {});
     } catch (error) {
-      if (mounted) setState(() => _error = 'Audio output could not be changed. Check microphone and audio permissions.');
+      if (mounted) showConnectXErrorDialog(context, 'Audio output could not be changed. Check microphone and audio permissions.');
     }
   }
 
@@ -359,8 +360,6 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       body: WillPopScope(
         onWillPop: () async { await _leave(); return false; },
         child: SafeArea(child: Column(children: [
-          if (_error != null)
-            Padding(padding: const EdgeInsets.all(10), child: Text(_error!, style: const TextStyle(color: Colors.redAccent))),
           Expanded(child: GridView.count(
             padding: const EdgeInsets.all(12),
             crossAxisCount: tiles.length <= 2 ? 1 : 2,
