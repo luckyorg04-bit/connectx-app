@@ -7,6 +7,7 @@ class AppPreferences {
   static final ValueNotifier<ThemeMode> themeMode =
       ValueNotifier<ThemeMode>(ThemeMode.system);
   static String languageCode = 'en';
+  static final ValueNotifier<Locale> locale = ValueNotifier<Locale>(const Locale('en'));
 
   static DatabaseReference _settingsRef() {
     final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -28,6 +29,7 @@ class AppPreferences {
               ? ThemeMode.dark
               : ThemeMode.system;
       languageCode = value['languageCode']?.toString() ?? 'en';
+      locale.value = Locale(languageCode);
     } catch (error) {
       debugPrint('ConnectX preferences load failed: $error');
     }
@@ -47,5 +49,6 @@ class AppPreferences {
   static Future<void> saveLanguage(String code) async {
     await _settingsRef().update({'languageCode': code});
     languageCode = code;
+    locale.value = Locale(code);
   }
 }
