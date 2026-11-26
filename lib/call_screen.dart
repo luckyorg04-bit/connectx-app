@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'services/database_service.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
@@ -33,6 +35,7 @@ class _CallScreenState extends State<CallScreen> {
   String _callId = '';
   String _peerName = 'ConnectX user';
   String _peerUid = '';
+  String _peerPhotoUrl = '';
   bool _isCaller = false;
   bool _isVideo = false;
   bool _ready = false;
@@ -59,10 +62,38 @@ class _CallScreenState extends State<CallScreen> {
     _callId = args['callId'].toString();
     _peerUid = args['peerUid'].toString();
     _peerName = (args['peerName'] ?? 'ConnectX user').toString();
+    _peerPhotoUrl = (args['peerPhotoUrl'] ?? '').toString();
     _isCaller = args['isCaller'] == true;
     _isVideo = args['isVideo'] == true;
     _ready = true;
     _initialize();
+  }
+
+  Widget _peerAvatar({double radius = 52}) {
+    return StreamBuilder<DatabaseEvent>(
+      stream: ConnectXDatabase.instance.ref('PublicUsers').child(_peerUid).onValue,
+      builder: (context, snapshot) {
+        final savedPhoto = snapshot.data?.snapshot.child('photoUrl').value?.toString() ?? '';
+        final photoUrl = savedPhoto.isNotEmpty ? savedPhoto : _peerPhotoUrl;
+        final savedName = snapshot.data?.snapshot.child('name').value?.toString() ?? '';
+        if (savedName.trim().isNotEmpty && savedName != _peerName && mounted) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && _peerName != savedName) setState(() => _peerName = savedName);
+          });
+        }
+        return CircleAvatar(
+          radius: radius,
+          backgroundColor: const Color(0xFF26343D),
+          backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+          child: photoUrl.isEmpty
+              ? Text(
+                  _peerName.trim().isNotEmpty ? _peerName.trim()[0].toUpperCase() : 'C',
+                  style: TextStyle(color: Colors.white, fontSize: radius * 0.85, fontWeight: FontWeight.w600),
+                )
+              : null,
+        );
+      },
+    );
   }
 
   String _friendlyError(String raw) {
@@ -503,7 +534,7 @@ class _CallScreenState extends State<CallScreen> {
         Expanded(child: Stack(children: [
           Positioned.fill(child: _isVideo && _remoteRenderer.srcObject != null
             ? RTCVideoView(_remoteRenderer, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover)
-            : const Center(child: Icon(Icons.person, size: 110, color: Colors.white54))),
+            : Center(child: _peerAvatar(radius: 76))),
           if (_isVideo && _localRenderer.srcObject != null)
             Positioned(right: 16, top: 16, width: 112, height: 160,
               child: ClipRRect(borderRadius: BorderRadius.circular(12),
@@ -516,7 +547,7 @@ class _CallScreenState extends State<CallScreen> {
             )),
           if (!_isVideo)
             Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-              const CircleAvatar(radius: 52, child: Icon(Icons.person, size: 54)),
+              _peerAvatar(radius: 58),
               const SizedBox(height: 16),
               Text(_peerName, style: const TextStyle(color: Colors.white, fontSize: 22)),
               const SizedBox(height: 8),
