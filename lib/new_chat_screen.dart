@@ -148,7 +148,16 @@ class _ChatScreenState extends State<NewChatScreen> {
             if (_loading)
               const Expanded(child: Center(child: CircularProgressIndicator()))
             else if (users.isNotEmpty)
-              Expanded(child: UserList(users: users, wantChats: false))
+              Expanded(child: Column(children: [
+                if (_lastQueryType == 'phone number')
+                  ListTile(
+                    dense: true,
+                    leading: const Icon(Icons.phone_rounded),
+                    title: const Text('Phone number matched'),
+                    subtitle: Text(searchController.text.trim()),
+                  ),
+                Expanded(child: UserList(users: users, wantChats: false)),
+              ]))
             else
               Expanded(
                 child: Center(
