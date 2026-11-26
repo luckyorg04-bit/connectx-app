@@ -146,7 +146,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
                 } else if (value == 'new_group') {
                   _createGroup();
                 } else if (value == 'settings') {
-                  _openNotificationSettings();
+                  Navigator.of(context).pushNamed('/settings');
                 } else if (value == 'my_qr') {
                   Navigator.of(context).pushNamed('/my-qr');
                 } else if (value == 'scan_qr') {
@@ -346,7 +346,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
       }
     } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not create group: $error')),
+        const SnackBar(content: Text('Could not create group. Check your connection and try again.')),
       );
     }
   }
@@ -1167,94 +1167,181 @@ class _ChannelsPanel extends StatelessWidget {
 class _CallsTab extends StatelessWidget {
   const _CallsTab();
 
+  Future<void> _startCall(BuildContext context, User1 person, bool video) async {
+    try {
+      final callId = FirebaseFirestore.instance.collection('calls').doc().id;
+      await Navigator.of(context).pushNamed('/call', arguments: {
+        'callId': callId,
+        'peerUid': person.key,
+        'peerName': person.name,
+        'isCaller': true,
+        'isVideo': video,
+      });
+    } catch (error) {
+      debugPrint('ConnectX start call failed: $error');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not start this call. Please try again.')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser!.uid;
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance.collection('calls')
-        .where('participants', arrayContains: uid).snapshots(),
-      builder: (context, directSnapshot) {
-        if (directSnapshot.hasError) return const _SectionEmptyState(icon: Icons.cloud_off_outlined, title: 'Calls are unavailable', description: 'ConnectX could not load call history. Check your connection or try again later.');
-        if (!directSnapshot.hasData) return const Center(child: CircularProgressIndicator());
-        final directCalls = directSnapshot.data!.docs.toList()
-          ..sort((a, b) {
-            final aa = a.data()['createdAt'], bb = b.data()['createdAt'];
-            return (bb is Timestamp ? bb : Timestamp(0, 0))
-              .compareTo(aa is Timestamp ? aa : Timestamp(0, 0));
-          });
-        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance.collection('groupCalls')
-            .where('participants', arrayContains: uid).snapshots(),
-          builder: (context, groupSnapshot) {
-            if (groupSnapshot.hasError) return const _SectionEmptyState(icon: Icons.cloud_off_outlined, title: 'Group calls are unavailable', description: 'ConnectX could not load group call history. Check your connection or try again later.');
-            if (!groupSnapshot.hasData) return const Center(child: CircularProgressIndicator());
-            final groupCalls = groupSnapshot.data!.docs.toList()
+    final contacts = users.where((person) => person.key != uid).toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 90),
+      children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 18, 16, 8),
+          child: Text('Start a call', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        ),
+        if (contacts.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(20),
+            child: Text('ConnectX users will appear here when available.'),
+          )
+        else
+          ...contacts.map((person) => ListTile(
+            leading: CircleAvatar(
+              backgroundImage: person.photoUrl.isNotEmpty ? NetworkImage(person.photoUrl) : null,
+              child: person.photoUrl.isEmpty
+                  ? Text(person.name.isNotEmpty ? person.name[0].toUpperCase() : 'C')
+                  : null,
+            ),
+            title: Text(person.name),
+            subtitle: Text(person.online ? 'Online' : '@${person.username}'),
+            trailing: Wrap(spacing: 0, children: [
+              IconButton(
+                tooltip: 'Voice call',
+                icon: const Icon(Icons.call_outlined),
+                onPressed: () => _startCall(context, person, false),
+              ),
+              IconButton(
+                tooltip: 'Video call',
+                icon: const Icon(Icons.videocam_outlined),
+                onPressed: () => _startCall(context, person, true),
+              ),
+            ]),
+          )),
+        const Divider(height: 24),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Text('Recent calls', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        ),
+        StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance.collection('calls')
+              .where('participants', arrayContains: uid).snapshots(),
+          builder: (context, directSnapshot) {
+            if (directSnapshot.hasError) {
+              debugPrint('ConnectX calls query failed: ${directSnapshot.error}');
+              return const Padding(
+                padding: EdgeInsets.all(18),
+                child: Text('Call history is temporarily unavailable. You can still call a contact above.'),
+              );
+            }
+            if (!directSnapshot.hasData) {
+              return const Padding(
+                padding: EdgeInsets.all(18),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            final directCalls = directSnapshot.data!.docs.toList()
               ..sort((a, b) {
                 final aa = a.data()['createdAt'], bb = b.data()['createdAt'];
                 return (bb is Timestamp ? bb : Timestamp(0, 0))
-                  .compareTo(aa is Timestamp ? aa : Timestamp(0, 0));
+                    .compareTo(aa is Timestamp ? aa : Timestamp(0, 0));
               });
-            if (directCalls.isEmpty && groupCalls.isEmpty) {
-              return const _SectionEmptyState(icon: Icons.call_outlined,
-                title: 'No calls yet', description: 'Your voice, video and group call history will appear here.');
-            }
-            return ListView(padding: const EdgeInsets.only(bottom: 90), children: [
-              if (directCalls.isNotEmpty) ...[
-                const Padding(padding: EdgeInsets.all(16), child: Text('Recent calls',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
-                ...directCalls.map((doc) {
-                  final data = doc.data();
-                  final incoming = data['calleeUid'] == uid;
-                  final ringing = data['status'] == 'ringing' && incoming;
-                  final video = data['type'] == 'video';
-                  final peerName = (incoming ? data['callerName'] : data['calleeName']) ?? 'ConnectX user';
-                  final status = (data['status'] ?? 'unknown').toString();
-                  return ListTile(
-                    leading: CircleAvatar(child: Icon(video ? Icons.videocam : Icons.call)),
-                    title: Text(peerName.toString()),
-                    subtitle: Text(ringing ? 'Incoming ${video ? 'video' : 'voice'} call' :
-                      '${incoming ? 'Incoming' : 'Outgoing'} · $status'),
-                    trailing: ringing ? IconButton(icon: const Icon(Icons.call, color: Colors.green),
-                      onPressed: () => Navigator.of(context).pushNamed('/call', arguments: {
-                        'callId': doc.id, 'peerUid': data['callerUid'].toString(),
-                        'peerName': peerName.toString(), 'isCaller': false, 'isVideo': video,
-                      })) : null,
-                  );
-                }),
-              ],
-              if (groupCalls.isNotEmpty) ...[
-                const Padding(padding: EdgeInsets.fromLTRB(16, 20, 16, 8), child: Text('Group calls',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
-                ...groupCalls.map((doc) {
-                  final data = doc.data();
-                  final expiry = data['expiresAt'];
-                  final active = data['status'] == 'active'
-                    && expiry is Timestamp && expiry.toDate().isAfter(DateTime.now());
-                  final type = data['type'] == 'video' ? 'Video' : 'Voice';
-                  final activeUids = List<String>.from(data['activeUids'] ?? []);
-                  return ListTile(
-                    leading: CircleAvatar(child: Icon(type == 'Video' ? Icons.video_call : Icons.groups)),
-                    title: Text((data['groupName'] ?? 'Group call').toString()),
-                    subtitle: Text('$type group call · ${active ? 'Active (${activeUids.length} joined)' : (data['status'] ?? 'Ended')}'),
-                    trailing: active ? IconButton(
-                      tooltip: 'Join group call',
-                      icon: const Icon(Icons.call, color: Colors.green),
-                      onPressed: () => Navigator.of(context).pushNamed('/group-call', arguments: {
-                        'callId': doc.id,
-                        'groupId': data['groupId'].toString(),
-                        'groupName': (data['groupName'] ?? 'Group').toString(),
-                        'callType': data['type'] ?? 'voice',
-                        'isCreator': false,
-                        'isGroupCall': true,
-                      }),
-                    ) : null,
-                  );
-                }),
-              ],
-            ]);
+            return Column(children: directCalls.map((doc) {
+              final data = doc.data();
+              final incoming = data['calleeUid'] == uid;
+              final video = data['type'] == 'video';
+              final peerName = (incoming ? data['callerName'] : data['calleeName'])?.toString() ?? 'ConnectX user';
+              final ringing = data['status'] == 'ringing' && incoming;
+              final peerUid = (incoming ? data['callerUid'] : data['calleeUid'])?.toString() ?? '';
+              final person = contacts.where((u) => u.key == peerUid).cast<User1?>().firstWhere(
+                (u) => u != null, orElse: () => null);
+              return ListTile(
+                leading: CircleAvatar(
+                  backgroundImage: person?.photoUrl.isNotEmpty == true ? NetworkImage(person!.photoUrl) : null,
+                  child: person?.photoUrl.isNotEmpty == true ? null : Icon(video ? Icons.videocam : Icons.call),
+                ),
+                title: Text(peerName),
+                subtitle: Text(ringing ? 'Incoming ${video ? 'video' : 'voice'} call' :
+                    '${incoming ? 'Incoming' : 'Outgoing'} · ${data['status'] ?? 'unknown'}'),
+                trailing: ringing ? IconButton(
+                  icon: const Icon(Icons.call, color: Colors.green),
+                  onPressed: () => Navigator.of(context).pushNamed('/call', arguments: {
+                    'callId': doc.id, 'peerUid': peerUid, 'peerName': peerName,
+                    'isCaller': false, 'isVideo': video,
+                  }),
+                ) : null,
+              );
+            }).toList());
           },
-        );
-      },
+        ),
+        const Divider(height: 24),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Text('Group calls', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        ),
+        StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance.collection('groupCalls')
+              .where('participants', arrayContains: uid).snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              debugPrint('ConnectX group calls query failed: ${snapshot.error}');
+              return const Padding(
+                padding: EdgeInsets.all(18),
+                child: Text('Group call history is temporarily unavailable.'),
+              );
+            }
+            if (!snapshot.hasData) {
+              return const Padding(
+                padding: EdgeInsets.all(18),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            final docs = snapshot.data!.docs.toList()
+              ..sort((a, b) {
+                final aa = a.data()['createdAt'], bb = b.data()['createdAt'];
+                return (bb is Timestamp ? bb : Timestamp(0, 0))
+                    .compareTo(aa is Timestamp ? aa : Timestamp(0, 0));
+              });
+            if (docs.isEmpty) return const Padding(
+              padding: EdgeInsets.all(18),
+              child: Text('No group calls yet.'),
+            );
+            return Column(children: docs.map((doc) {
+              final data = doc.data();
+              final expiry = data['expiresAt'];
+              final active = data['status'] == 'active' &&
+                  expiry is Timestamp && expiry.toDate().isAfter(DateTime.now());
+              final type = data['type'] == 'video' ? 'Video' : 'Voice';
+              return ListTile(
+                leading: CircleAvatar(child: Icon(type == 'Video' ? Icons.video_call : Icons.groups)),
+                title: Text((data['groupName'] ?? 'Group call').toString()),
+                subtitle: Text('$type group call · ${active ? 'Active' : (data['status'] ?? 'Ended')}'),
+                trailing: active ? IconButton(
+                  tooltip: 'Join group call',
+                  icon: const Icon(Icons.call, color: Colors.green),
+                  onPressed: () => Navigator.of(context).pushNamed('/group-call', arguments: {
+                    'callId': doc.id,
+                    'groupId': data['groupId'].toString(),
+                    'groupName': (data['groupName'] ?? 'Group').toString(),
+                    'callType': data['type'] ?? 'voice',
+                    'isCreator': false,
+                    'isGroupCall': true,
+                  }),
+                ) : null,
+              );
+            }).toList());
+          },
+        ),
+      ],
     );
   }
 }
