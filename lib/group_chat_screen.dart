@@ -54,7 +54,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: const Text('Manage group'),
-          content: SizedBox(width: double.maxFinite, height: 430, child: Column(children: [
+          content: SizedBox(width: double.maxFinite, height: (MediaQuery.of(context).size.height * .66).clamp(300.0, 460.0).toDouble(), child: Column(children: [
             TextField(controller: nameController, maxLength: 40,
               decoration: const InputDecoration(labelText: 'Group name')),
             TextField(controller: descriptionController, maxLength: 512, maxLines: 2,
