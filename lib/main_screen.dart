@@ -725,9 +725,11 @@ class _UpdatesTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser!.uid;
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      // Keep the realtime audience query independent of the expiry range.
+      // Expiry is filtered below so a missing composite index cannot hide
+      // successfully published statuses from the entire feed.
       stream: FirebaseFirestore.instance.collection('statuses')
           .where('audienceUids', arrayContains: uid)
-          .where('expiresAt', isGreaterThan: Timestamp.now())
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
@@ -779,6 +781,50 @@ class _UpdatesTab extends StatelessWidget {
           return DateFormat('d MMM, h:mm a').format(date);
         }
 
+        Widget myStatusAvatar({required bool hasStatus}) {
+          return StreamBuilder<DatabaseEvent>(
+            stream: ConnectXDatabase.instance.ref('PublicUsers').child(uid).onValue,
+            builder: (context, profileSnapshot) {
+              final profile = profileSnapshot.data?.snapshot;
+              final photoUrl = profile?.child('photoUrl').value?.toString() ??
+                  FirebaseAuth.instance.currentUser?.photoURL ?? '';
+              final avatar = CircleAvatar(
+                radius: 27,
+                backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+                child: photoUrl.isEmpty ? const Icon(Icons.person_outline_rounded) : null,
+              );
+              return Stack(clipBehavior: Clip.none, children: [
+                if (hasStatus)
+                  Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: const Color(0xFF25D366), width: 2.5),
+                    ),
+                    child: avatar,
+                  )
+                else
+                  avatar,
+                Positioned(
+                  right: -1,
+                  bottom: -1,
+                  child: Container(
+                    width: 21,
+                    height: 21,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF008069),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Theme.of(context).scaffoldBackgroundColor, width: 2),
+                    ),
+                    child: const Icon(Icons.add, size: 15, color: Colors.white),
+                  ),
+                ),
+              ]);
+            },
+          );
+        }
+
         Widget statusAvatar(
           QueryDocumentSnapshot<Map<String, dynamic>> latest, {
           required bool own,
@@ -797,32 +843,7 @@ class _UpdatesTab extends StatelessWidget {
                         : Icons.text_fields_rounded)
                 : null,
           );
-          if (own) {
-            return Stack(clipBehavior: Clip.none, children: [
-              Container(
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFF25D366), width: 2.5),
-                ),
-                child: avatar,
-              ),
-              Positioned(
-                right: -1,
-                bottom: -1,
-                child: Container(
-                  width: 21,
-                  height: 21,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF008069),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Theme.of(context).scaffoldBackgroundColor, width: 2),
-                  ),
-                  child: const Icon(Icons.add, size: 15, color: Colors.white),
-                ),
-              ),
-            ]);
-          }
+          if (own) return myStatusAvatar(hasStatus: true);
           return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
             stream: latest.reference.collection('views').doc(uid).snapshots(),
             builder: (context, viewSnapshot) {
@@ -916,27 +937,7 @@ class _UpdatesTab extends StatelessWidget {
             if (mine.isEmpty)
               ListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
-                leading: Stack(clipBehavior: Clip.none, children: [
-                  CircleAvatar(
-                    radius: 30,
-                    backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                    child: const Icon(Icons.person_outline_rounded, size: 29),
-                  ),
-                  Positioned(
-                    right: -1,
-                    bottom: -1,
-                    child: Container(
-                      width: 21,
-                      height: 21,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF008069),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Theme.of(context).scaffoldBackgroundColor, width: 2),
-                      ),
-                      child: const Icon(Icons.add, size: 15, color: Colors.white),
-                    ),
-                  ),
-                ]),
+                leading: myStatusAvatar(hasStatus: false),
                 title: const Text('My status', style: TextStyle(fontWeight: FontWeight.w600)),
                 subtitle: const Text('Tap to add a status update'),
                 onTap: () => _create(context),
