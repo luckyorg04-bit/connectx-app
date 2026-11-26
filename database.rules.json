@@ -29,6 +29,9 @@
         },
         "notificationSettings": {
           ".write": "auth != null && auth.uid == $uid"
+        },
+        "appSettings": {
+          ".write": "auth != null && auth.uid == $uid"
         }
       }
     },
