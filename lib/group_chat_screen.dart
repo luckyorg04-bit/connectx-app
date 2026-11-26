@@ -47,6 +47,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     final selected = <String>{...members};
     final selectedAdmins = <String>{...admins, creator};
     final nameController = TextEditingController(text: (data['name'] ?? _groupName).toString());
+    final descriptionController = TextEditingController(text: (data['description'] ?? '').toString());
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
@@ -55,6 +56,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           content: SizedBox(width: double.maxFinite, height: 430, child: Column(children: [
             TextField(controller: nameController, maxLength: 40,
               decoration: const InputDecoration(labelText: 'Group name')),
+            TextField(controller: descriptionController, maxLength: 512, maxLines: 2,
+              decoration: const InputDecoration(labelText: 'Group description')),
             const Align(alignment: Alignment.centerLeft,
               child: Text('Members and admins', style: TextStyle(fontWeight: FontWeight.w600))),
             Expanded(child: ListView(children: users.where((u) => u.key != uid || selected.contains(uid)).map((person) {
@@ -91,7 +94,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       ),
     );
     final newName = nameController.text.trim();
+    final newDescription = descriptionController.text.trim();
     nameController.dispose();
+    descriptionController.dispose();
     if (confirmed != true || newName.isEmpty) return;
     selected.add(creator);
     selectedAdmins.add(creator);
@@ -99,6 +104,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     try {
       await ref.update({
         'name': newName,
+        'description': newDescription,
         'memberUids': selected.toList(),
         'adminUids': selectedAdmins.where(selected.contains).toList(),
       });
