@@ -19,6 +19,7 @@ dependencies:
   firebase_messaging: 15.2.5
   google_sign_in: ^6.1.5
   http: ^0.13.5
+  flutter_contacts: ^1.1.9+2
   intl: ^0.20.2
   flutter_local_notifications: ^17.2.4
   elegant_notification: ^1.8.1
