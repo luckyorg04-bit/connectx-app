@@ -68,8 +68,17 @@ Future<void> main() async {
     )),
   );
   if (FirebaseAuth.instance.currentUser != null) {
-    await AppPreferences.load();
-    await NotificationService.initialize();
+    // Optional startup services must never hold the app on its splash screen.
+    try {
+      await AppPreferences.load().timeout(const Duration(seconds: 8));
+    } catch (error) {
+      debugPrint('ConnectX startup preferences unavailable: $error');
+    }
+    try {
+      await NotificationService.initialize().timeout(const Duration(seconds: 8));
+    } catch (error) {
+      debugPrint('ConnectX startup notifications unavailable: $error');
+    }
   }
   runApp(const MyApp(user: null));
 }
