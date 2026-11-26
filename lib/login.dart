@@ -430,8 +430,18 @@ class AuthPageState extends State<AuthPage> {
   }
 
   Future<void> _openMain() async {
-    await AppPreferences.load();
-    await NotificationService.initialize();
+    // Local preferences and push notifications are optional startup services.
+    // A failure in either must not strand an authenticated user on the login page.
+    try {
+      await AppPreferences.load().timeout(const Duration(seconds: 5));
+    } catch (error) {
+      debugPrint('ConnectX preferences startup failed: $error');
+    }
+    try {
+      await NotificationService.initialize().timeout(const Duration(seconds: 8));
+    } catch (error) {
+      debugPrint('ConnectX notification startup failed: $error');
+    }
     currentRoute = '/main';
     if (!mounted) return;
     await Navigator.of(context).pushNamedAndRemoveUntil('/main', (route) => false);
