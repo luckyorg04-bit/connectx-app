@@ -185,7 +185,7 @@ ThemeData _buildTheme(Brightness brightness) {
     brightness: brightness,
     colorScheme: scheme,
     fontFamily: 'Roboto',
-    scaffoldBackgroundColor: isDark ? const Color(0xFF0B141B) : Colors.white,
+    scaffoldBackgroundColor: isDark ? const Color(0xFF0B141B) : const Color(0xFFF7F8F8),
     appBarTheme: AppBarTheme(
       toolbarHeight: 56,
       titleTextStyle: TextStyle(
@@ -203,7 +203,7 @@ ThemeData _buildTheme(Brightness brightness) {
       surfaceTintColor: Colors.transparent,
     ),
     navigationBarTheme: NavigationBarThemeData(
-      height: 68,
+      height: 64,
       backgroundColor: isDark ? const Color(0xFF141D24) : Colors.white,
       indicatorColor: isDark ? const Color(0xFF005B4A) : const Color(0xFFE7FCE3),
       labelTextStyle: WidgetStateProperty.resolveWith((states) => TextStyle(
@@ -224,7 +224,7 @@ ThemeData _buildTheme(Brightness brightness) {
       elevation: 0,
       margin: EdgeInsets.zero,
       color: isDark ? const Color(0xFF141D24) : const Color(0xFFF7F8F8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
@@ -233,10 +233,10 @@ ThemeData _buildTheme(Brightness brightness) {
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: isDark ? const Color(0xFF222B32) : const Color(0xFFF0F2F5),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         borderSide: BorderSide(color: primary, width: 1.4),
       ),
     ),
