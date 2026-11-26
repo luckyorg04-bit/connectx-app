@@ -94,10 +94,22 @@ jobs:
           node --check vps-api/migrate-rtdb.js
           node -e "for (const f of ['firebase.json','database.rules.json','firestore.indexes.json']) JSON.parse(require('fs').readFileSync(f, 'utf8'))"
 
+      - name: Set up Java 21 for Firebase Emulator Suite
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - name: Run Firebase security rules tests
         run: |
           npm install --prefix firebase-tests --no-audit --no-fund
           npx --yes firebase-tools emulators:exec --only database,firestore --project connectx-rules-test "npm test --prefix firebase-tests"
+
+      - name: Restore Java 17 for Android release builds
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
 
       - name: Analyze Flutter project
         run: flutter analyze --no-fatal-infos
