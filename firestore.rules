@@ -155,11 +155,9 @@ service cloud.firestore {
         && request.resource.data.expiresAt is timestamp
         && request.resource.data.expiresAt > request.time
         && request.resource.data.expiresAt <= request.time + duration.value(24, 'h');
-      // Statuses are visible only to the owner and the audience captured at publish time.
-      // Feed queries must include audienceUids arrayContains request.auth.uid.
-      allow read: if signedIn()
-        && resource.data.audienceUids is list
-        && resource.data.audienceUids.hasAny([request.auth.uid]);
+      // Status metadata is visible to signed-in users. Media downloads are
+      // separately authorized by the VPS against the captured audience list.
+      allow read: if signedIn();
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
       allow update: if false;
       match /views/{viewerUid} {
