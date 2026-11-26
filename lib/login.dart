@@ -310,9 +310,9 @@ class AuthPageState extends State<AuthPage> {
     try {
       UserCredential credential;
       if (_isLogin) {
-        credential = await FirebaseAuth.instance.signInWithEmailAndPassword(email: email, password: password);
+        credential = await FirebaseAuth.instance.signInWithEmailAndPassword(email: email, password: password).timeout(const Duration(seconds: 25));
       } else {
-        credential = await FirebaseAuth.instance.createUserWithEmailAndPassword(email: email, password: password);
+        credential = await FirebaseAuth.instance.createUserWithEmailAndPassword(email: email, password: password).timeout(const Duration(seconds: 25));
         await credential.user?.updateDisplayName(_nameController.text.trim());
         final existingPhoneUid = await PhoneLookupService.findUid(_phoneController.text.trim());
         if (existingPhoneUid != null) {
@@ -332,15 +332,17 @@ class AuthPageState extends State<AuthPage> {
       } else if (await PhoneLookupService.getPrivatePhone(credential.user!.uid) == null) {
         final phone = await _askPhoneNumber();
         if (phone == null) {
-          await FirebaseAuth.instance.signOut();
+          await _cleanupPartialSession();
           return;
         }
         await PhoneLookupService.register(credential.user!.uid, phone);
       }
       await _openMain();
     } on FirebaseAuthException catch (error) {
+      await _cleanupPartialSession();
       _showError(_authError(error));
     } catch (error) {
+      await _cleanupPartialSession();
       _showError('Unable to sign in right now. Check your details and connection, then try again.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -363,15 +365,17 @@ class AuthPageState extends State<AuthPage> {
       if (await PhoneLookupService.getPrivatePhone(userCredential.user!.uid) == null) {
         final phone = await _askPhoneNumber();
         if (phone == null) {
-          await FirebaseAuth.instance.signOut();
+          await _cleanupPartialSession(clearGoogle: true);
           return;
         }
         await PhoneLookupService.register(userCredential.user!.uid, phone);
       }
       await _openMain();
     } on FirebaseAuthException catch (error) {
+      await _cleanupPartialSession(clearGoogle: true);
       _showError(_authError(error));
     } catch (error) {
+      await _cleanupPartialSession(clearGoogle: true);
       _showError('Google sign-in could not be completed. Check your connection and try again.');
     } finally {
       if (mounted) setState(() => _isGoogleLoading = false);
@@ -526,6 +530,23 @@ class AuthPageState extends State<AuthPage> {
     currentRoute = '/main';
     if (!mounted) return;
     await Navigator.of(context).pushNamedAndRemoveUntil('/main', (route) => false);
+  }
+
+  Future<void> _cleanupPartialSession({bool clearGoogle = false}) async {
+    try {
+      if (FirebaseAuth.instance.currentUser != null) {
+        await FirebaseAuth.instance.signOut().timeout(const Duration(seconds: 6));
+      }
+    } catch (error) {
+      debugPrint('ConnectX partial authentication cleanup failed: $error');
+    }
+    if (clearGoogle) {
+      try {
+        await GoogleSignIn().signOut().timeout(const Duration(seconds: 4));
+      } catch (error) {
+        debugPrint('ConnectX partial Google session cleanup failed: $error');
+      }
+    }
   }
 
   void _showError(String message) {
