@@ -394,7 +394,7 @@ class AuthPageState extends State<AuthPage> {
       } else {
         _showError('You are signed in, but ConnectX could not finish loading. Reopen the app; your account remains signed in.');
       }
-    }    } finally {
+    } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
