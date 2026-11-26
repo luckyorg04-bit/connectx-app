@@ -73,13 +73,23 @@ service cloud.firestore {
           && request.resource.data.reactions is map
           && resource.data.get('reactions', {}) is map
           && request.resource.data.reactions.keys().size() <= 2
-          && request.resource.data.reactions.get(otherParticipant(conversationId), null)
-            == resource.data.get('reactions', {}).get(otherParticipant(conversationId), null)
+          && (
+            (
+              !resource.data.get('reactions', {}).keys().hasAny([otherParticipant(conversationId)])
+              && !request.resource.data.reactions.keys().hasAny([otherParticipant(conversationId)])
+            )
+            || (
+              resource.data.get('reactions', {}).keys().hasAny([otherParticipant(conversationId)])
+              && request.resource.data.reactions.keys().hasAny([otherParticipant(conversationId)])
+              && request.resource.data.reactions[otherParticipant(conversationId)]
+                == resource.data.reactions[otherParticipant(conversationId)]
+            )
+          )
           && (
             !request.resource.data.reactions.keys().hasAny([request.auth.uid])
             || (
-              request.resource.data.reactions.get(request.auth.uid, '') is string
-              && request.resource.data.reactions.get(request.auth.uid, '').size() <= 8
+              request.resource.data.reactions[request.auth.uid] is string
+              && request.resource.data.reactions[request.auth.uid].size() <= 8
             )
           )
         )
