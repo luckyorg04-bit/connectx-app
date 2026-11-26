@@ -21,7 +21,8 @@
    <application
         android:label="ConnectX"
         android:name="${applicationName}"
-        android:icon="@mipmap/logo">
+        android:icon="@mipmap/logo"
+        android:roundIcon="@mipmap/logo">
 <!--       <service-->
 <!--           android:name=".FcmReceiver"-->
 <!--           android:exported="false"-->
