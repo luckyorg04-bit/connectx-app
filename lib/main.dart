@@ -1,3 +1,4 @@
+import 'dart:ui' as ui;
 import 'package:connectx/models/user.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -16,9 +17,45 @@ import 'app_navigator.dart';
 import 'settings_screen.dart';
 import 'services/app_preferences.dart';
 
+bool _globalErrorDialogVisible = false;
+
+void _showGlobalErrorDialog() {
+  if (_globalErrorDialogVisible) return;
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    final context = appNavigatorKey.currentContext;
+    if (context == null || !context.mounted || _globalErrorDialogVisible) return;
+    _globalErrorDialogVisible = true;
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          icon: const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 40),
+          title: const Text('Something went wrong'),
+          content: const Text('ConnectX hit an unexpected problem. Your account data has not been intentionally changed. Please try again.'),
+          actions: [FilledButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('OK'),
+          )],
+        ),
+      );
+    } finally {
+      _globalErrorDialogVisible = false;
+    }
+  });
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+  FlutterError.onError = (details) {
+    debugPrint('ConnectX framework error: ${details.exceptionAsString()}');
+    _showGlobalErrorDialog();
+  };
+  ui.PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('ConnectX uncaught error: $error');
+    _showGlobalErrorDialog();
+    return true;
+  };
   ErrorWidget.builder = (details) => const Material(
     color: Color(0xFF0B141B),
     child: Center(child: Padding(
