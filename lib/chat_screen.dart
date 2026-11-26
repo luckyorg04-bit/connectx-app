@@ -760,7 +760,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
     final currentUser = FirebaseAuth.instance.currentUser!;
     return Scaffold(
       backgroundColor: Theme.of(context).brightness == Brightness.dark
-          ? const Color(0xFF101A20) : const Color(0xFFF4F7F7),
+          ? const Color(0xFF0B141B) : const Color(0xFFEFEAE2),
       appBar: AppBar(
         automaticallyImplyLeading: false,
         title: Row(children: [
