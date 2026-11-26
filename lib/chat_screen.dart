@@ -795,7 +795,9 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
           ),
         ],
       ),
-      body: Column(children: [
+      body: CustomPaint(
+        painter: _ChatWallpaperPainter(dark: Theme.of(context).brightness == Brightness.dark),
+        child: Column(children: [
         Expanded(child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
           stream: _messageStream,
           builder: (context, snapshot) {
@@ -907,7 +909,8 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
             ),
           ]),
         )),
-      ]),
+        ]),
+      ),
     );
   }
 
@@ -923,6 +926,41 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
     scrollController.dispose();
     super.dispose();
   }
+}
+
+
+class _ChatWallpaperPainter extends CustomPainter {
+  final bool dark;
+  const _ChatWallpaperPainter({required this.dark});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = (dark ? const Color(0xFF9FB2B8) : const Color(0xFF7B8B82)).withOpacity(dark ? .075 : .12)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.15;
+    const step = 76.0;
+    var row = 0;
+    for (double y = -step; y < size.height + step; y += step) {
+      final shift = row.isEven ? 0.0 : step / 2;
+      for (double x = -step + shift; x < size.width + step; x += step) {
+        final center = Offset(x, y);
+        canvas.drawCircle(center, 9, paint);
+        final wave = Path()
+          ..moveTo(x - 15, y + 20)
+          ..cubicTo(x - 5, y + 8, x + 5, y + 32, x + 16, y + 18);
+        canvas.drawPath(wave, paint);
+        canvas.drawArc(
+          Rect.fromCircle(center: Offset(x + 22, y - 19), radius: 7),
+          .4, 4.5, false, paint,
+        );
+      }
+      row++;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ChatWallpaperPainter oldDelegate) => oldDelegate.dark != dark;
 }
 
 String assignUsers(String user1, String user2) {
