@@ -308,7 +308,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
                 child: Text('Add members', style: TextStyle(fontWeight: FontWeight.w600))),
               Expanded(
                 child: available.isEmpty
-                  ? const Center(child: Text('No other contacts yet. You can create the group now and add members later.'))
+                  ? const Center(child: Text('Start a chat with at least one person before creating a group.'))
                   : ListView(children: available.map((person) => CheckboxListTile(
                       value: selected.contains(person.key),
                       title: Text(person.name),
@@ -324,7 +324,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
           actions: [
             TextButton(onPressed: () => Navigator.pop(dialogContext, false),
               child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(dialogContext, true),
+            FilledButton(onPressed: selected.isEmpty ? null : () => Navigator.pop(dialogContext, true),
               child: const Text('Create')),
           ],
         ),
@@ -334,7 +334,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
     final groupDescription = descriptionController.text.trim();
     nameController.dispose();
     descriptionController.dispose();
-    if (confirmed != true || groupName.isEmpty) return;
+    if (confirmed != true || groupName.isEmpty || selected.isEmpty) return;
     final uid = FirebaseAuth.instance.currentUser!.uid;
     final members = <String>{uid, ...selected}.toList();
     try {
