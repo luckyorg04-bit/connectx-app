@@ -297,7 +297,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
           title: const Text('Create group'),
           content: SizedBox(
             width: double.maxFinite,
-            height: 360,
+            height: (MediaQuery.of(context).size.height * .58).clamp(280.0, 420.0).toDouble(),
             child: Column(children: [
               TextField(
                 controller: nameController,
