@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:connectx/chat_screen.dart';
 import 'package:connectx/login.dart';
@@ -103,4 +104,33 @@ void main() {
     expect(validateUsername('ab'), isNotNull);
     expect(validateUsername('bad..name'), isNotNull);
   });
+  testWidgets('ConnectX sign-in screen shows branded responsive authentication', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    await tester.pumpWidget(const MaterialApp(home: AuthPage()));
+    expect(find.text('ConnectX'), findsOneWidget);
+    expect(find.text('Welcome back'), findsOneWidget);
+    expect(find.text('Sign in'), findsWidgets);
+    expect(find.text('Continue with Google'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+
+  testWidgets('ConnectX sign-up reveals required profile fields', (tester) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1;
+    await tester.pumpWidget(const MaterialApp(home: AuthPage()));
+    await tester.ensureVisible(find.text('Sign up'));
+    await tester.tap(find.text('Sign up'));
+    await tester.pumpAndSettle();
+    expect(find.text('Join ConnectX'), findsOneWidget);
+    expect(find.text('Full name'), findsOneWidget);
+    expect(find.text('Username'), findsOneWidget);
+    expect(find.text('Phone number with country code'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+
 }

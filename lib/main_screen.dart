@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectx/models/chat.dart';
 import 'package:connectx/utils/user_list.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:video_player/video_player.dart';
 import 'package:flutter/material.dart';
@@ -35,6 +36,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
   late final TabController _tabController;
   bool _showProfile = false;
   String _chatFilter = 'All';
+  String _chatSearch = '';
+  final TextEditingController _chatSearchController = TextEditingController();
 
   @override
   void initState() {
@@ -95,10 +98,13 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          _showProfile ? 'Profile' : 'ConnectX',
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
+        title: _showProfile
+            ? const Text('Profile', style: TextStyle(fontWeight: FontWeight.w700))
+            : const Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.forum_rounded, size: 21, color: Colors.white),
+                SizedBox(width: 9),
+                Text('ConnectX', style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: -.25)),
+              ]),
         automaticallyImplyLeading: false,
         leading: _showProfile
             ? IconButton(
@@ -244,6 +250,33 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
     const filters = ['All', 'Unread', 'Favorites', 'Groups', 'Archived'];
     return Column(
       children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
+          child: SizedBox(
+            height: 46,
+            child: TextField(
+              controller: _chatSearchController,
+              onChanged: (value) => setState(() => _chatSearch = value),
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                hintText: 'Search chats or people',
+                prefixIcon: const Icon(Icons.search_rounded),
+                suffixIcon: _chatSearch.isEmpty ? null : IconButton(
+                  tooltip: 'Clear search',
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () => setState(() {
+                    _chatSearchController.clear();
+                    _chatSearch = '';
+                  }),
+                ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                filled: true,
+                fillColor: Theme.of(context).brightness == Brightness.dark
+                    ? const Color(0xFF202C33) : const Color(0xFFF0F2F5),
+              ),
+            ),
+          ),
+        ),
         SizedBox(
           height: 58,
           child: ListView.separated(
@@ -257,6 +290,14 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
               return ChoiceChip(
                 label: Text(filter),
                 selected: selected,
+                selectedColor: const Color(0xFFD9FDD3),
+                backgroundColor: Theme.of(context).brightness == Brightness.dark
+                    ? const Color(0xFF202C33) : const Color(0xFFF0F2F5),
+                side: BorderSide.none,
+                labelStyle: TextStyle(
+                  color: selected ? const Color(0xFF075E54) : Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                ),
                 onSelected: (_) => setState(() => _chatFilter = filter),
               );
             },
@@ -264,7 +305,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
         ),
         Expanded(
           child: _chatFilter == 'Groups'
-              ? _GroupsList(onCreateGroup: _createGroup)
+              ? _GroupsList(onCreateGroup: _createGroup, searchQuery: _chatSearch)
               : users.isEmpty && _chatFilter == 'All'
                   ? const _SectionEmptyState(
                       icon: Icons.chat_bubble_outline_rounded,
@@ -276,6 +317,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
                       key: userListKey,
                       wantChats: true,
                       filter: _chatFilter,
+                      searchQuery: _chatSearch,
                     )
 
         ),
@@ -370,7 +412,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
   Future<void> _logout() async {
     if (_isLoggingOut) return;
     setState(() => _isLoggingOut = true);
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final uid = currentUser?.uid;
+    final isGoogleSession = currentUser?.providerData.any((provider) => provider.providerId == 'google.com') ?? false;
     // Presence and notification cleanup are best-effort. They must never
     // prevent Firebase Auth from signing the user out.
     try {
@@ -384,19 +428,43 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
     } catch (error) {
       debugPrint('ConnectX logout presence cleanup failed: $error');
     }
+    // Stop account-scoped listeners before clearing the authenticated session.
+    final activeSubscriptions = List<StreamSubscription>.from(subscriptions);
+    subscriptions.clear();
+    users.clear();
+    chats.clear();
+    try {
+      await Future.wait(activeSubscriptions.map((subscription) => subscription.cancel()))
+          .timeout(const Duration(seconds: 4));
+    } catch (error) {
+      debugPrint('ConnectX logout listener cleanup failed: $error');
+    }
     try {
       await NotificationService.dispose().timeout(const Duration(seconds: 4));
     } catch (error) {
       debugPrint('ConnectX logout notification cleanup failed: $error');
     }
+    if (isGoogleSession) {
+      try {
+        await GoogleSignIn().signOut().timeout(const Duration(seconds: 4));
+      } catch (error) {
+        debugPrint('ConnectX Google session cleanup failed: $error');
+      }
+    }
     try {
       await FirebaseAuth.instance.signOut().timeout(const Duration(seconds: 8));
     } catch (error) {
       debugPrint('ConnectX Firebase sign-out failed: $error');
-      if (mounted) setState(() => _isLoggingOut = false);
+      // The user is still authenticated; restore the home data listeners.
+      if (mounted) {
+        getData();
+        setState(() => _isLoggingOut = false);
+      }
       return;
     }
     AppPreferences.reset();
+    pendingCallArguments = null;
+    pendingDirectChatUid = null;
     currentRoute = '/login';
     if (!mounted) return;
     await Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
@@ -444,6 +512,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _tabController.dispose();
+    _chatSearchController.dispose();
     for (final subscription in subscriptions) {
       subscription.cancel();
     }
@@ -454,7 +523,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
 
 class _GroupsList extends StatelessWidget {
   final VoidCallback onCreateGroup;
-  const _GroupsList({required this.onCreateGroup});
+  final String searchQuery;
+  const _GroupsList({required this.onCreateGroup, required this.searchQuery});
 
   @override
   Widget build(BuildContext context) {
@@ -475,11 +545,15 @@ class _GroupsList extends StatelessWidget {
           builder: (context, snapshot) {
             if (snapshot.hasError) return const _SectionEmptyState(icon: Icons.cloud_off_outlined, title: 'Groups are unavailable', description: 'ConnectX could not load your groups. Check your connection and try again.') ;
             if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-            final groups = snapshot.data!.docs;
-            if (groups.isEmpty) return const _SectionEmptyState(
+            final query = searchQuery.trim().toLowerCase();
+            final groups = snapshot.data!.docs.where((doc) {
+              final name = (doc.data()['name'] ?? 'Group').toString().toLowerCase();
+              return query.isEmpty || name.contains(query);
+            }).toList();
+            if (groups.isEmpty) return _SectionEmptyState(
               icon: Icons.groups_outlined,
-              title: 'No group chats yet',
-              description: 'Create a group to start a group conversation.',
+              title: query.isEmpty ? 'No group chats yet' : 'No matching groups',
+              description: query.isEmpty ? 'Create a group to start a group conversation.' : 'Try another group name.',
             );
             return ListView.builder(
               itemCount: groups.length,
@@ -515,12 +589,26 @@ class _UpdatesTab extends StatelessWidget {
         ListTile(leading: const Icon(Icons.videocam), title: const Text('Video status'), onTap: () => Navigator.pop(c, 'video')),
       ])));
     if (kind == null) return;
-    // WhatsApp-style default: share with all known ConnectX users; no per-status
-    // audience picker. Keep the owner in the list for the Firestore rule.
-    final audience = <String>{
-      uid,
-      ...users.where((u) => u.key != uid).map((u) => u.key),
-    }.take(500).toList();
+    // Status audience must include registered users, not only the recent-chat
+    // list. The latter is intentionally limited to active conversations.
+    final audienceSet = <String>{uid};
+    try {
+      final publicUsers = await ConnectXDatabase.instance
+          .ref('PublicUsers').get().timeout(const Duration(seconds: 10));
+      audienceSet.addAll(publicUsers.children
+          .map((profile) => profile.key)
+          .whereType<String>()
+          .where((userUid) => userUid.isNotEmpty));
+    } catch (error) {
+      debugPrint('ConnectX status audience lookup failed: $error');
+      audienceSet.addAll(users.map((user) => user.key).where((userUid) => userUid.isNotEmpty));
+    }
+    final orderedAudience = audienceSet.toList()..sort();
+    orderedAudience.remove(uid);
+    final audience = <String>[uid, ...orderedAudience].take(500).toList();
+    if (audienceSet.length > 500) {
+      debugPrint('ConnectX status audience capped at 500 users by media API limit.');
+    }
     String text = '';
     String? url, fileName;
     if (kind == 'text') {
@@ -596,39 +684,23 @@ class _UpdatesTab extends StatelessWidget {
     }
   }
 
-  Future<void> _view(BuildContext context, QueryDocumentSnapshot<Map<String, dynamic>> doc, String uid) async {
-    final data = doc.data();
-    if (data['ownerUid'] != uid) {
-      try { await doc.reference.collection('views').doc(uid).set({'viewerUid': uid, 'viewedAt': FieldValue.serverTimestamp()}); } catch (_) {}
-    }
-    if (!context.mounted) return;
-    final type = (data['mediaType'] ?? 'text').toString();
-    var statusMediaUrl = data['mediaUrl']?.toString();
-    if (statusMediaUrl != null && (type == 'image' || type == 'video')) {
-      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
-      final uri = Uri.tryParse(statusMediaUrl);
-      if (token != null && uri != null) {
-        statusMediaUrl = uri.replace(queryParameters: {
-          ...uri.queryParameters,
-          'auth': token,
-        }).toString();
-      }
-    }
-    await showDialog<void>(context: context, builder: (c) => Dialog(
-      child: Padding(padding: const EdgeInsets.all(16), child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Row(children: [Expanded(child: Text((data['userName'] ?? 'ConnectX user').toString(), style: const TextStyle(fontWeight: FontWeight.bold))),
-          IconButton(onPressed: () => Navigator.pop(c), icon: const Icon(Icons.close))]),
-        if (type == 'image' && statusMediaUrl != null)
-          Image.network(statusMediaUrl, fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => const Text('Unable to load photo'))
-        else if (type == 'video' && statusMediaUrl != null)
-          _StatusVideoPlayer(url: statusMediaUrl)
-        else
-          Padding(padding: const EdgeInsets.all(24), child: SelectableText((data['statusText'] ?? '').toString(), style: const TextStyle(fontSize: 20))),
-        if (data['ownerUid'] == uid)
-          StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(stream: doc.reference.collection('views').snapshots(),
-            builder: (_, snap) => Align(alignment: Alignment.centerLeft, child: Text('Seen by ${snap.data?.docs.length ?? 0}'))),
-      ]))));
+  Future<void> _viewGroup(
+    BuildContext context,
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> items,
+    String uid,
+  ) async {
+    if (items.isEmpty || !context.mounted) return;
+    // Present a user's statuses oldest-to-newest, like a WhatsApp story sequence.
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => Dialog.fullscreen(
+        child: _StatusStoryViewer(
+          statuses: items.reversed.toList(),
+          viewerUid: uid,
+        ),
+      ),
+    );
   }
 
   Future<void> _showViewers(BuildContext context, QueryDocumentSnapshot<Map<String, dynamic>> doc) async {
@@ -654,60 +726,254 @@ class _UpdatesTab extends StatelessWidget {
     final uid = FirebaseAuth.instance.currentUser!.uid;
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance.collection('statuses')
-        .where('audienceUids', arrayContains: uid)
-         .where('expiresAt', isGreaterThan: Timestamp.now()).snapshots(),
+          .where('audienceUids', arrayContains: uid)
+          .where('expiresAt', isGreaterThan: Timestamp.now())
+          .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) return const _SectionEmptyState(icon: Icons.cloud_off_outlined, title: 'Updates are unavailable', description: 'ConnectX could not load updates. Check your connection or try again later.');
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-        final now = Timestamp.now();
-        final docs = snapshot.data!.docs.where((d) => d.data()['expiresAt'] is Timestamp &&
-          (d.data()['expiresAt'] as Timestamp).compareTo(now) > 0).toList()
-          ..sort((a,b) => ((b.data()['createdAt'] is Timestamp) ? b.data()['createdAt'] as Timestamp : Timestamp(0,0))
-            .compareTo((a.data()['createdAt'] is Timestamp) ? a.data()['createdAt'] as Timestamp : Timestamp(0,0)));
-        final mine = docs.where((d) => d.data()['ownerUid'] == uid).toList();
-        final others = docs.where((d) => d.data()['ownerUid'] != uid).toList();
-        Widget statusTile(QueryDocumentSnapshot<Map<String, dynamic>> d, bool own) {
-          final data = d.data(), type = (d.data()['mediaType'] ?? 'text').toString();
-          return ListTile(
-            leading: CircleAvatar(
-              backgroundImage: (data['userPhotoUrl'] ?? '').toString().isNotEmpty
-                  ? NetworkImage(data['userPhotoUrl'].toString()) : null,
-              child: (data['userPhotoUrl'] ?? '').toString().isEmpty
-                  ? Icon(type == 'video' ? Icons.videocam : type == 'image' ? Icons.image : Icons.text_fields)
-                  : null,
-            ),
-            title: Text(own ? (data['statusText'] ?? data['fileName'] ?? 'My status').toString() : (data['userName'] ?? 'Contact').toString(), maxLines: 1, overflow: TextOverflow.ellipsis),
-            subtitle: own
-              ? StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(stream: d.reference.collection('views').snapshots(),
-                  builder: (_, v) => Text('Seen by ${v.data?.docs.length ?? 0} · 24-hour status'))
-              : Text((data['statusText'] ?? data['fileName'] ?? 'Media status').toString(), maxLines: 1, overflow: TextOverflow.ellipsis),
-            onTap: () => _view(context, d, uid),
-            trailing: own ? PopupMenuButton<String>(
-              onSelected: (value) {
-                if (value == 'views') _showViewers(context, d);
-                if (value == 'delete') d.reference.delete();
-              },
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'views', child: Text('View seen list')),
-                PopupMenuItem(value: 'delete', child: Text('Delete status')),
-              ],
-            ) : null,
+        if (snapshot.hasError) {
+          debugPrint('ConnectX status feed stream failed: ${snapshot.error}');
+          return const _SectionEmptyState(
+            icon: Icons.cloud_off_outlined,
+            title: 'Updates are unavailable',
+            description: 'ConnectX could not load updates. Check your connection or try again later.',
           );
         }
-        return ListView(padding: const EdgeInsets.fromLTRB(16,12,16,90), children: [
-          Text('Status', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-          ListTile(contentPadding: EdgeInsets.zero, leading: const CircleAvatar(child: Icon(Icons.add_a_photo)),
-            title: const Text('My status'), subtitle: const Text('Add text, photo or video'),
-            onTap: () => _create(context), trailing: IconButton(icon: const Icon(Icons.add), onPressed: () => _create(context))),
-          ...mine.map((d) => statusTile(d, true)),
-          const Divider(height: 24),
-          Text('Recent updates', style: Theme.of(context).textTheme.titleSmall),
-          if (others.isEmpty) const _SectionEmptyState(icon: Icons.circle_outlined, title: 'No recent updates', description: 'Statuses from your contacts appear here.')
-          else ...others.map((d) => statusTile(d, false)),
-          const Divider(height: 28),
-          const _ChannelsPanel(),
-        ]);
-      });
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final now = Timestamp.now();
+        final activeStatuses = snapshot.data!.docs.where((doc) {
+          final expiry = doc.data()['expiresAt'];
+          return expiry is Timestamp && expiry.compareTo(now) > 0;
+        }).toList();
+
+        DateTime statusDate(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+          final createdAt = doc.data()['createdAt'];
+          return createdAt is Timestamp ? createdAt.toDate() : DateTime.fromMillisecondsSinceEpoch(0);
+        }
+
+        // WhatsApp-style feed: one row per person, with that person's active
+        // statuses grouped together and the newest update shown first.
+        final grouped = <String, List<QueryDocumentSnapshot<Map<String, dynamic>>>>{};
+        for (final doc in activeStatuses) {
+          final ownerUid = (doc.data()['ownerUid'] ?? '').toString();
+          if (ownerUid.isEmpty) continue;
+          grouped.putIfAbsent(ownerUid, () => <QueryDocumentSnapshot<Map<String, dynamic>>>[]).add(doc);
+        }
+        for (final items in grouped.values) {
+          items.sort((a, b) => statusDate(b).compareTo(statusDate(a)));
+        }
+
+        final mine = grouped.remove(uid) ?? <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+        final otherGroups = grouped.entries.toList()
+          ..sort((a, b) => statusDate(b.value.first).compareTo(statusDate(a.value.first)));
+
+        String timeLabel(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+          final date = statusDate(doc);
+          if (date.millisecondsSinceEpoch == 0) return 'Just now';
+          final difference = DateTime.now().difference(date);
+          if (difference.inMinutes < 1) return 'Just now';
+          if (difference.inHours < 1) return '${difference.inMinutes} minutes ago';
+          if (difference.inDays < 1) return DateFormat.jm().format(date);
+          return DateFormat('d MMM, h:mm a').format(date);
+        }
+
+        Widget statusAvatar(
+          QueryDocumentSnapshot<Map<String, dynamic>> latest, {
+          required bool own,
+        }) {
+          final data = latest.data();
+          final photoUrl = (data['userPhotoUrl'] ?? '').toString();
+          final avatar = CircleAvatar(
+            radius: 27,
+            backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+            backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+            child: photoUrl.isEmpty
+                ? Icon((data['mediaType'] ?? 'text') == 'video'
+                    ? Icons.videocam_rounded
+                    : (data['mediaType'] ?? 'text') == 'image'
+                        ? Icons.image_rounded
+                        : Icons.text_fields_rounded)
+                : null,
+          );
+          if (own) {
+            return Stack(clipBehavior: Clip.none, children: [
+              Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFF25D366), width: 2.5),
+                ),
+                child: avatar,
+              ),
+              Positioned(
+                right: -1,
+                bottom: -1,
+                child: Container(
+                  width: 21,
+                  height: 21,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF008069),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Theme.of(context).scaffoldBackgroundColor, width: 2),
+                  ),
+                  child: const Icon(Icons.add, size: 15, color: Colors.white),
+                ),
+              ),
+            ]);
+          }
+          return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+            stream: latest.reference.collection('views').doc(uid).snapshots(),
+            builder: (context, viewSnapshot) {
+              final viewed = viewSnapshot.data?.exists == true;
+              final ringColor = viewed ? Colors.grey.shade500 : const Color(0xFF25D366);
+              return Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: ringColor, width: viewed ? 1.5 : 2.5),
+                ),
+                child: avatar,
+              );
+            },
+          );
+        }
+
+        Widget statusRow({
+          required List<QueryDocumentSnapshot<Map<String, dynamic>>> items,
+          required bool own,
+        }) {
+          final latest = items.first;
+          final data = latest.data();
+          final name = own ? 'My status' : (data['userName'] ?? 'ConnectX user').toString();
+          final preview = own
+              ? (items.length == 1 ? 'Tap to view your status' : '${items.length} updates · Tap to view')
+              : '${items.length} updates · ${timeLabel(latest)}';
+          return ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
+            leading: statusAvatar(latest, own: own),
+            title: Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: own
+                ? StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                    stream: latest.reference.collection('views').snapshots(),
+                    builder: (_, views) => Text(
+                      views.hasData
+                          ? 'Seen by ${views.data!.docs.length} · 24-hour status'
+                          : preview,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  )
+                : Text(preview, maxLines: 1, overflow: TextOverflow.ellipsis),
+            trailing: own
+                ? Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      PopupMenuButton<String>(
+                        tooltip: 'Status options',
+                        onSelected: (value) async {
+                          if (value == 'views') {
+                            await _showViewers(context, latest);
+                          } else if (value == 'delete') {
+                            try {
+                              await latest.reference.delete();
+                            } catch (error) {
+                              if (context.mounted) {
+                                showConnectXErrorDialog(context, 'Status could not be deleted. Please try again.');
+                              }
+                            }
+                          }
+                        },
+                        itemBuilder: (_) => const [
+                          PopupMenuItem(value: 'views', child: Text('View seen list')),
+                          PopupMenuItem(value: 'delete', child: Text('Delete latest status')),
+                        ],
+                      ),
+                      IconButton(
+                        tooltip: 'Add status',
+                        icon: const Icon(Icons.add_circle_outline_rounded, color: Color(0xFF008069)),
+                        onPressed: () => _create(context),
+                      ),
+                    ],
+                  )
+                : null,
+            onTap: () => _viewGroup(context, items, uid),
+          );
+        }
+
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(0, 12, 0, 90),
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'Status',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (mine.isEmpty)
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
+                leading: Stack(clipBehavior: Clip.none, children: [
+                  CircleAvatar(
+                    radius: 30,
+                    backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    child: const Icon(Icons.person_outline_rounded, size: 29),
+                  ),
+                  Positioned(
+                    right: -1,
+                    bottom: -1,
+                    child: Container(
+                      width: 21,
+                      height: 21,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF008069),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Theme.of(context).scaffoldBackgroundColor, width: 2),
+                      ),
+                      child: const Icon(Icons.add, size: 15, color: Colors.white),
+                    ),
+                  ),
+                ]),
+                title: const Text('My status', style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: const Text('Tap to add a status update'),
+                onTap: () => _create(context),
+                trailing: IconButton(
+                  tooltip: 'Create status',
+                  icon: const Icon(Icons.camera_alt_outlined),
+                  onPressed: () => _create(context),
+                ),
+              )
+            else
+              statusRow(items: mine, own: true),
+            const Divider(height: 24, indent: 16, endIndent: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'Recent updates',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+            const SizedBox(height: 6),
+            if (otherGroups.isEmpty)
+              const _SectionEmptyState(
+                icon: Icons.circle_outlined,
+                title: 'No recent updates',
+                description: 'New status updates from ConnectX users will appear here automatically.',
+              )
+            else
+              ...otherGroups.map((group) => statusRow(
+                    items: group.value,
+                    own: false,
+                  )),
+            const Divider(height: 28, indent: 16, endIndent: 16),
+            const _ChannelsPanel(),
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -1186,6 +1452,248 @@ class _CallsTab extends StatelessWidget {
           },
         ),
       ],
+    );
+  }
+}
+
+class _StatusStoryViewer extends StatefulWidget {
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>> statuses;
+  final String viewerUid;
+
+  const _StatusStoryViewer({
+    required this.statuses,
+    required this.viewerUid,
+  });
+
+  @override
+  State<_StatusStoryViewer> createState() => _StatusStoryViewerState();
+}
+
+class _StatusStoryViewerState extends State<_StatusStoryViewer> {
+  late final PageController _pageController;
+  late final Future<String?>? _authToken;
+  Timer? _progressTimer;
+  int _index = 0;
+  double _progress = 0;
+  DateTime _startedAt = DateTime.now();
+
+  QueryDocumentSnapshot<Map<String, dynamic>> get _current => widget.statuses[_index];
+
+  Duration get _duration {
+    final type = (_current.data()['mediaType'] ?? 'text').toString();
+    return Duration(seconds: type == 'video' ? 30 : 7);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+    _authToken = FirebaseAuth.instance.currentUser?.getIdToken();
+    _markViewed(0);
+    _startProgress();
+  }
+
+  Future<void> _markViewed(int index) async {
+    final doc = widget.statuses[index];
+    if (doc.data()['ownerUid'] == widget.viewerUid) return;
+    final viewRef = doc.reference.collection('views').doc(widget.viewerUid);
+    try {
+      final existing = await viewRef.get();
+      if (!existing.exists) {
+        await viewRef.set({
+          'viewerUid': widget.viewerUid,
+          'viewedAt': FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (error) {
+      debugPrint('ConnectX status seen marker failed: $error');
+    }
+  }
+
+  void _startProgress() {
+    _progressTimer?.cancel();
+    _startedAt = DateTime.now();
+    _progress = 0;
+    _progressTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      final elapsed = DateTime.now().difference(_startedAt).inMilliseconds;
+      final nextProgress = (elapsed / _duration.inMilliseconds).clamp(0.0, 1.0);
+      if (nextProgress >= 1) {
+        if (_index < widget.statuses.length - 1) {
+          _pageController.nextPage(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOut,
+          );
+        } else {
+          Navigator.of(context).pop();
+        }
+        timer.cancel();
+        return;
+      }
+      setState(() => _progress = nextProgress);
+    });
+  }
+
+  void _changePage(int nextIndex) {
+    setState(() => _index = nextIndex);
+    _markViewed(nextIndex);
+    _startProgress();
+  }
+
+  void _step(int direction) {
+    final next = _index + direction;
+    if (next < 0) {
+      _pageController.animateToPage(0, duration: const Duration(milliseconds: 180), curve: Curves.easeOut);
+    } else if (next >= widget.statuses.length) {
+      Navigator.of(context).pop();
+    } else {
+      _pageController.animateToPage(next, duration: const Duration(milliseconds: 180), curve: Curves.easeOut);
+    }
+  }
+
+  String _mediaUrl(String raw, String token) {
+    final uri = Uri.tryParse(raw);
+    if (uri == null) return raw;
+    return uri.replace(queryParameters: {
+      ...uri.queryParameters,
+      'auth': token,
+    }).toString();
+  }
+
+  @override
+  void dispose() {
+    _progressTimer?.cancel();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final data = _current.data();
+    final ownerName = (data['userName'] ?? 'ConnectX user').toString();
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        titleSpacing: 4,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(ownerName, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+            Text(
+              data['createdAt'] is Timestamp
+                  ? DateFormat.jm().format((data['createdAt'] as Timestamp).toDate())
+                  : 'Just now',
+              style: const TextStyle(fontSize: 11, color: Colors.white70),
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            tooltip: 'Close status',
+            onPressed: () => Navigator.of(context).pop(),
+            icon: const Icon(Icons.close_rounded),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 6, 8, 10),
+            child: Row(
+              children: List.generate(widget.statuses.length, (index) {
+                final value = index < _index ? 1.0 : index == _index ? _progress : 0.0;
+                return Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: LinearProgressIndicator(
+                        value: value,
+                        minHeight: 3,
+                        backgroundColor: Colors.white24,
+                        valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapUp: (details) {
+                final width = MediaQuery.of(context).size.width;
+                _step(details.localPosition.dx < width * .35 ? -1 : 1);
+              },
+              child: PageView.builder(
+                controller: _pageController,
+                itemCount: widget.statuses.length,
+                onPageChanged: _changePage,
+                itemBuilder: (context, index) {
+                  final story = widget.statuses[index].data();
+                  final storyType = (story['mediaType'] ?? 'text').toString();
+                  final storyUrl = story['mediaUrl']?.toString();
+                  final storyText = (story['statusText'] ?? '').toString();
+                  if (storyType == 'image' && storyUrl != null) {
+                    return FutureBuilder<String?>(
+                      future: _authToken,
+                      builder: (context, tokenSnapshot) {
+                        if (!tokenSnapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator(color: Colors.white));
+                        }
+                        return Center(
+                          child: Image.network(
+                            _mediaUrl(storyUrl, tokenSnapshot.data!),
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) => const Text(
+                              'Unable to load photo',
+                              style: TextStyle(color: Colors.white),
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  }
+                  if (storyType == 'video' && storyUrl != null) {
+                    return FutureBuilder<String?>(
+                      future: _authToken,
+                      builder: (context, tokenSnapshot) {
+                        if (!tokenSnapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator(color: Colors.white));
+                        }
+                        return Center(child: _StatusVideoPlayer(url: _mediaUrl(storyUrl, tokenSnapshot.data!)));
+                      },
+                    );
+                  }
+                  return Container(
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.all(32),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFF075E54), Color(0xFF128C7E), Color(0xFF202C33)],
+                      ),
+                    ),
+                    child: Text(
+                      storyText,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white, fontSize: 27, fontWeight: FontWeight.w600),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

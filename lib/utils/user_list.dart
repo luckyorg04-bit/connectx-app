@@ -13,7 +13,8 @@ class UserList extends StatefulWidget {
   final List<User1> users;
   final bool wantChats;
   final String filter;
-  const UserList({super.key, required this.users, required this.wantChats, this.filter = 'All'});
+  final String searchQuery;
+  const UserList({super.key, required this.users, required this.wantChats, this.filter = 'All', this.searchQuery = ''});
   @override
   State<UserList> createState() => UserListState();
 }
@@ -148,8 +149,11 @@ class UserListState extends State<UserList> {
   @override
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser?.uid;
+    final query = widget.searchQuery.trim().toLowerCase();
     final contacts = widget.users.where((c) {
       if (c.key == uid || _blockedUsers.contains(c.key)) return false;
+      if (query.isNotEmpty && !c.name.toLowerCase().contains(query) &&
+          !c.username.toLowerCase().contains(query)) return false;
       final meta = _meta[c.key] ?? const <String, dynamic>{};
       if (widget.filter == 'Archived') return meta['archived'] == true;
       if (meta['archived'] == true) return false;
@@ -164,7 +168,7 @@ class UserListState extends State<UserList> {
       return (_latest[b.key]?.timestamp ?? 0).compareTo(_latest[a.key]?.timestamp ?? 0);
     });
     if (contacts.isEmpty) {
-      final message = widget.filter == 'Groups' ? 'Group chats will be available in Part 2.'
+      final message = query.isNotEmpty ? 'No chats match "$query".' : widget.filter == 'Groups' ? 'Group chats will be available in Part 2.'
         : widget.filter == 'Unread' ? 'No unread conversations.'
         : widget.filter == 'Favorites' ? 'No favorites yet. Add a chat using its menu.'
         : widget.filter == 'Archived' ? 'No archived conversations.'

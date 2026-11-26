@@ -1,10 +1,10 @@
 # ConnectX Production Release Readiness
 
 **Repository:** `luckyorg04-bit/connectx-app`  
-**Branch:** `release/connectx-ui-only-1.0.4`  
+**Branch:** `release/connectx-whatsapp-style-1.1.0`  
 **Package:** `com.ghostgroup.connectx`  
 **Firebase project:** `connectx-app-f8407`  
-**Version currently declared:** `1.0.5+6`  
+**Version currently declared:** `1.1.0+7`  
 **Target SDK:** 36
 
 ## Verified repository configuration
@@ -29,7 +29,7 @@ The current commit's results must be read from the GitHub Actions run list. Do n
 
 1. **Account deletion:** The app currently initiates a support email request; it does not automatically delete the Firebase Auth account, user data, messages, groups, statuses or uploaded media. Implement and test complete deletion before declaring Google Play account-deletion compliance.
 2. **Public privacy/deletion URLs:** Firebase Hosting is now configured in `firebase.json`, with `public/privacy-policy.html` and `public/account-deletion.html`. Hosting has not been deployed and the live site ID/URL has not been verified. Create/confirm the Firebase Hosting site, deploy Hosting, verify both pages load publicly, then enter the actual account-deletion URL in Play Console Data Safety and the privacy-policy URL in Play Console.
-3. **Upload signing:** GitHub Actions has successfully configured the existing upload keystore and produced a signed AAB in an earlier 1.0.4 run; the 1.0.5+6 signed release workflow is being validated after mobile layout and brand metadata updates. Before upload, compare the AAB signer certificate with the upload certificate currently registered in Play Console. Do not reset or replace the existing signing identity. Verify versionCode `6` is greater than every version already uploaded to Play Console.
+3. **Upload signing:** GitHub Actions has successfully configured the existing upload keystore and produced a signed AAB in an earlier 1.0.4 run; the 1.1.0+7 signed release workflow must be validated after the responsive authentication and chat UI updates. Before upload, compare the AAB signer certificate with the upload certificate currently registered in Play Console. Do not reset or replace the existing signing identity. Verify versionCode `7` is greater than every version already uploaded to Play Console.
 4. **Firebase deployment:** The updated RTDB rules, Firestore rules/indexes, phone callable functions and Hosting pages are not deployed by CI. Back up current configuration and deploy only after reviewing the diff.
 5. **Notification migration:** The VPS is the intended single FCM notification worker. If the old Cloud Function notification triggers are still deployed, remove those legacy triggers during the reviewed Functions deployment after confirming the VPS worker is healthy. Keep `registerPhoneNumber` and `lookupPhoneNumber`.
 6. **VPS operations:** Confirm the service is healthy, its Firebase service account is mounted outside Git, persistent upload storage is backed up, TURN credentials are configured, and logs/monitoring are available.

@@ -27,7 +27,7 @@ class PhoneLookupService {
     final normalized = normalize(phone);
     await _functions.httpsCallable('registerPhoneNumber').call({
       'phone': normalized,
-    });
+    }).timeout(const Duration(seconds: 18));
   }
 
   static Future<String?> findUid(String phone) async {
@@ -37,7 +37,7 @@ class PhoneLookupService {
     final normalized = normalize(phone);
     final result = await _functions.httpsCallable('lookupPhoneNumber').call({
       'phone': normalized,
-    });
+    }).timeout(const Duration(seconds: 18));
     final data = Map<String, dynamic>.from(result.data as Map);
     final uid = data['uid']?.toString();
     return uid == null || uid.isEmpty ? null : uid;
@@ -48,7 +48,7 @@ class PhoneLookupService {
         .ref('PrivateUsers')
         .child(uid)
         .child('phone')
-        .get()).value;
+        .get().timeout(const Duration(seconds: 12))).value;
     return value?.toString();
   }
 }

@@ -7,7 +7,7 @@ name: ConnectX Android debug build
 on:
   push:
     branches:
-      - release/connectx-ui-only-1.0.4
+      - release/connectx-whatsapp-style-1.1.0
     paths:
       - 'lib/**'
       - 'android/**'
