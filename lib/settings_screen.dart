@@ -191,9 +191,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Card(child: Column(children: [
                   ListTile(
                     leading: const Icon(Icons.person_outline),
-                    title: const Text('Profile'),
+                    title: const Text('Edit profile'),
                     subtitle: const Text('Name, photo and account details'),
-                    onTap: () => Navigator.pop(context),
+                    onTap: () => Navigator.pushNamed(context, '/edit-profile'),
                   ),
                   const Divider(height: 1),
                   ListTile(
