@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:connectx/main_screen.dart' show users;
 import 'package:flutter/material.dart';
+import 'utils/app_feedback.dart';
 
 class GroupChatScreen extends StatefulWidget {
   const GroupChatScreen({Key? key}) : super(key: key);
@@ -111,7 +112,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       if (mounted) setState(() => _groupName = newName);
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Group settings updated.')));
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Group settings could not be updated. Please try again.')));
+      showConnectXErrorDialog(context, 'Group settings could not be updated. Please try again.');
     }
   }
 
@@ -151,9 +152,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         'callType': callType, 'isCreator': true,
       });
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Group call could not be started. Please try again.')),
-      );
+      showConnectXErrorDialog(context, 'Group call could not be started. Please try again.');
     }
   }
 
@@ -198,9 +197,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         'createdAt': FieldValue.serverTimestamp(),
       });
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Poll could not be sent. Please try again.')),
-      );
+      showConnectXErrorDialog(context, 'Poll could not be sent. Please try again.');
     }
   }
 
@@ -237,9 +234,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       });
       _controller.clear();
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Message could not be sent. Please try again.')),
-      );
+      showConnectXErrorDialog(context, 'Message could not be sent. Please try again.');
     } finally {
       if (mounted) setState(() => _sending = false);
     }
