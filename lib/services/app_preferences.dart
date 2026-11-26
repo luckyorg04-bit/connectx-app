@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'database_service.dart';
 
 class AppPreferences {
@@ -29,6 +31,8 @@ class AppPreferences {
               ? ThemeMode.dark
               : ThemeMode.system;
       languageCode = value['languageCode']?.toString() ?? 'en';
+      await initializeDateFormatting(languageCode);
+      Intl.defaultLocale = languageCode;
       locale.value = Locale(languageCode);
     } catch (error) {
       debugPrint('ConnectX preferences load failed: $error');
@@ -38,6 +42,7 @@ class AppPreferences {
   static void reset() {
     themeMode.value = ThemeMode.system;
     languageCode = 'en';
+    Intl.defaultLocale = 'en';
     locale.value = const Locale('en');
   }
 
@@ -54,6 +59,8 @@ class AppPreferences {
 
   static Future<void> saveLanguage(String code) async {
     await _settingsRef().update({'languageCode': code});
+    await initializeDateFormatting(code);
+    Intl.defaultLocale = code;
     languageCode = code;
     locale.value = Locale(code);
   }
