@@ -413,7 +413,11 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
       await FirebaseAuth.instance.signOut().timeout(const Duration(seconds: 8));
     } catch (error) {
       debugPrint('ConnectX Firebase sign-out failed: $error');
-      if (mounted) setState(() => _isLoggingOut = false);
+      // The user is still authenticated; restore the home data listeners.
+      if (mounted) {
+        getData();
+        setState(() => _isLoggingOut = false);
+      }
       return;
     }
     AppPreferences.reset();
