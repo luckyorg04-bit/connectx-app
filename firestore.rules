@@ -39,8 +39,8 @@ service cloud.firestore {
         (
           resource.data.sender == request.auth.uid
           && resource.data.timestamp is int
-          && request.time.seconds() * 1000 >= resource.data.timestamp
-          && request.time.seconds() * 1000 - resource.data.timestamp <= 900000
+          && request.time.toMillis() >= resource.data.timestamp
+          && request.time.toMillis() - resource.data.timestamp <= 900000
           && request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['message', 'isEdited', 'editedAt'])
           && request.resource.data.message is string
@@ -186,18 +186,16 @@ service cloud.firestore {
       // Status metadata is visible to signed-in users. Media downloads are
       // separately authorized by the VPS against the captured audience list.
       allow read: if signedIn()
-        && 'audienceUids' in resource.data
-        && resource.data.audienceUids is list
-        && request.auth.uid in resource.data.audienceUids;
+        && resource.data.get('audienceUids', []) is list
+        && request.auth.uid in resource.data.get('audienceUids', []);
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
       allow update: if false;
       match /views/{viewerUid} {
         allow create: if signedIn()
           && request.auth.uid == viewerUid
           && get(/databases/$(database)/documents/statuses/$(statusId)).data.expiresAt > request.time
-          && 'audienceUids' in get(/databases/$(database)/documents/statuses/$(statusId)).data
-          && get(/databases/$(database)/documents/statuses/$(statusId)).data.audienceUids is list
-          && request.auth.uid in get(/databases/$(database)/documents/statuses/$(statusId)).data.audienceUids
+          && get(/databases/$(database)/documents/statuses/$(statusId)).data.get('audienceUids', []) is list
+          && request.auth.uid in get(/databases/$(database)/documents/statuses/$(statusId)).data.get('audienceUids', [])
           && request.resource.data.viewerUid == request.auth.uid;
         allow read: if signedIn()
           && get(/databases/$(database)/documents/statuses/$(statusId)).data.ownerUid == request.auth.uid;
