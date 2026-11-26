@@ -115,9 +115,15 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
               onPressed: () => Navigator.of(context).pushNamed('/edit-profile'),
             ),
             IconButton(
-              tooltip: 'Log out',
-              icon: const Icon(Icons.logout_rounded),
-              onPressed: _logout,
+              tooltip: _isLoggingOut ? 'Logging out' : 'Log out',
+              icon: _isLoggingOut
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.logout_rounded),
+              onPressed: _isLoggingOut ? null : _logout,
             ),
           ] else ...[
             if (_selectedTab == 0) ...[
