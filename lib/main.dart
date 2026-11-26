@@ -12,11 +12,23 @@ import 'group_call_screen.dart';
 import 'services/notification_service.dart';
 import 'call_screen.dart';
 import 'app_navigator.dart';
+import 'settings_screen.dart';
+import 'services/app_preferences.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+  ErrorWidget.builder = (details) => const Material(
+    color: Color(0xFF0B141B),
+    child: Center(child: Padding(
+      padding: EdgeInsets.all(24),
+      child: Text('Something went wrong. Please return and try again.',
+        textAlign: TextAlign.center,
+        style: TextStyle(color: Colors.white, fontSize: 15)),
+    )),
+  );
   if (FirebaseAuth.instance.currentUser != null) {
+    await AppPreferences.load();
     await NotificationService.initialize();
   }
   runApp(const MyApp(user: null));
@@ -34,7 +46,9 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     _user = user;
-    return MaterialApp(
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: AppPreferences.themeMode,
+      builder: (context, selectedThemeMode, _) => MaterialApp(
       navigatorKey: appNavigatorKey,
       builder: (context, child) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -55,7 +69,7 @@ class MyApp extends StatelessWidget {
       title: 'ConnectX',
       theme: _buildTheme(Brightness.light),
       darkTheme: _buildTheme(Brightness.dark),
-      themeMode: ThemeMode.system,
+      themeMode: selectedThemeMode,
       initialRoute: _user != null
           ? "/chat"
           : FirebaseAuth.instance.currentUser != null
@@ -64,6 +78,7 @@ class MyApp extends StatelessWidget {
       routes: {
         '/login': (context) => const AuthPage(),
         '/main': (context) => const MainScreen(),
+        '/settings': (context) => const SettingsScreen(),
         '/chat': (context) => const ChatScreen(),
         '/group': (context) => const GroupChatScreen(),
         '/group-call': (context) => const GroupCallScreen(),
@@ -90,6 +105,7 @@ class MyApp extends StatelessWidget {
           )
         ];
       },
+      ),
     );
   }
 }
