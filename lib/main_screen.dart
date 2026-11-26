@@ -490,7 +490,7 @@ class _UpdatesTab extends StatelessWidget {
     final audience = <String>{
       uid,
       ...users.where((u) => u.key != uid).map((u) => u.key),
-    }.toList();
+    }.take(500).toList();
     String text = '';
     String? url, fileName;
     if (kind == 'text') {
