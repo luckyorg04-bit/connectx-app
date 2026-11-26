@@ -359,15 +359,39 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
     }
   }
 
+  bool _isLoggingOut = false;
+
   Future<void> _logout() async {
+    if (_isLoggingOut) return;
+    setState(() => _isLoggingOut = true);
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid != null) {
-      await ConnectXDatabase.instance.ref("PublicUsers").child(uid).child("online").set(false);
+    // Presence and notification cleanup are best-effort. They must never
+    // prevent Firebase Auth from signing the user out.
+    try {
+      if (uid != null) {
+        await ConnectXDatabase.instance
+            .ref('PublicUsers')
+            .child(uid)
+            .update({'online': false, 'lastSeen': ServerValue.timestamp})
+            .timeout(const Duration(seconds: 4));
+      }
+    } catch (error) {
+      debugPrint('ConnectX logout presence cleanup failed: $error');
     }
-    await NotificationService.dispose();
-    await FirebaseAuth.instance.signOut();
+    try {
+      await NotificationService.dispose().timeout(const Duration(seconds: 4));
+    } catch (error) {
+      debugPrint('ConnectX logout notification cleanup failed: $error');
+    }
+    try {
+      await FirebaseAuth.instance.signOut().timeout(const Duration(seconds: 8));
+    } catch (error) {
+      debugPrint('ConnectX Firebase sign-out failed: $error');
+      if (mounted) setState(() => _isLoggingOut = false);
+      return;
+    }
     AppPreferences.reset();
-    currentRoute = "/login";
+    currentRoute = '/login';
     if (!mounted) return;
     await Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
   }
