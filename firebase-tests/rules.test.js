@@ -73,9 +73,11 @@ test('Realtime Database permits only the intended owner preference writes', asyn
 
 test('Firestore direct messages are limited to conversation participants', async () => {
   const alice = env.authenticatedContext('alice').firestore();
+  const bob = env.authenticatedContext('bob').firestore();
   const charlie = env.authenticatedContext('charlie').firestore();
 
   const message = doc(alice, 'messages/alice,bob/chats/message-1');
+  const bobMessage = doc(bob, 'messages/alice,bob/chats/message-1');
   await assertSucceeds(setDoc(message, {
     sender: 'alice', message: 'Hello', timestamp: Date.now(),
     isRead: false, isDelivered: false,
@@ -88,11 +90,11 @@ test('Firestore direct messages are limited to conversation participants', async
   console.log('Direct message test: add Alice reaction');
   await assertSucceeds(updateDoc(message, { 'reactions.alice': '❤️' }));
   console.log('Direct message test: add Bob reaction');
-  await assertSucceeds(updateDoc(message, { 'reactions.bob': '👍' }));
+  await assertSucceeds(updateDoc(bobMessage, { 'reactions.bob': '👍' }));
   console.log('Direct message test: allow Alice to change her own reaction');
   await assertSucceeds(updateDoc(message, { 'reactions.alice': '😂' }));
   console.log('Direct message test: reject Bob changing Alice reaction');
-  await assertFails(updateDoc(message, { 'reactions.alice': '🥲' }));
+  await assertFails(updateDoc(bobMessage, { 'reactions.alice': '🥲' }));
 });
 
 
