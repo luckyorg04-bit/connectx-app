@@ -487,8 +487,8 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
     if (!_recording) {
       final allowed = await _recorder.hasPermission();
       if (!allowed) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Microphone permission is required.')),
+        if (mounted) showConnectXErrorDialog(
+          context, 'Microphone permission is required to record a voice message.',
         );
         return;
       }
