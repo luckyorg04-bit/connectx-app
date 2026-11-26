@@ -300,26 +300,39 @@ class AuthPageState extends State<AuthPage> {
   Future<void> _ensureUserProfile(User user, {String? preferredName, String? preferredUsername}) async {
     final ref = ConnectXDatabase.instance.ref('PublicUsers').child(user.uid);
     final existing = await ref.get();
-    if (existing.exists) {
-      final currentData = existing.value is Map
-          ? Map<dynamic, dynamic>.from(existing.value as Map)
-          : <dynamic, dynamic>{};
-      if (currentData['bio'] == null || currentData.containsKey('about')) {
-        await ref.update({
-          'bio': currentData['bio']?.toString() ??
-              currentData['about']?.toString() ?? 'Hey there! I am using ConnectX',
-          'about': null,
-        });
-      }
-      return;
-    }
-
     final emailPrefix = (user.email ?? 'connectx_user')
         .split('@')
         .first
         .toLowerCase()
         .replaceAll(RegExp(r'[^a-z0-9_.]'), '');
     final safePrefix = emailPrefix.isEmpty ? 'connectx' : emailPrefix;
+    if (existing.exists) {
+      final currentData = existing.value is Map
+          ? Map<dynamic, dynamic>.from(existing.value as Map)
+          : <dynamic, dynamic>{};
+      // Older accounts may predate the required PublicUsers schema. Repair
+      // missing fields on sign-in so profile edits and presence updates pass
+      // the current Realtime Database validation rules.
+      final updates = <String, dynamic>{};
+      if (currentData['name'] is! String || (currentData['name'] as String).trim().isEmpty) {
+        updates['name'] = user.displayName?.trim().isNotEmpty == true
+            ? user.displayName!.trim()
+            : safePrefix;
+      }
+      if (currentData['username'] is! String || (currentData['username'] as String).trim().isEmpty) {
+        updates['username'] = '${safePrefix}_${user.uid.substring(0, user.uid.length < 8 ? user.uid.length : 8)}';
+      }
+      if (currentData['key'] != user.uid) updates['key'] = user.uid;
+      if (currentData['online'] is! bool) updates['online'] = true;
+      if (currentData['lastSeen'] is! num) updates['lastSeen'] = ServerValue.timestamp;
+      if (currentData['bio'] is! String) {
+        updates['bio'] = currentData['about']?.toString() ?? 'Hey there! I am using ConnectX';
+      }
+      if (currentData['photoUrl'] is! String) updates['photoUrl'] = user.photoURL ?? '';
+      if (currentData.containsKey('about')) updates['about'] = null;
+      if (updates.isNotEmpty) await ref.update(updates);
+      return;
+    }
     final username = (preferredUsername?.trim().isNotEmpty ?? false)
         ? preferredUsername!.trim().toLowerCase()
         : '${safePrefix}_${user.uid.substring(0, 4)}';
