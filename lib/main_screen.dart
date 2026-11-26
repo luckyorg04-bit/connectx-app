@@ -589,12 +589,26 @@ class _UpdatesTab extends StatelessWidget {
         ListTile(leading: const Icon(Icons.videocam), title: const Text('Video status'), onTap: () => Navigator.pop(c, 'video')),
       ])));
     if (kind == null) return;
-    // WhatsApp-style default: share with all known ConnectX users; no per-status
-    // audience picker. Keep the owner in the list for the Firestore rule.
-    final audience = <String>{
-      uid,
-      ...users.where((u) => u.key != uid).map((u) => u.key),
-    }.take(500).toList();
+    // Status audience must include registered users, not only the recent-chat
+    // list. The latter is intentionally limited to active conversations.
+    final audienceSet = <String>{uid};
+    try {
+      final publicUsers = await ConnectXDatabase.instance
+          .ref('PublicUsers').get().timeout(const Duration(seconds: 10));
+      audienceSet.addAll(publicUsers.children
+          .map((profile) => profile.key)
+          .whereType<String>()
+          .where((userUid) => userUid.isNotEmpty));
+    } catch (error) {
+      debugPrint('ConnectX status audience lookup failed: $error');
+      audienceSet.addAll(users.map((user) => user.key).where((userUid) => userUid.isNotEmpty));
+    }
+    final orderedAudience = audienceSet.toList()..sort();
+    orderedAudience.remove(uid);
+    final audience = <String>[uid, ...orderedAudience].take(500).toList();
+    if (audienceSet.length > 500) {
+      debugPrint('ConnectX status audience capped at 500 users by media API limit.');
+    }
     String text = '';
     String? url, fileName;
     if (kind == 'text') {
@@ -728,60 +742,232 @@ class _UpdatesTab extends StatelessWidget {
     final uid = FirebaseAuth.instance.currentUser!.uid;
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance.collection('statuses')
-        .where('audienceUids', arrayContains: uid)
-         .where('expiresAt', isGreaterThan: Timestamp.now()).snapshots(),
+          .where('audienceUids', arrayContains: uid)
+          .where('expiresAt', isGreaterThan: Timestamp.now())
+          .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) return const _SectionEmptyState(icon: Icons.cloud_off_outlined, title: 'Updates are unavailable', description: 'ConnectX could not load updates. Check your connection or try again later.');
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-        final now = Timestamp.now();
-        final docs = snapshot.data!.docs.where((d) => d.data()['expiresAt'] is Timestamp &&
-          (d.data()['expiresAt'] as Timestamp).compareTo(now) > 0).toList()
-          ..sort((a,b) => ((b.data()['createdAt'] is Timestamp) ? b.data()['createdAt'] as Timestamp : Timestamp(0,0))
-            .compareTo((a.data()['createdAt'] is Timestamp) ? a.data()['createdAt'] as Timestamp : Timestamp(0,0)));
-        final mine = docs.where((d) => d.data()['ownerUid'] == uid).toList();
-        final others = docs.where((d) => d.data()['ownerUid'] != uid).toList();
-        Widget statusTile(QueryDocumentSnapshot<Map<String, dynamic>> d, bool own) {
-          final data = d.data(), type = (d.data()['mediaType'] ?? 'text').toString();
-          return ListTile(
-            leading: CircleAvatar(
-              backgroundImage: (data['userPhotoUrl'] ?? '').toString().isNotEmpty
-                  ? NetworkImage(data['userPhotoUrl'].toString()) : null,
-              child: (data['userPhotoUrl'] ?? '').toString().isEmpty
-                  ? Icon(type == 'video' ? Icons.videocam : type == 'image' ? Icons.image : Icons.text_fields)
-                  : null,
-            ),
-            title: Text(own ? (data['statusText'] ?? data['fileName'] ?? 'My status').toString() : (data['userName'] ?? 'Contact').toString(), maxLines: 1, overflow: TextOverflow.ellipsis),
-            subtitle: own
-              ? StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(stream: d.reference.collection('views').snapshots(),
-                  builder: (_, v) => Text('Seen by ${v.data?.docs.length ?? 0} · 24-hour status'))
-              : Text((data['statusText'] ?? data['fileName'] ?? 'Media status').toString(), maxLines: 1, overflow: TextOverflow.ellipsis),
-            onTap: () => _view(context, d, uid),
-            trailing: own ? PopupMenuButton<String>(
-              onSelected: (value) {
-                if (value == 'views') _showViewers(context, d);
-                if (value == 'delete') d.reference.delete();
-              },
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'views', child: Text('View seen list')),
-                PopupMenuItem(value: 'delete', child: Text('Delete status')),
-              ],
-            ) : null,
+        if (snapshot.hasError) {
+          debugPrint('ConnectX status feed stream failed: ${snapshot.error}');
+          return const _SectionEmptyState(
+            icon: Icons.cloud_off_outlined,
+            title: 'Updates are unavailable',
+            description: 'ConnectX could not load updates. Check your connection or try again later.',
           );
         }
-        return ListView(padding: const EdgeInsets.fromLTRB(16,12,16,90), children: [
-          Text('Status', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-          ListTile(contentPadding: EdgeInsets.zero, leading: const CircleAvatar(child: Icon(Icons.add_a_photo)),
-            title: const Text('My status'), subtitle: const Text('Add text, photo or video'),
-            onTap: () => _create(context), trailing: IconButton(icon: const Icon(Icons.add), onPressed: () => _create(context))),
-          ...mine.map((d) => statusTile(d, true)),
-          const Divider(height: 24),
-          Text('Recent updates', style: Theme.of(context).textTheme.titleSmall),
-          if (others.isEmpty) const _SectionEmptyState(icon: Icons.circle_outlined, title: 'No recent updates', description: 'Statuses from your contacts appear here.')
-          else ...others.map((d) => statusTile(d, false)),
-          const Divider(height: 28),
-          const _ChannelsPanel(),
-        ]);
-      });
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final now = Timestamp.now();
+        final activeStatuses = snapshot.data!.docs.where((doc) {
+          final expiry = doc.data()['expiresAt'];
+          return expiry is Timestamp && expiry.compareTo(now) > 0;
+        }).toList();
+
+        DateTime statusDate(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+          final createdAt = doc.data()['createdAt'];
+          return createdAt is Timestamp ? createdAt.toDate() : DateTime.fromMillisecondsSinceEpoch(0);
+        }
+
+        // WhatsApp-style feed: one row per person, with that person's active
+        // statuses grouped together and the newest update shown first.
+        final grouped = <String, List<QueryDocumentSnapshot<Map<String, dynamic>>>>{};
+        for (final doc in activeStatuses) {
+          final ownerUid = (doc.data()['ownerUid'] ?? '').toString();
+          if (ownerUid.isEmpty) continue;
+          grouped.putIfAbsent(ownerUid, () => <QueryDocumentSnapshot<Map<String, dynamic>>>[]).add(doc);
+        }
+        for (final items in grouped.values) {
+          items.sort((a, b) => statusDate(b).compareTo(statusDate(a)));
+        }
+
+        final mine = grouped.remove(uid) ?? <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+        final otherGroups = grouped.entries.toList()
+          ..sort((a, b) => statusDate(b.value.first).compareTo(statusDate(a.value.first)));
+
+        String timeLabel(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+          final date = statusDate(doc);
+          if (date.millisecondsSinceEpoch == 0) return 'Just now';
+          final difference = DateTime.now().difference(date);
+          if (difference.inMinutes < 1) return 'Just now';
+          if (difference.inHours < 1) return '${difference.inMinutes} minutes ago';
+          if (difference.inDays < 1) return DateFormat.jm().format(date);
+          return DateFormat('d MMM, h:mm a').format(date);
+        }
+
+        Widget statusAvatar(
+          QueryDocumentSnapshot<Map<String, dynamic>> latest, {
+          required bool own,
+          required int count,
+        }) {
+          final data = latest.data();
+          final photoUrl = (data['userPhotoUrl'] ?? '').toString();
+          final avatar = CircleAvatar(
+            radius: 27,
+            backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+            backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+            child: photoUrl.isEmpty
+                ? Icon((data['mediaType'] ?? 'text') == 'video'
+                    ? Icons.videocam_rounded
+                    : (data['mediaType'] ?? 'text') == 'image'
+                        ? Icons.image_rounded
+                        : Icons.text_fields_rounded)
+                : null,
+          );
+          if (own) {
+            return Stack(clipBehavior: Clip.none, children: [
+              Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFF25D366), width: 2.5),
+                ),
+                child: avatar,
+              ),
+              Positioned(
+                right: -1,
+                bottom: -1,
+                child: Container(
+                  width: 21,
+                  height: 21,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF008069),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Theme.of(context).scaffoldBackgroundColor, width: 2),
+                  ),
+                  child: const Icon(Icons.add, size: 15, color: Colors.white),
+                ),
+              ),
+            ]);
+          }
+          return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+            stream: latest.reference.collection('views').doc(uid).snapshots(),
+            builder: (context, viewSnapshot) {
+              final viewed = viewSnapshot.data?.exists == true;
+              final ringColor = viewed ? Colors.grey.shade500 : const Color(0xFF25D366);
+              return Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: ringColor, width: viewed ? 1.5 : 2.5),
+                ),
+                child: avatar,
+              );
+            },
+          );
+        }
+
+        Widget statusRow({
+          required String ownerUid,
+          required List<QueryDocumentSnapshot<Map<String, dynamic>>> items,
+          required bool own,
+        }) {
+          final latest = items.first;
+          final data = latest.data();
+          final name = own ? 'My status' : (data['userName'] ?? 'ConnectX user').toString();
+          final preview = own
+              ? (items.length == 1 ? 'Tap to view your status' : '${items.length} updates · Tap to view')
+              : '${items.length} updates · ${timeLabel(latest)}';
+          return ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
+            leading: statusAvatar(latest, own: own, count: items.length),
+            title: Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: own
+                ? StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                    stream: latest.reference.collection('views').snapshots(),
+                    builder: (_, views) => Text(
+                      views.hasData
+                          ? 'Seen by ${views.data!.docs.length} · 24-hour status'
+                          : preview,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  )
+                : Text(preview, maxLines: 1, overflow: TextOverflow.ellipsis),
+            trailing: own
+                ? IconButton(
+                    tooltip: 'Add status',
+                    icon: const Icon(Icons.add_circle_outline_rounded, color: Color(0xFF008069)),
+                    onPressed: () => _create(context),
+                  )
+                : null,
+            onTap: () => _view(context, latest, uid),
+          );
+        }
+
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(0, 12, 0, 90),
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'Status',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (mine.isEmpty)
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
+                leading: Stack(clipBehavior: Clip.none, children: [
+                  CircleAvatar(
+                    radius: 30,
+                    backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    child: const Icon(Icons.person_outline_rounded, size: 29),
+                  ),
+                  Positioned(
+                    right: -1,
+                    bottom: -1,
+                    child: Container(
+                      width: 21,
+                      height: 21,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF008069),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Theme.of(context).scaffoldBackgroundColor, width: 2),
+                      ),
+                      child: const Icon(Icons.add, size: 15, color: Colors.white),
+                    ),
+                  ),
+                ]),
+                title: const Text('My status', style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: const Text('Tap to add a status update'),
+                onTap: () => _create(context),
+                trailing: IconButton(
+                  tooltip: 'Create status',
+                  icon: const Icon(Icons.camera_alt_outlined),
+                  onPressed: () => _create(context),
+                ),
+              )
+            else
+              statusRow(ownerUid: uid, items: mine, own: true),
+            const Divider(height: 24, indent: 16, endIndent: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'Recent updates',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+            const SizedBox(height: 6),
+            if (otherGroups.isEmpty)
+              const _SectionEmptyState(
+                icon: Icons.circle_outlined,
+                title: 'No recent updates',
+                description: 'New status updates from ConnectX users will appear here automatically.',
+              )
+            else
+              ...otherGroups.map((group) => statusRow(
+                    ownerUid: group.key,
+                    items: group.value,
+                    own: false,
+                  )),
+            const Divider(height: 28, indent: 16, endIndent: 16),
+            const _ChannelsPanel(),
+          ],
+        );
+      },
+    );
   }
 }
 
