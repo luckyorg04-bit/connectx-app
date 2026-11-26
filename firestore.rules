@@ -150,11 +150,11 @@ service cloud.firestore {
         && request.resource.data.expiresAt is timestamp
         && request.resource.data.expiresAt > request.time
         && request.resource.data.expiresAt <= request.time + duration.value(24, 'h');
-      // The client query filters expiresAt. Keeping the list rule audience-based
-      // lets Firestore prove access for arrayContains(audienceUids, uid) queries.
+      // Status is visible to every authenticated ConnectX account for 24 hours.
+      // The client query filters by expiresAt so Firestore can prove this rule.
       allow read: if signedIn()
-        && resource.data.audienceUids is list
-        && request.auth.uid in resource.data.audienceUids;
+        && resource.data.expiresAt is timestamp
+        && resource.data.expiresAt > request.time;
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
       allow update: if false;
       match /views/{viewerUid} {
