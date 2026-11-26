@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - release/connectx-whatsapp-style-1.1.0
+      - fix/connectx-status-feed-profile-1.1.2
     paths:
       - 'lib/**'
       - 'android/**'
@@ -47,7 +48,28 @@ jobs:
         shell: bash
         run: |
           grep -q 'applicationId "com.ghostgroup.connectx"' android/app/build.gradle
-          grep -q '^version: 1.1.1+8$' pubspec.yaml
+          grep -q '^version: 1.1.2+9
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Run static analysis
+        run: flutter analyze --no-pub --no-fatal-infos
+
+      - name: Run Flutter tests
+        run: flutter test --no-pub
+
+      - name: Build installable debug APK
+        run: flutter build apk --debug --no-pub
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ConnectX-1.1.2-9-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+ pubspec.yaml
 
       - name: Resolve dependencies
         run: flutter pub get
