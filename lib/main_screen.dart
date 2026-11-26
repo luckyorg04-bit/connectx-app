@@ -517,7 +517,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
 
 class _GroupsList extends StatelessWidget {
   final VoidCallback onCreateGroup;
-  const _GroupsList({required this.onCreateGroup});
+  final String searchQuery;
+  const _GroupsList({required this.onCreateGroup, required this.searchQuery});
 
   @override
   Widget build(BuildContext context) {
@@ -538,11 +539,15 @@ class _GroupsList extends StatelessWidget {
           builder: (context, snapshot) {
             if (snapshot.hasError) return const _SectionEmptyState(icon: Icons.cloud_off_outlined, title: 'Groups are unavailable', description: 'ConnectX could not load your groups. Check your connection and try again.') ;
             if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-            final groups = snapshot.data!.docs;
+            final query = searchQuery.trim().toLowerCase();
+            final groups = snapshot.data!.docs.where((doc) {
+              final name = (doc.data()['name'] ?? 'Group').toString().toLowerCase();
+              return query.isEmpty || name.contains(query);
+            }).toList();
             if (groups.isEmpty) return const _SectionEmptyState(
               icon: Icons.groups_outlined,
-              title: 'No group chats yet',
-              description: 'Create a group to start a group conversation.',
+              title: query.isEmpty ? 'No group chats yet' : 'No matching groups',
+              description: query.isEmpty ? 'Create a group to start a group conversation.' : 'Try another group name.',
             );
             return ListView.builder(
               itemCount: groups.length,
