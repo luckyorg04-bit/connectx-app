@@ -9,6 +9,7 @@ import 'package:connectx/models/chat.dart';
 import 'package:connectx/utils/user_list.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:video_player/video_player.dart';
 import 'package:flutter/material.dart';
 import 'main.dart';
 import 'app_navigator.dart';
@@ -733,6 +734,9 @@ class _UpdatesTab extends StatelessWidget {
       await FirebaseFirestore.instance.collection('statuses').add({
         'ownerUid': uid,
         'userName': FirebaseAuth.instance.currentUser?.displayName ?? 'ConnectX user',
+        'userPhotoUrl': (users.where((u) => u.key == uid).toList().isNotEmpty
+            ? users.firstWhere((u) => u.key == uid).photoUrl
+            : FirebaseAuth.instance.currentUser?.photoURL ?? ''),
         'statusText': text,
         'mediaType': kind,
         if (url != null) 'mediaUrl': url,
@@ -773,8 +777,7 @@ class _UpdatesTab extends StatelessWidget {
           Image.network(statusMediaUrl, fit: BoxFit.contain,
             errorBuilder: (_, __, ___) => const Text('Unable to load photo'))
         else if (type == 'video' && statusMediaUrl != null)
-          ListTile(leading: const Icon(Icons.play_circle), title: Text((data['fileName'] ?? 'Video status').toString()),
-            onTap: () { final uri = Uri.tryParse(statusMediaUrl!); if (uri != null) launchUrl(uri, mode: LaunchMode.externalApplication); })
+          _StatusVideoPlayer(url: statusMediaUrl!)
         else
           Padding(padding: const EdgeInsets.all(24), child: SelectableText((data['statusText'] ?? '').toString(), style: const TextStyle(fontSize: 20))),
         if (data['ownerUid'] == uid)
@@ -806,7 +809,6 @@ class _UpdatesTab extends StatelessWidget {
     final uid = FirebaseAuth.instance.currentUser!.uid;
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance.collection('statuses')
-        .where('audienceUids', arrayContains: uid)
         .where('expiresAt', isGreaterThan: Timestamp.now()).snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) return const _SectionEmptyState(icon: Icons.cloud_off_outlined, title: 'Updates are unavailable', description: 'ConnectX could not load updates. Check your connection or try again later.');
@@ -821,7 +823,13 @@ class _UpdatesTab extends StatelessWidget {
         Widget statusTile(QueryDocumentSnapshot<Map<String, dynamic>> d, bool own) {
           final data = d.data(), type = (d.data()['mediaType'] ?? 'text').toString();
           return ListTile(
-            leading: CircleAvatar(child: Icon(type == 'video' ? Icons.videocam : type == 'image' ? Icons.image : Icons.text_fields)),
+            leading: CircleAvatar(
+              backgroundImage: (data['userPhotoUrl'] ?? '').toString().isNotEmpty
+                  ? NetworkImage(data['userPhotoUrl'].toString()) : null,
+              child: (data['userPhotoUrl'] ?? '').toString().isEmpty
+                  ? Icon(type == 'video' ? Icons.videocam : type == 'image' ? Icons.image : Icons.text_fields)
+                  : null,
+            ),
             title: Text(own ? (data['statusText'] ?? data['fileName'] ?? 'My status').toString() : (data['userName'] ?? 'Contact').toString(), maxLines: 1, overflow: TextOverflow.ellipsis),
             subtitle: own
               ? StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(stream: d.reference.collection('views').snapshots(),
@@ -1342,6 +1350,69 @@ class _CallsTab extends StatelessWidget {
           },
         ),
       ],
+    );
+  }
+}
+
+class _StatusVideoPlayer extends StatefulWidget {
+  final String url;
+  const _StatusVideoPlayer({required this.url});
+
+  @override
+  State<_StatusVideoPlayer> createState() => _StatusVideoPlayerState();
+}
+
+class _StatusVideoPlayerState extends State<_StatusVideoPlayer> {
+  late final VideoPlayerController _controller;
+  late final Future<void> _initialized;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url));
+    _initialized = _controller.initialize().then((_) {
+      _controller.setLooping(true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<void>(
+      future: _initialized,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) return const Padding(
+          padding: EdgeInsets.all(20),
+          child: Text('This video could not be played.'),
+        );
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const SizedBox(height: 220, child: Center(child: CircularProgressIndicator()));
+        }
+        return Column(mainAxisSize: MainAxisSize.min, children: [
+          AspectRatio(
+            aspectRatio: _controller.value.aspectRatio,
+            child: VideoPlayer(_controller),
+          ),
+          IconButton(
+            iconSize: 42,
+            onPressed: () {
+              setState(() {
+                if (_controller.value.isPlaying) {
+                  _controller.pause();
+                } else {
+                  _controller.play();
+                }
+              });
+            },
+            icon: Icon(_controller.value.isPlaying ? Icons.pause_circle : Icons.play_circle),
+          ),
+        ]);
+      },
     );
   }
 }
