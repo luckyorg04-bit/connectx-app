@@ -131,6 +131,40 @@ class _ChatMessageState extends State<ChatMessage> {
       return const Text('Opened once');
     }
     switch (message.type) {
+      case 'gif':
+        return GestureDetector(
+          onTap: () => _openMedia(url),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 250, maxHeight: 210),
+                  color: Colors.black.withOpacity(.05),
+                  child: Image.network(url, width: 230, fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const SizedBox(
+                      width: 220, height: 90,
+                      child: Center(child: Icon(Icons.broken_image_outlined))),
+                  ),
+                ),
+              ),
+              if (message.fileName != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(message.fileName!,
+                    style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                ),
+              if (message.message.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 3),
+                  child: Text(message.message,
+                    maxLines: 3, overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: secondary, fontSize: 9)),
+                ),
+            ],
+          ),
+        );
       case 'image':
         if (message.isViewOnce && !widget.isMe) return TextButton.icon(
           onPressed: () => _openMedia(url), icon: const Icon(Icons.looks_one), label: const Text('Open photo once'));
