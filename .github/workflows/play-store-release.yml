@@ -140,7 +140,7 @@ jobs:
           "$APKSIGNER" verify --verbose "$APK"
           JAR_VERIFY_OUTPUT="$(jarsigner -verify -verbose -certs "$AAB" 2>&1 || true)"
           printf '%s\n' "$JAR_VERIFY_OUTPUT"
-          echo "$JAR_VERIFY_OUTPUT" | grep -q 'jar verified\.'
+          [[ "$JAR_VERIFY_OUTPUT" == *"jar verified."* ]]
           APK_CERT="$("$APKSIGNER" verify --print-certs "$APK" | awk -F': ' '/certificate SHA-256 digest:/ {sub(/^.*digest: /, ""); gsub(/:/, ""); print toupper($0); exit}')"
           AAB_CERT="$(keytool -printcert -jarfile "$AAB" 2>/dev/null | awk '/SHA256:/ {sub(/^.*SHA256: */, ""); gsub(/:/, ""); print toupper($0); exit}')"
           echo "Configured upload certificate SHA-256: $UPLOAD_CERT_SHA256"
