@@ -34,7 +34,6 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   bool _speakerOn = true;
   final Set<String> _creatingPeers = <String>{};
   bool _leaving = false;
-  String? _error;
 
   String get _uid => FirebaseAuth.instance.currentUser!.uid;
   DocumentReference<Map<String, dynamic>> get _callRef =>
@@ -170,7 +169,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
         if (mounted) setState(() {});
       } catch (error) {
         debugPrint('ConnectX group remote track attach failed: $error');
-        if (mounted) setState(() => _error = 'Could not attach a participant media track.');
+        if (mounted) showConnectXErrorDialog(context, 'A participant audio or video stream could not be displayed.');
       }
     };
     peer.onIceCandidate = (candidate) async {
