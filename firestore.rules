@@ -79,8 +79,11 @@ service cloud.firestore {
         )
         ||
         (
-          resource.data.isViewOnce == true
+          'isViewOnce' in resource.data
+          && resource.data.isViewOnce == true
           && resource.data.sender != request.auth.uid
+          && 'viewedBy' in resource.data
+          && resource.data.viewedBy is map
           && !resource.data.viewedBy.keys().hasAny([request.auth.uid])
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewedBy'])
           && request.resource.data.viewedBy is map
@@ -89,7 +92,8 @@ service cloud.firestore {
         )
         ||
         (
-          resource.data.type == 'poll'
+          'type' in resource.data
+          && resource.data.type == 'poll'
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pollVotes'])
           && request.resource.data.pollVotes is map
           && request.resource.data.pollVotes.diff(resource.data.pollVotes).affectedKeys().hasOnly([request.auth.uid])
