@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'services/chat_storage.dart';
@@ -16,7 +15,6 @@ import 'models/user.dart';
 import 'profile_screen.dart';
 import 'services/notification_service.dart';
 import 'services/database_service.dart';
-import 'services/profile_storage.dart';
 
 List<User1> users = [];
 List<Chat> chats = [];
@@ -112,7 +110,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
             IconButton(
               tooltip: 'Edit profile',
               icon: const Icon(Icons.edit_outlined),
-              onPressed: _openEditProfile,
+              onPressed: () => Navigator.of(context).pushNamed('/edit-profile'),
             ),
             IconButton(
               tooltip: 'Log out',
@@ -359,185 +357,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
         const SnackBar(content: Text('Could not create group. Check your connection and try again.')),
       );
     }
-  }
-
-  Future<void> _openEditProfile() async {
-    final uid = FirebaseAuth.instance.currentUser!.uid;
-    final ref = ConnectXDatabase.instance.ref("PublicUsers").child(uid);
-    final snapshot = await ref.get();
-    if (!mounted) return;
-
-    final nameController = TextEditingController(
-      text: snapshot.child('name').value?.toString() ??
-          FirebaseAuth.instance.currentUser?.displayName ?? '',
-    );
-    final bioController = TextEditingController(
-      text: snapshot.child('bio').value?.toString() ??
-          snapshot.child('about').value?.toString() ?? '',
-    );
-    final currentPhotoUrl = snapshot.child('photoUrl').value?.toString() ??
-        FirebaseAuth.instance.currentUser?.photoURL ?? '';
-    XFile? pickedPhoto;
-    var removePhoto = false;
-
-    final shouldSave = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => AlertDialog(
-          title: const Text('Edit profile'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircleAvatar(
-                  radius: 42,
-                  backgroundImage: pickedPhoto != null
-                      ? FileImage(File(pickedPhoto!.path)) as ImageProvider<Object>
-                      : (!removePhoto && currentPhotoUrl.isNotEmpty
-                          ? NetworkImage(currentPhotoUrl) as ImageProvider<Object>
-                          : null),
-                  child: pickedPhoto == null && (removePhoto || currentPhotoUrl.isEmpty)
-                      ? const Icon(Icons.person, size: 42)
-                      : null,
-                ),
-                Wrap(
-                  alignment: WrapAlignment.center,
-                  children: [
-                    TextButton.icon(
-                      icon: const Icon(Icons.photo_camera_outlined),
-                      label: const Text('Change photo'),
-                      onPressed: () async {
-                        final image = await ImagePicker().pickImage(
-                          source: ImageSource.gallery,
-                          imageQuality: 85,
-                          maxWidth: 1200,
-                        );
-                        if (image != null) {
-                          setDialogState(() {
-                            pickedPhoto = image;
-                            removePhoto = false;
-                          });
-                        }
-                      },
-                    ),
-                    if (currentPhotoUrl.isNotEmpty || pickedPhoto != null)
-                      TextButton.icon(
-                        icon: const Icon(Icons.delete_outline),
-                        label: const Text('Remove photo'),
-                        onPressed: () => setDialogState(() {
-                          pickedPhoto = null;
-                          removePhoto = true;
-                        }),
-                      ),
-                  ],
-                ),
-                TextField(
-                  controller: nameController,
-                  maxLength: 40,
-                  decoration: const InputDecoration(
-                    labelText: 'Name',
-                    prefixIcon: Icon(Icons.person_outline),
-                  ),
-                ),
-                TextField(
-                  controller: bioController,
-                  maxLength: 160,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Bio',
-                    prefixIcon: Icon(Icons.edit_outlined),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Save'),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (shouldSave == true && nameController.text.trim().isNotEmpty) {
-      try {
-        var photoUrl = currentPhotoUrl;
-        var oldPhotoToDelete = '';
-        if (pickedPhoto != null) {
-          photoUrl = await ProfileStorage.upload(pickedPhoto!);
-          oldPhotoToDelete = currentPhotoUrl;
-        } else if (removePhoto) {
-          photoUrl = '';
-          oldPhotoToDelete = currentPhotoUrl;
-        }
-
-        final name = nameController.text.trim();
-        await ref.update({
-          'name': name,
-          'bio': bioController.text.trim(),
-          'photoUrl': photoUrl,
-          'about': null,
-        });
-        // PublicUsers is the app's profile source of truth. Auth profile
-        // metadata is a best-effort mirror and must not turn a successful
-        // database update into a false "upload failed" result.
-        try {
-          await FirebaseAuth.instance.currentUser?.updateDisplayName(name);
-          await FirebaseAuth.instance.currentUser?.updatePhotoURL(
-            photoUrl.isEmpty ? null : photoUrl,
-          );
-        } catch (authError) {
-          debugPrint('ConnectX Auth profile metadata sync failed: $authError');
-        }
-        if (oldPhotoToDelete.isNotEmpty && oldPhotoToDelete != photoUrl) {
-          try {
-            await ProfileStorage.delete(oldPhotoToDelete);
-          } catch (error) {
-            // The new profile remains saved; an orphaned old image can be cleaned later.
-            debugPrint('ConnectX old profile photo cleanup failed: $error');
-          }
-        }
-        if (mounted) {
-          await showDialog<void>(
-            context: context,
-            builder: (dialogContext) => AlertDialog(
-              icon: const Icon(Icons.check_circle_rounded, color: Color(0xFF008069), size: 42),
-              title: Text(pickedPhoto != null ? 'Profile photo uploaded successfully' : 'Profile updated successfully'),
-              content: const Text('Your profile details and photo have been saved.'),
-              actions: [FilledButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('Done'),
-              )],
-            ),
-          );
-        }
-      } catch (error) {
-        debugPrint('ConnectX profile update failed: $error');
-        if (mounted) {
-          await showDialog<void>(
-            context: context,
-            builder: (dialogContext) => AlertDialog(
-              icon: const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 40),
-              title: const Text('Profile update failed'),
-              content: const Text('Your changes could not be saved. Check your internet connection and try again.'),
-              actions: [FilledButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('OK'),
-              )],
-            ),
-          );
-        }
-      }
-    }
-
-    nameController.dispose();
-    bioController.dispose();
   }
 
   Future<void> _logout() async {
