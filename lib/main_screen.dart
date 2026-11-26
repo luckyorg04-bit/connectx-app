@@ -36,6 +36,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
   late final TabController _tabController;
   bool _showProfile = false;
   String _chatFilter = 'All';
+  String _chatSearch = '';
+  final TextEditingController _chatSearchController = TextEditingController();
 
   @override
   void initState() {
@@ -248,6 +250,33 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
     const filters = ['All', 'Unread', 'Favorites', 'Groups', 'Archived'];
     return Column(
       children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
+          child: SizedBox(
+            height: 46,
+            child: TextField(
+              controller: _chatSearchController,
+              onChanged: (value) => setState(() => _chatSearch = value),
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                hintText: 'Search chats or people',
+                prefixIcon: const Icon(Icons.search_rounded),
+                suffixIcon: _chatSearch.isEmpty ? null : IconButton(
+                  tooltip: 'Clear search',
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () => setState(() {
+                    _chatSearchController.clear();
+                    _chatSearch = '';
+                  }),
+                ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                filled: true,
+                fillColor: Theme.of(context).brightness == Brightness.dark
+                    ? const Color(0xFF202C33) : const Color(0xFFF0F2F5),
+              ),
+            ),
+          ),
+        ),
         SizedBox(
           height: 58,
           child: ListView.separated(
@@ -261,6 +290,14 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
               return ChoiceChip(
                 label: Text(filter),
                 selected: selected,
+                selectedColor: const Color(0xFFD9FDD3),
+                backgroundColor: Theme.of(context).brightness == Brightness.dark
+                    ? const Color(0xFF202C33) : const Color(0xFFF0F2F5),
+                side: BorderSide.none,
+                labelStyle: TextStyle(
+                  color: selected ? const Color(0xFF075E54) : Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                ),
                 onSelected: (_) => setState(() => _chatFilter = filter),
               );
             },
@@ -268,7 +305,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
         ),
         Expanded(
           child: _chatFilter == 'Groups'
-              ? _GroupsList(onCreateGroup: _createGroup)
+              ? _GroupsList(onCreateGroup: _createGroup, searchQuery: _chatSearch)
               : users.isEmpty && _chatFilter == 'All'
                   ? const _SectionEmptyState(
                       icon: Icons.chat_bubble_outline_rounded,
@@ -280,6 +317,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
                       key: userListKey,
                       wantChats: true,
                       filter: _chatFilter,
+                      searchQuery: _chatSearch,
                     )
 
         ),
@@ -468,6 +506,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _tabController.dispose();
+    _chatSearchController.dispose();
     for (final subscription in subscriptions) {
       subscription.cancel();
     }
