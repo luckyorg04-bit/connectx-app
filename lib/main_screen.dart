@@ -528,7 +528,7 @@ class _UpdatesTab extends StatelessWidget {
           bytes: bytes,
           contentType: mime,
           resourceType: 'status',
-          audienceUids: [uid],
+          audienceUids: audience,
         );
       } catch (error) {
         showConnectXErrorDialog(context, 'Media upload failed. Check your connection and try again.');
@@ -621,7 +621,8 @@ class _UpdatesTab extends StatelessWidget {
     final uid = FirebaseAuth.instance.currentUser!.uid;
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance.collection('statuses')
-        .where('expiresAt', isGreaterThan: Timestamp.now()).snapshots(),
+        .where('audienceUids', arrayContains: uid)
+         .where('expiresAt', isGreaterThan: Timestamp.now()).snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) return const _SectionEmptyState(icon: Icons.cloud_off_outlined, title: 'Updates are unavailable', description: 'ConnectX could not load updates. Check your connection or try again later.');
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
