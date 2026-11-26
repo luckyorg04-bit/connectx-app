@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectx/models/chat.dart';
 import 'package:connectx/utils/user_list.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:video_player/video_player.dart';
 import 'package:flutter/material.dart';
@@ -384,10 +385,26 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
     } catch (error) {
       debugPrint('ConnectX logout presence cleanup failed: $error');
     }
+    // Stop account-scoped listeners before clearing the authenticated session.
+    final activeSubscriptions = List<StreamSubscription>.from(subscriptions);
+    subscriptions.clear();
+    users.clear();
+    chats.clear();
+    try {
+      await Future.wait(activeSubscriptions.map((subscription) => subscription.cancel()))
+          .timeout(const Duration(seconds: 4));
+    } catch (error) {
+      debugPrint('ConnectX logout listener cleanup failed: $error');
+    }
     try {
       await NotificationService.dispose().timeout(const Duration(seconds: 4));
     } catch (error) {
       debugPrint('ConnectX logout notification cleanup failed: $error');
+    }
+    try {
+      await GoogleSignIn().signOut().timeout(const Duration(seconds: 4));
+    } catch (error) {
+      debugPrint('ConnectX Google session cleanup failed: $error');
     }
     try {
       await FirebaseAuth.instance.signOut().timeout(const Duration(seconds: 8));
