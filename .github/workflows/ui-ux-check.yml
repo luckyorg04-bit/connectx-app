@@ -7,7 +7,7 @@ name: ConnectX UI UX checks
 on:
   push:
     branches:
-      - release/connectx-ui-only-1.0.4
+      - release/connectx-whatsapp-style-1.1.0
     paths:
       - 'lib/**'
       - 'test/**'
