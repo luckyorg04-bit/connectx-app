@@ -384,7 +384,7 @@ class AuthPageState extends State<AuthPage> {
 
   Future<void> _ensureUserProfile(User user, {String? preferredName, String? preferredUsername}) async {
     final ref = ConnectXDatabase.instance.ref('PublicUsers').child(user.uid);
-    final existing = await ref.get();
+    final existing = await ref.get().timeout(const Duration(seconds: 12));
     final emailPrefix = (user.email ?? 'connectx_user')
         .split('@')
         .first
@@ -415,7 +415,7 @@ class AuthPageState extends State<AuthPage> {
       }
       if (currentData['photoUrl'] is! String) updates['photoUrl'] = user.photoURL ?? '';
       if (currentData.containsKey('about')) updates['about'] = null;
-      if (updates.isNotEmpty) await ref.update(updates);
+      if (updates.isNotEmpty) await ref.update(updates).timeout(const Duration(seconds: 12));
       return;
     }
     final username = (preferredUsername?.trim().isNotEmpty ?? false)
@@ -435,7 +435,7 @@ class AuthPageState extends State<AuthPage> {
       'lastSeen': ServerValue.timestamp,
       'bio': 'Hey there! I am using ConnectX',
       'photoUrl': user.photoURL ?? '',
-    });
+    }).timeout(const Duration(seconds: 12));
   }
 
   Future<String?> _askPhoneNumber() async {
