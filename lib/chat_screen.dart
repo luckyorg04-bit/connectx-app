@@ -5,6 +5,10 @@ import 'package:file_picker/file_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:http/http.dart' as http;
+import 'package:flutter_contacts/flutter_contacts.dart';
+import 'widgets/connectx_gif_picker.dart';
+import 'chat_contact_info_screen.dart';
 import 'package:record/record.dart';
 import 'services/chat_storage.dart';
 import 'package:connectx/main.dart';
@@ -41,6 +45,8 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
   bool _recording = false;
   int _disappearingDurationMs = 0;
   bool _sendViewOnce = false;
+  String _wallpaperId = '0';
+  String? _wallpaperUrl;
   Timer? _expiryRefreshTimer;
   final Record _recorder = Record();
   final ImagePicker _imagePicker = ImagePicker();
@@ -65,6 +71,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
         onError: (Object error) => debugPrint('ConnectX read receipt listener failed: $error'));
       _listenForTyping();
       _loadDisappearingSetting();
+      _loadChatWallpaper();
       _expiryRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
         if (mounted) setState(() {});
       });
@@ -89,6 +96,42 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
     final value = await ConnectXDatabase.instance.ref('PrivateUsers').child(_uid)
       .child('chatMeta').child(user!.key).child('disappearingDurationMs').get();
     if (mounted) setState(() => _disappearingDurationMs = (value.value as num?)?.toInt() ?? 0);
+  }
+
+
+  DatabaseReference get _chatWallpaperRef => ConnectXDatabase.instance
+      .ref('PrivateUsers').child(_uid).child('chatMeta').child(user!.key).child('wallpaper');
+
+  Future<void> _loadChatWallpaper() async {
+    try {
+      final value = await _chatWallpaperRef.get();
+      final data = value.value;
+      if (!mounted || data is! Map) return;
+      setState(() {
+        _wallpaperId = (data['id'] ?? '0').toString();
+        _wallpaperUrl = data['url']?.toString();
+      });
+    } catch (error) {
+      debugPrint('ConnectX wallpaper preference unavailable: $error');
+    }
+  }
+
+  Future<void> _saveChatWallpaper(String id, String? url) async {
+    await _chatWallpaperRef.set({'id': id, 'url': url});
+    if (!mounted) return;
+    setState(() {
+      _wallpaperId = id;
+      _wallpaperUrl = url;
+    });
+  }
+
+  Future<void> _openContactInfo() async {
+    await Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => ChatContactInfoScreen(
+        user: user!,
+        onWallpaperSelected: _saveChatWallpaper,
+      ),
+    ));
   }
 
   Future<void> _setDisappearingSetting() async {
@@ -400,13 +443,39 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
   }
 
   Future<void> _pickGif() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom, allowedExtensions: ['gif'], withData: true);
-    if (result == null || result.files.isEmpty) return;
-    final file = result.files.first;
-    if (file.bytes == null) return;
-    await _uploadBytes(bytes: file.bytes!, fileName: file.name,
-      contentType: 'image/gif', type: 'image');
+    final selected = await ConnectXGifPicker.show(context);
+    if (selected == null || !mounted || _sending) return;
+    setState(() => _sending = true);
+    try {
+      await _ensureCanMessage();
+      final response = await http.get(Uri.parse(selected.url))
+          .timeout(const Duration(seconds: 30));
+      if (response.statusCode != 200 || response.bodyBytes.isEmpty) {
+        throw Exception('GIF download failed');
+      }
+      if (response.bodyBytes.length > 25 * 1024 * 1024) {
+        throw Exception('GIF is larger than 25 MB');
+      }
+      final mediaUrl = await ChatStorage.upload(
+        conversationId: assignUsers(_uid, user!.key),
+        fileName: 'connectx_gif_${DateTime.now().millisecondsSinceEpoch}.gif',
+        bytes: response.bodyBytes,
+        contentType: 'image/gif',
+        viewOnce: false,
+      );
+      await _sendStructuredMessage(
+        type: 'gif',
+        text: selected.attribution,
+        mediaUrl: mediaUrl,
+        fileName: selected.title,
+      );
+    } catch (error) {
+      if (mounted) showConnectXErrorDialog(
+        context, 'GIF could not be sent. Please try another GIF or check your connection.',
+      );
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
   }
 
   Future<void> _pickDocument() async {
@@ -454,32 +523,70 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
   }
 
   Future<void> _shareContact() async {
-    final name = TextEditingController();
-    final phone = TextEditingController();
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Share contact'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(controller: name, decoration: const InputDecoration(labelText: 'Contact name')),
-          TextField(controller: phone, keyboardType: TextInputType.phone,
-            decoration: const InputDecoration(labelText: 'Phone number')),
-        ]),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Share')),
-        ],
-      ),
-    );
-    if (confirmed == true && name.text.trim().isNotEmpty && phone.text.trim().isNotEmpty) {
-      await _sendStructuredMessage(type: 'contact',
-        text: '${name.text.trim()} • ${phone.text.trim()}',
-        contactName: name.text.trim(), contactPhone: phone.text.trim());
+    try {
+      // Ask only for read access. Nothing is uploaded until the user chooses
+      // one contact and explicitly taps Send.
+      final granted = await FlutterContacts.requestPermission(readonly: true);
+      if (!granted) {
+        if (mounted) showConnectXErrorDialog(
+          context, 'Contacts permission is needed to choose a contact. You can allow it in app settings.',
+        );
+        return;
+      }
+      final contacts = await FlutterContacts.getContacts(
+        withProperties: true,
+        withPhoto: false,
+      );
+      if (!mounted) return;
+      final selected = await showModalBottomSheet<Contact>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        builder: (sheetContext) => _ConnectXContactPicker(contacts: contacts),
+      );
+      if (selected == null || !mounted) return;
+      final name = selected.displayName.trim();
+      final phones = selected.phones
+          .map((phone) => phone.number.trim())
+          .where((phone) => phone.isNotEmpty)
+          .toSet()
+          .toList();
+      if (name.isEmpty || phones.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('This contact has no phone number to share.')),
+        );
+        return;
+      }
+      final phone = phones.length == 1 ? phones.first : await showModalBottomSheet<String>(
+        context: context,
+        builder: (sheetContext) => SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const ListTile(title: Text('Choose phone number')),
+            ...phones.map((number) => ListTile(
+              leading: const Icon(Icons.phone_outlined),
+              title: Text(number),
+              onTap: () => Navigator.pop(sheetContext, number),
+            )),
+          ]),
+        ),
+      );
+      if (phone == null || phone.isEmpty) return;
+      if (mounted) setState(() => _sending = true);
+      try {
+        await _sendStructuredMessage(
+          type: 'contact',
+          text: '$name • $phone',
+          contactName: name,
+          contactPhone: phone,
+        );
+      } finally {
+        if (mounted) setState(() => _sending = false);
+      }
+    } catch (error) {
+      if (mounted) showConnectXErrorDialog(
+        context, 'Contacts could not be loaded. Check permission and try again.',
+      );
     }
-    name.dispose();
-    phone.dispose();
   }
 
   Future<void> _toggleVoiceRecording() async {
@@ -762,17 +869,21 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
               currentRoute = '/main';
             },
           ),
-          CircleAvatar(
+          GestureDetector(onTap: _openContactInfo, child: CircleAvatar(
             radius: 20,
             backgroundImage: user!.photoUrl.isNotEmpty ? NetworkImage(user!.photoUrl) : null,
             child: user!.photoUrl.isEmpty ? Text(user!.username.isEmpty ? 'C' : user!.username[0].toUpperCase()) : null,
-          ),
+          )),
           const SizedBox(width: 10),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(user!.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16)),
-            Text(_remoteTyping ? 'typing…' : (user!.online ? 'online' : 'last seen recently'),
-              style: const TextStyle(fontSize: 11)),
-          ])),
+          Expanded(child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _openContactInfo,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(user!.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16)),
+              Text(_remoteTyping ? 'typing…' : (user!.online ? 'online' : 'last seen recently'),
+                style: const TextStyle(fontSize: 11)),
+            ]),
+          )),
         ]),
         actions: [
           IconButton(tooltip: 'Voice call', icon: const Icon(Icons.call_outlined),
@@ -795,7 +906,12 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
           ),
         ],
       ),
-      body: CustomPaint(
+      body: Container(
+        decoration: BoxDecoration(
+          color: _wallpaperUrl == null ? _wallpaperColor(_wallpaperId, Theme.of(context).brightness == Brightness.dark) : null,
+          image: _wallpaperUrl == null ? null : DecorationImage(image: NetworkImage(_wallpaperUrl!), fit: BoxFit.cover),
+        ),
+        child: CustomPaint(
         painter: _ChatWallpaperPainter(dark: Theme.of(context).brightness == Brightness.dark),
         child: Column(children: [
         Expanded(child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -910,7 +1026,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
           ]),
         )),
         ]),
-      ),
+      )),
     );
   }
 
@@ -928,6 +1044,111 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
   }
 }
 
+
+
+/// WhatsApp-style local contact picker. Only the selected contact is shared.
+class _ConnectXContactPicker extends StatefulWidget {
+  final List<Contact> contacts;
+  const _ConnectXContactPicker({required this.contacts});
+
+  @override
+  State<_ConnectXContactPicker> createState() => _ConnectXContactPickerState();
+}
+
+class _ConnectXContactPickerState extends State<_ConnectXContactPicker> {
+  final TextEditingController _search = TextEditingController();
+  Contact? _selected;
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _search.text.trim().toLowerCase();
+    final contacts = widget.contacts.where((contact) {
+      final name = contact.displayName.toLowerCase();
+      final phones = contact.phones.map((phone) => phone.number).join(' ');
+      return query.isEmpty || name.contains(query) || phones.toLowerCase().contains(query);
+    }).toList()
+      ..sort((a, b) => a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()));
+    return SafeArea(
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * .82,
+        child: Column(children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 12, 8),
+            child: Row(children: [
+              const Expanded(child: Text('Share contact',
+                style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700))),
+              IconButton(onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close)),
+            ]),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            child: TextField(
+              controller: _search,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                hintText: 'Search contacts',
+                prefixIcon: const Icon(Icons.search),
+                filled: true,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none),
+              ),
+            ),
+          ),
+          Expanded(
+            child: contacts.isEmpty
+                ? const Center(child: Text('No contacts found'))
+                : ListView.builder(
+                    itemCount: contacts.length,
+                    itemBuilder: (context, index) {
+                      final contact = contacts[index];
+                      final numbers = contact.phones.map((p) => p.number)
+                          .where((p) => p.trim().isNotEmpty).toSet().toList();
+                      final chosen = _selected?.id == contact.id;
+                      final first = contact.displayName.trim().isEmpty
+                          ? '?' : contact.displayName.trim().characters.first.toUpperCase();
+                      return ListTile(
+                        selected: chosen,
+                        leading: CircleAvatar(child: Text(first)),
+                        title: Text(contact.displayName.isEmpty ? 'Unnamed contact' : contact.displayName),
+                        subtitle: Text(numbers.isEmpty ? 'No phone number' : numbers.join(' · '),
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                        trailing: chosen ? const Icon(Icons.check_circle, color: Color(0xFF008069))
+                            : null,
+                        onTap: numbers.isEmpty ? null : () => setState(() => _selected = contact),
+                      );
+                    },
+                  ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
+            child: SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _selected == null ? null : () => Navigator.pop(context, _selected),
+                icon: const Icon(Icons.send_rounded),
+                label: Text(_selected == null ? 'Select a contact' : 'Send contact'),
+              ),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+Color _wallpaperColor(String id, bool dark) {
+  const colors = [0xFFEFEAE2,0xFFDCEFE7,0xFFE1E9F8,0xFFF8E2E2,0xFFF5E9CF,0xFFE8DDF4,0xFFD9E8EA,0xFFF2E3D3,0xFF24323A,0xFF172B4D,0xFF283A2F,0xFF402D35,0xFF3A3150,0xFF263B48,0xFF4A3B2D,0xFF20252B,0xFFF0F1F3,0xFFE3F2FD,0xFFFCE4EC,0xFFE8F5E9];
+  final index = int.tryParse(id);
+  if (index == null || index < 0 || index >= colors.length) return dark ? const Color(0xFF0B141B) : const Color(0xFFEFEAE2);
+  return Color(colors[index]);
+}
 
 class _ChatWallpaperPainter extends CustomPainter {
   final bool dark;
