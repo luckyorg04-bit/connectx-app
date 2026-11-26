@@ -63,6 +63,10 @@ service cloud.firestore {
         (
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions'])
           && request.resource.data.reactions is map
+          && request.resource.data.reactions.diff(resource.data.reactions).affectedKeys()
+            .hasOnly([request.auth.uid])
+          && request.resource.data.reactions[request.auth.uid] is string
+          && request.resource.data.reactions[request.auth.uid].size() <= 8
         )
         ||
         (
