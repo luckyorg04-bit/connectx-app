@@ -361,37 +361,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
     }
   }
 
-  Future<void> _openNotificationSettings() async {
-    final uid = FirebaseAuth.instance.currentUser!.uid;
-    final ref = ConnectXDatabase.instance.ref('PrivateUsers').child(uid).child('notificationSettings');
-    final snap = await ref.get();
-    final saved = Map<String, dynamic>.from(snap.value is Map ? snap.value as Map : {});
-    bool messages = saved['messages'] != false;
-    bool groups = saved['groups'] != false;
-    bool calls = saved['calls'] != false;
-    final confirmed = await showDialog<bool>(context: context, builder: (dialogContext) =>
-      StatefulBuilder(builder: (context, setDialogState) => AlertDialog(
-        title: const Text('Notification settings'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          SwitchListTile(title: const Text('Direct messages'), value: messages,
-            onChanged: (v) => setDialogState(() => messages = v)),
-          SwitchListTile(title: const Text('Group messages'), value: groups,
-            onChanged: (v) => setDialogState(() => groups = v)),
-          SwitchListTile(title: const Text('Voice and video calls'), value: calls,
-            onChanged: (v) => setDialogState(() => calls = v)),
-        ]),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Save')),
-        ],
-      )));
-    if (confirmed == true) {
-      await ref.set({'messages': messages, 'groups': groups, 'calls': calls});
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Notification preferences saved.')));
-    }
-  }
-
   Future<void> _openEditProfile() async {
     final uid = FirebaseAuth.instance.currentUser!.uid;
     final ref = ConnectXDatabase.instance.ref("PublicUsers").child(uid);
@@ -786,7 +755,7 @@ class _UpdatesTab extends StatelessWidget {
           Image.network(statusMediaUrl, fit: BoxFit.contain,
             errorBuilder: (_, __, ___) => const Text('Unable to load photo'))
         else if (type == 'video' && statusMediaUrl != null)
-          _StatusVideoPlayer(url: statusMediaUrl!)
+          _StatusVideoPlayer(url: statusMediaUrl)
         else
           Padding(padding: const EdgeInsets.all(24), child: SelectableText((data['statusText'] ?? '').toString(), style: const TextStyle(fontSize: 20))),
         if (data['ownerUid'] == uid)
