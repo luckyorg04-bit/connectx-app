@@ -116,6 +116,29 @@ test('Firestore status feed is restricted to its selected audience', async () =>
   await assertSucceeds(getDocs(query(collection(bob, 'statuses'), where('audienceUids', 'array-contains', 'bob'), where('expiresAt', '>', new Date()))));
 });
 
+test('Firestore status viewers can read only their own seen marker while owners can read all', async () => {
+  const alice = env.authenticatedContext('alice').firestore();
+  const bob = env.authenticatedContext('bob').firestore();
+  const charlie = env.authenticatedContext('charlie').firestore();
+
+  await setDoc(doc(alice, 'statuses/status-views'), {
+    ownerUid: 'alice',
+    statusText: 'Hello',
+    mediaType: 'text',
+    audienceUids: ['alice', 'bob'],
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+  });
+  await setDoc(doc(bob, 'statuses/status-views/views/bob'), {
+    viewerUid: 'bob',
+    viewedAt: new Date(),
+  });
+
+  await assertSucceeds(getDoc(doc(bob, 'statuses/status-views/views/bob')));
+  await assertSucceeds(getDoc(doc(alice, 'statuses/status-views/views/bob')));
+  await assertFails(getDoc(doc(charlie, 'statuses/status-views/views/bob')));
+  await assertFails(getDoc(doc(bob, 'statuses/status-views/views/alice')));
+});
+
 test('Firestore direct call records are restricted to their participants', async () => {
   const alice = env.authenticatedContext('alice').firestore();
   const bob = env.authenticatedContext('bob').firestore();
