@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - master
+      - release/connectx-ui-only-1.0.4
     paths:
       - 'lib/**'
       - 'pubspec.yaml'
