@@ -120,12 +120,18 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
               onPressed: _logout,
             ),
           ] else ...[
-            if (_selectedTab == 0)
+            if (_selectedTab == 0) ...[
               IconButton(
-                tooltip: 'Search',
+                tooltip: 'Create status',
+                icon: const Icon(Icons.camera_alt_outlined),
+                onPressed: () => _UpdatesTab()._create(context),
+              ),
+              IconButton(
+                tooltip: 'Search contacts',
                 icon: const Icon(Icons.search_rounded),
                 onPressed: () => Navigator.of(context).pushNamed('/main/new'),
               ),
+            ],
             if (_selectedTab == 1)
               IconButton(
                 tooltip: 'Create status',
@@ -157,21 +163,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
             ),
           ],
         ],
-        bottom: _showProfile
-            ? null
-            : TabBar(
-                controller: _tabController,
-                indicatorColor: Colors.white,
-                indicatorWeight: 3,
-                labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-                unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
-                tabs: const [
-                  Tab(text: 'CHATS'),
-                  Tab(text: 'UPDATES'),
-                  Tab(text: 'COMMUNITIES'),
-                  Tab(text: 'CALLS'),
-                ],
-              ),
       ),
       body: _showProfile
           ? const ProfileScreen()
@@ -182,6 +173,37 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
                 const _UpdatesTab(),
                 const _CommunitiesTab(),
                 const _CallsTab(),
+              ],
+            ),
+      bottomNavigationBar: _showProfile
+          ? null
+          : NavigationBar(
+              selectedIndex: _selectedTab,
+              onDestinationSelected: (index) {
+                _tabController.animateTo(index);
+                setState(() => _selectedTab = index);
+              },
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Icons.chat_bubble_outline_rounded),
+                  selectedIcon: Icon(Icons.chat_rounded),
+                  label: 'Chats',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.circle_outlined),
+                  selectedIcon: Icon(Icons.donut_large_rounded),
+                  label: 'Updates',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.groups_outlined),
+                  selectedIcon: Icon(Icons.groups_rounded),
+                  label: 'Communities',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.call_outlined),
+                  selectedIcon: Icon(Icons.call_rounded),
+                  label: 'Calls',
+                ),
               ],
             ),
       floatingActionButton: _showProfile
