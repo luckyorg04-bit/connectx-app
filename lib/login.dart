@@ -309,25 +309,27 @@ class AuthPageState extends State<AuthPage> {
     setState(() => _isLoading = true);
     final email = _emailController.text.trim();
     final password = _passwordController.text;
-    var accountCreatedThisAttempt = false;
+    var authenticatedThisAttempt = FirebaseAuth.instance.currentUser != null;
     try {
-      // If Firebase account creation succeeded earlier but profile bootstrap
-      // was interrupted, retry profile setup instead of creating the account
-      // again (which would return email-already-in-use).
+      // Resume a previous signup whose Firebase Auth account exists but whose
+      // profile setup was interrupted. Profile sync must never invalidate Auth.
       final pendingUser = FirebaseAuth.instance.currentUser;
       if (!_isLogin &&
           pendingUser != null &&
           (pendingUser.email ?? '').trim().toLowerCase() == email.toLowerCase()) {
-        await _ensureUserProfile(
-          pendingUser,
-          preferredName: _nameController.text.trim(),
-          preferredUsername: _usernameController.text.trim(),
-        );
+        authenticatedThisAttempt = true;
         try {
-          await PhoneLookupService.register(
-            pendingUser.uid,
-            _phoneController.text.trim(),
+          await _ensureUserProfile(
+            pendingUser,
+            preferredName: _nameController.text.trim(),
+            preferredUsername: _usernameController.text.trim(),
           );
+        } catch (error, stackTrace) {
+          debugPrint('ConnectX pending signup profile sync failed: $error');
+          debugPrintStack(stackTrace: stackTrace);
+        }
+        try {
+          await PhoneLookupService.register(pendingUser.uid, _phoneController.text.trim());
         } catch (error) {
           debugPrint('ConnectX optional phone registration retry failed: $error');
         }
@@ -344,63 +346,55 @@ class AuthPageState extends State<AuthPage> {
         credential = await FirebaseAuth.instance
             .createUserWithEmailAndPassword(email: email, password: password)
             .timeout(const Duration(seconds: 25));
-        accountCreatedThisAttempt = true;
         try {
           await credential.user!
               .updateDisplayName(_nameController.text.trim())
               .timeout(const Duration(seconds: 10));
         } catch (error) {
-          // A display-name update is profile polish, not an authentication gate.
           debugPrint('ConnectX display-name update failed: $error');
         }
       }
 
-      // Authentication must not depend on the optional phone-index Cloud
-      // Functions. Previously a lookup/registration outage signed users out
-      // after Firebase had already created their account, making the next
-      // signup attempt fail with email-already-in-use.
-      await _ensureUserProfile(
-        credential.user!,
-        preferredName: _isLogin ? null : _nameController.text.trim(),
-        preferredUsername: _isLogin ? null : _usernameController.text.trim(),
-      );
+      // Firebase Auth has accepted the credentials. Keep this session even if
+      // Realtime Database profile sync is slow, denied, or unavailable.
+      authenticatedThisAttempt = true;
+      try {
+        await _ensureUserProfile(
+          credential.user!,
+          preferredName: _isLogin ? null : _nameController.text.trim(),
+          preferredUsername: _isLogin ? null : _usernameController.text.trim(),
+        );
+      } catch (error, stackTrace) {
+        debugPrint('ConnectX non-blocking profile sync failed: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      }
 
       if (!_isLogin) {
         try {
-          await PhoneLookupService.register(
-            credential.user!.uid,
-            _phoneController.text.trim(),
-          );
+          await PhoneLookupService.register(credential.user!.uid, _phoneController.text.trim());
         } catch (error) {
-          // Keep the newly created account usable even if phone indexing is
-          // unavailable or the number is already linked to another account.
           debugPrint('ConnectX optional phone registration failed: $error');
         }
       }
 
       await _openMain();
     } on FirebaseAuthException catch (error) {
-      // Never discard a newly created Firebase account because an optional
-      // profile-side operation failed. A subsequent tap can resume setup.
-      if (!accountCreatedThisAttempt) await _cleanupPartialSession();
+      if (!authenticatedThisAttempt) await _cleanupPartialSession();
       _showError(_authError(error));
     } catch (error, stackTrace) {
       debugPrint('ConnectX email authentication/profile bootstrap failed: $error');
       debugPrintStack(stackTrace: stackTrace);
-      // Keep a newly created account signed in so the next attempt can resume
-      // the idempotent profile bootstrap instead of stranding its email.
-      if (!accountCreatedThisAttempt) await _cleanupPartialSession();
-      if (error is FirebaseException) {
-        final message = error.code == 'permission-denied'
-            ? 'Firebase database access was denied while preparing your profile. Please contact support.'
-            : error.code == 'unavailable' || error.code == 'network-request-failed'
-                ? 'Network connection failed. Check your internet and try again.'
-                : 'Your account was authenticated, but profile setup failed (${error.code}). Please try again.';
-        _showError(message);
+      if (!authenticatedThisAttempt) {
+        await _cleanupPartialSession();
+        if (error is FirebaseException) {
+          _showError('Firebase request failed (${error.code}). Please try again.');
+        } else {
+          _showError('Sign-in could not reach the authentication service (${error.runtimeType}). Check your connection and retry.');
+        }
       } else {
-        _showError('Unable to complete sign-in. Please check your connection and try again.');
+        _showError('You are signed in, but ConnectX could not finish loading. Reopen the app; your account remains signed in.');
       }
-    } finally {
+    }    } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
