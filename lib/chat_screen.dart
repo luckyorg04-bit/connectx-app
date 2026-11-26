@@ -195,7 +195,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
       });
       await _updateChatIndex();
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Poll not sent: $error')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Poll could not be sent. Please try again.')));
     }
   }
 
@@ -242,7 +242,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
       });
     } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
+        const SnackBar(content: Text('Message could not be sent. Please try again.')),
       );
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -361,7 +361,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
       if (mounted && _sendViewOnce) setState(() => _sendViewOnce = false);
     } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Upload failed: $error')),
+        const SnackBar(content: Text('Media upload failed. Check your connection and try again.')),
       );
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -384,7 +384,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
       );
     } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unable to select media: $error')),
+        const SnackBar(content: Text('Media could not be selected. Please try again.')),
       );
     }
   }
@@ -457,7 +457,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
       );
     } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Location sharing failed: $error')),
+        const SnackBar(content: Text('Location could not be shared. Check location permission and try again.')),
       );
     }
   }
@@ -808,7 +808,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
         Expanded(child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
           stream: _messageStream,
           builder: (context, snapshot) {
-            if (snapshot.hasError) return Center(child: Text('Could not load messages: ${snapshot.error}'));
+            if (snapshot.hasError) return const Center(child: Text('Messages are temporarily unavailable. Check your connection and try again.'));
             if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
             final docs = snapshot.data!.docs.where((doc) {
               final expiry = doc.data()['expiresAt'];
