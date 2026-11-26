@@ -99,9 +99,11 @@ service cloud.firestore {
         && request.auth.uid in request.resource.data.adminUids;
       allow update: if isGroupAdmin(groupId)
         && request.resource.data.createdBy == resource.data.createdBy
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'memberUids', 'adminUids'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'description', 'memberUids', 'adminUids'])
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
+        && request.resource.data.get('description', '') is string
+        && request.resource.data.get('description', '').size() <= 512
         && request.resource.data.memberUids is list
         && request.resource.data.adminUids is list
         && resource.data.createdBy in request.resource.data.memberUids
