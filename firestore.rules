@@ -10,12 +10,6 @@ service cloud.firestore {
       return signedIn() && request.auth.uid in conversationId.split(',');
     }
 
-    function otherParticipant(conversationId) {
-      return conversationId.split(',')[0] == request.auth.uid
-        ? conversationId.split(',')[1]
-        : conversationId.split(',')[0];
-    }
-
     function isGroupMember(groupId) {
       return signedIn()
         && exists(/databases/$(database)/documents/groupChats/$(groupId))
@@ -72,19 +66,9 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions'])
           && request.resource.data.reactions is map
           && resource.data.get('reactions', {}) is map
+          && request.resource.data.reactions.diff(resource.data.get('reactions', {}))
+            .affectedKeys().hasOnly([request.auth.uid])
           && request.resource.data.reactions.keys().size() <= 2
-          && (
-            (
-              !resource.data.get('reactions', {}).keys().hasAny([otherParticipant(conversationId)])
-              && !request.resource.data.reactions.keys().hasAny([otherParticipant(conversationId)])
-            )
-            || (
-              resource.data.get('reactions', {}).keys().hasAny([otherParticipant(conversationId)])
-              && request.resource.data.reactions.keys().hasAny([otherParticipant(conversationId)])
-              && request.resource.data.reactions[otherParticipant(conversationId)]
-                == resource.data.reactions[otherParticipant(conversationId)]
-            )
-          )
           && (
             !request.resource.data.reactions.keys().hasAny([request.auth.uid])
             || (
