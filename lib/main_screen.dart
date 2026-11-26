@@ -684,39 +684,23 @@ class _UpdatesTab extends StatelessWidget {
     }
   }
 
-  Future<void> _view(BuildContext context, QueryDocumentSnapshot<Map<String, dynamic>> doc, String uid) async {
-    final data = doc.data();
-    if (data['ownerUid'] != uid) {
-      try { await doc.reference.collection('views').doc(uid).set({'viewerUid': uid, 'viewedAt': FieldValue.serverTimestamp()}); } catch (_) {}
-    }
-    if (!context.mounted) return;
-    final type = (data['mediaType'] ?? 'text').toString();
-    var statusMediaUrl = data['mediaUrl']?.toString();
-    if (statusMediaUrl != null && (type == 'image' || type == 'video')) {
-      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
-      final uri = Uri.tryParse(statusMediaUrl);
-      if (token != null && uri != null) {
-        statusMediaUrl = uri.replace(queryParameters: {
-          ...uri.queryParameters,
-          'auth': token,
-        }).toString();
-      }
-    }
-    await showDialog<void>(context: context, builder: (c) => Dialog(
-      child: Padding(padding: const EdgeInsets.all(16), child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Row(children: [Expanded(child: Text((data['userName'] ?? 'ConnectX user').toString(), style: const TextStyle(fontWeight: FontWeight.bold))),
-          IconButton(onPressed: () => Navigator.pop(c), icon: const Icon(Icons.close))]),
-        if (type == 'image' && statusMediaUrl != null)
-          Image.network(statusMediaUrl, fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => const Text('Unable to load photo'))
-        else if (type == 'video' && statusMediaUrl != null)
-          _StatusVideoPlayer(url: statusMediaUrl)
-        else
-          Padding(padding: const EdgeInsets.all(24), child: SelectableText((data['statusText'] ?? '').toString(), style: const TextStyle(fontSize: 20))),
-        if (data['ownerUid'] == uid)
-          StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(stream: doc.reference.collection('views').snapshots(),
-            builder: (_, snap) => Align(alignment: Alignment.centerLeft, child: Text('Seen by ${snap.data?.docs.length ?? 0}'))),
-      ]))));
+  Future<void> _viewGroup(
+    BuildContext context,
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> items,
+    String uid,
+  ) async {
+    if (items.isEmpty || !context.mounted) return;
+    // Present a user's statuses oldest-to-newest, like a WhatsApp story sequence.
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => Dialog.fullscreen(
+        child: _StatusStoryViewer(
+          statuses: items.reversed.toList(),
+          viewerUid: uid,
+        ),
+      ),
+    );
   }
 
   Future<void> _showViewers(BuildContext context, QueryDocumentSnapshot<Map<String, dynamic>> doc) async {
@@ -883,13 +867,38 @@ class _UpdatesTab extends StatelessWidget {
                   )
                 : Text(preview, maxLines: 1, overflow: TextOverflow.ellipsis),
             trailing: own
-                ? IconButton(
-                    tooltip: 'Add status',
-                    icon: const Icon(Icons.add_circle_outline_rounded, color: Color(0xFF008069)),
-                    onPressed: () => _create(context),
+                ? Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      PopupMenuButton<String>(
+                        tooltip: 'Status options',
+                        onSelected: (value) async {
+                          if (value == 'views') {
+                            await _showViewers(context, latest);
+                          } else if (value == 'delete') {
+                            try {
+                              await latest.reference.delete();
+                            } catch (error) {
+                              if (context.mounted) {
+                                showConnectXErrorDialog(context, 'Status could not be deleted. Please try again.');
+                              }
+                            }
+                          }
+                        },
+                        itemBuilder: (_) => const [
+                          PopupMenuItem(value: 'views', child: Text('View seen list')),
+                          PopupMenuItem(value: 'delete', child: Text('Delete latest status')),
+                        ],
+                      ),
+                      IconButton(
+                        tooltip: 'Add status',
+                        icon: const Icon(Icons.add_circle_outline_rounded, color: Color(0xFF008069)),
+                        onPressed: () => _create(context),
+                      ),
+                    ],
                   )
                 : null,
-            onTap: () => _view(context, latest, uid),
+            onTap: () => _viewGroup(context, items, uid),
           );
         }
 
@@ -1443,6 +1452,250 @@ class _CallsTab extends StatelessWidget {
           },
         ),
       ],
+    );
+  }
+}
+
+class _StatusStoryViewer extends StatefulWidget {
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>> statuses;
+  final String viewerUid;
+
+  const _StatusStoryViewer({
+    required this.statuses,
+    required this.viewerUid,
+  });
+
+  @override
+  State<_StatusStoryViewer> createState() => _StatusStoryViewerState();
+}
+
+class _StatusStoryViewerState extends State<_StatusStoryViewer> {
+  late final PageController _pageController;
+  late final Future<String?> _authToken;
+  Timer? _progressTimer;
+  int _index = 0;
+  double _progress = 0;
+  DateTime _startedAt = DateTime.now();
+
+  QueryDocumentSnapshot<Map<String, dynamic>> get _current => widget.statuses[_index];
+
+  Duration get _duration {
+    final type = (_current.data()['mediaType'] ?? 'text').toString();
+    return Duration(seconds: type == 'video' ? 30 : 7);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+    _authToken = FirebaseAuth.instance.currentUser?.getIdToken();
+    _markViewed(0);
+    _startProgress();
+  }
+
+  Future<void> _markViewed(int index) async {
+    final doc = widget.statuses[index];
+    if (doc.data()['ownerUid'] == widget.viewerUid) return;
+    final viewRef = doc.reference.collection('views').doc(widget.viewerUid);
+    try {
+      final existing = await viewRef.get();
+      if (!existing.exists) {
+        await viewRef.set({
+          'viewerUid': widget.viewerUid,
+          'viewedAt': FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (error) {
+      debugPrint('ConnectX status seen marker failed: $error');
+    }
+  }
+
+  void _startProgress() {
+    _progressTimer?.cancel();
+    _startedAt = DateTime.now();
+    _progress = 0;
+    _progressTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      final elapsed = DateTime.now().difference(_startedAt).inMilliseconds;
+      final nextProgress = (elapsed / _duration.inMilliseconds).clamp(0.0, 1.0);
+      if (nextProgress >= 1) {
+        if (_index < widget.statuses.length - 1) {
+          _pageController.nextPage(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOut,
+          );
+        } else {
+          Navigator.of(context).pop();
+        }
+        timer.cancel();
+        return;
+      }
+      setState(() => _progress = nextProgress);
+    });
+  }
+
+  void _changePage(int nextIndex) {
+    setState(() => _index = nextIndex);
+    _markViewed(nextIndex);
+    _startProgress();
+  }
+
+  void _step(int direction) {
+    final next = _index + direction;
+    if (next < 0) {
+      _pageController.animateToPage(0, duration: const Duration(milliseconds: 180), curve: Curves.easeOut);
+    } else if (next >= widget.statuses.length) {
+      Navigator.of(context).pop();
+    } else {
+      _pageController.animateToPage(next, duration: const Duration(milliseconds: 180), curve: Curves.easeOut);
+    }
+  }
+
+  String _mediaUrl(String raw, String token) {
+    final uri = Uri.tryParse(raw);
+    if (uri == null) return raw;
+    return uri.replace(queryParameters: {
+      ...uri.queryParameters,
+      'auth': token,
+    }).toString();
+  }
+
+  @override
+  void dispose() {
+    _progressTimer?.cancel();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final data = _current.data();
+    final ownerName = (data['userName'] ?? 'ConnectX user').toString();
+    final type = (data['mediaType'] ?? 'text').toString();
+    final rawMediaUrl = data['mediaUrl']?.toString();
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        titleSpacing: 4,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(ownerName, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+            Text(
+              data['createdAt'] is Timestamp
+                  ? DateFormat.jm().format((data['createdAt'] as Timestamp).toDate())
+                  : 'Just now',
+              style: const TextStyle(fontSize: 11, color: Colors.white70),
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            tooltip: 'Close status',
+            onPressed: () => Navigator.of(context).pop(),
+            icon: const Icon(Icons.close_rounded),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 6, 8, 10),
+            child: Row(
+              children: List.generate(widget.statuses.length, (index) {
+                final value = index < _index ? 1.0 : index == _index ? _progress : 0.0;
+                return Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: LinearProgressIndicator(
+                        value: value,
+                        minHeight: 3,
+                        backgroundColor: Colors.white24,
+                        valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapUp: (details) {
+                final width = MediaQuery.of(context).size.width;
+                _step(details.localPosition.dx < width * .35 ? -1 : 1);
+              },
+              child: PageView.builder(
+                controller: _pageController,
+                itemCount: widget.statuses.length,
+                onPageChanged: _changePage,
+                itemBuilder: (context, index) {
+                  final story = widget.statuses[index].data();
+                  final storyType = (story['mediaType'] ?? 'text').toString();
+                  final storyUrl = story['mediaUrl']?.toString();
+                  final storyText = (story['statusText'] ?? '').toString();
+                  if (storyType == 'image' && storyUrl != null) {
+                    return FutureBuilder<String?>(
+                      future: _authToken,
+                      builder: (context, tokenSnapshot) {
+                        if (!tokenSnapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator(color: Colors.white));
+                        }
+                        return Center(
+                          child: Image.network(
+                            _mediaUrl(storyUrl, tokenSnapshot.data!),
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) => const Text(
+                              'Unable to load photo',
+                              style: TextStyle(color: Colors.white),
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  }
+                  if (storyType == 'video' && storyUrl != null) {
+                    return FutureBuilder<String?>(
+                      future: _authToken,
+                      builder: (context, tokenSnapshot) {
+                        if (!tokenSnapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator(color: Colors.white));
+                        }
+                        return Center(child: _StatusVideoPlayer(url: _mediaUrl(storyUrl, tokenSnapshot.data!)));
+                      },
+                    );
+                  }
+                  return Container(
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.all(32),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFF075E54), Color(0xFF128C7E), Color(0xFF202C33)],
+                      ),
+                    ),
+                    child: Text(
+                      storyText,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white, fontSize: 27, fontWeight: FontWeight.w600),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
