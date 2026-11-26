@@ -518,14 +518,33 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
           }
         }
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Profile updated')),
+          await showDialog<void>(
+            context: context,
+            builder: (dialogContext) => AlertDialog(
+              icon: const Icon(Icons.check_circle_rounded, color: Color(0xFF008069), size: 42),
+              title: const Text('Profile updated successfully'),
+              content: const Text('Your profile details and photo have been saved.'),
+              actions: [FilledButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Done'),
+              )],
+            ),
           );
         }
       } catch (error) {
+        debugPrint('ConnectX profile update failed: $error');
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Profile update failed: $error')),
+          await showDialog<void>(
+            context: context,
+            builder: (dialogContext) => AlertDialog(
+              icon: const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 40),
+              title: const Text('Profile update failed'),
+              content: const Text('Your changes could not be saved. Check your internet connection and try again.'),
+              actions: [FilledButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('OK'),
+              )],
+            ),
           );
         }
       }
@@ -660,27 +679,12 @@ class _UpdatesTab extends StatelessWidget {
         ListTile(leading: const Icon(Icons.videocam), title: const Text('Video status'), onTap: () => Navigator.pop(c, 'video')),
       ])));
     if (kind == null) return;
-    final audience = await showDialog<List<String>>(context: context, builder: (dialogContext) {
-      final selected = <String>{uid, ...users.where((u) => u.key != uid).map((u) => u.key)};
-      return StatefulBuilder(builder: (context, setDialogState) => AlertDialog(
-        title: const Text('Status privacy'),
-        content: SizedBox(width: double.maxFinite, height: 340, child: Column(children: [
-          const Text('Select the contacts who can view this status.'),
-          Expanded(child: ListView(children: users.where((u) => u.key != uid).map((person) =>
-            CheckboxListTile(dense: true, value: selected.contains(person.key),
-              title: Text(person.name), subtitle: Text('@${person.username}'),
-              onChanged: (value) => setDialogState(() {
-                if (value == true) selected.add(person.key); else selected.remove(person.key);
-              }),
-            )).toList())),
-        ])),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, selected.toList()), child: const Text('Done')),
-        ],
-      ));
-    });
-    if (audience == null) return;
+    // WhatsApp-style default: share with all known ConnectX users; no per-status
+    // audience picker. Keep the owner in the list for the Firestore rule.
+    final audience = <String>{
+      uid,
+      ...users.where((u) => u.key != uid).map((u) => u.key),
+    }.toList();
     String text = '';
     String? url, fileName;
     if (kind == 'text') {
@@ -805,7 +809,7 @@ class _UpdatesTab extends StatelessWidget {
         .where('audienceUids', arrayContains: uid)
         .where('expiresAt', isGreaterThan: Timestamp.now()).snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) return Center(child: Text('Unable to load updates: ${snapshot.error}'));
+        if (snapshot.hasError) return const _SectionEmptyState(icon: Icons.cloud_off_outlined, title: 'Updates are unavailable', description: 'ConnectX could not load updates. Check your connection or try again later.');
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         final now = Timestamp.now();
         final docs = snapshot.data!.docs.where((d) => d.data()['expiresAt'] is Timestamp &&
@@ -1170,7 +1174,7 @@ class _CallsTab extends StatelessWidget {
       stream: FirebaseFirestore.instance.collection('calls')
         .where('participants', arrayContains: uid).snapshots(),
       builder: (context, directSnapshot) {
-        if (directSnapshot.hasError) return Center(child: Text('Unable to load calls: ${directSnapshot.error}'));
+        if (directSnapshot.hasError) return const _SectionEmptyState(icon: Icons.cloud_off_outlined, title: 'Calls are unavailable', description: 'ConnectX could not load call history. Check your connection or try again later.');
         if (!directSnapshot.hasData) return const Center(child: CircularProgressIndicator());
         final directCalls = directSnapshot.data!.docs.toList()
           ..sort((a, b) {
@@ -1182,7 +1186,7 @@ class _CallsTab extends StatelessWidget {
           stream: FirebaseFirestore.instance.collection('groupCalls')
             .where('participants', arrayContains: uid).snapshots(),
           builder: (context, groupSnapshot) {
-            if (groupSnapshot.hasError) return Center(child: Text('Unable to load group calls: ${groupSnapshot.error}'));
+            if (groupSnapshot.hasError) return const _SectionEmptyState(icon: Icons.cloud_off_outlined, title: 'Group calls are unavailable', description: 'ConnectX could not load group call history. Check your connection or try again later.');
             if (!groupSnapshot.hasData) return const Center(child: CircularProgressIndicator());
             final groupCalls = groupSnapshot.data!.docs.toList()
               ..sort((a, b) {
