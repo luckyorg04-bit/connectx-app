@@ -544,7 +544,7 @@ class _GroupsList extends StatelessWidget {
               final name = (doc.data()['name'] ?? 'Group').toString().toLowerCase();
               return query.isEmpty || name.contains(query);
             }).toList();
-            if (groups.isEmpty) return const _SectionEmptyState(
+            if (groups.isEmpty) return _SectionEmptyState(
               icon: Icons.groups_outlined,
               title: query.isEmpty ? 'No group chats yet' : 'No matching groups',
               description: query.isEmpty ? 'Create a group to start a group conversation.' : 'Try another group name.',
