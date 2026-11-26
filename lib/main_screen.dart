@@ -534,13 +534,20 @@ class _UpdatesTab extends StatelessWidget {
         return;
       }
     }
+    var statusOwnerPhotoUrl = FirebaseAuth.instance.currentUser?.photoURL ?? '';
+    try {
+      final profilePhoto = await ConnectXDatabase.instance
+          .ref('PublicUsers').child(uid).child('photoUrl').get();
+      final savedPhotoUrl = profilePhoto.value?.toString() ?? '';
+      if (savedPhotoUrl.isNotEmpty) statusOwnerPhotoUrl = savedPhotoUrl;
+    } catch (error) {
+      debugPrint('ConnectX status profile photo lookup failed: $error');
+    }
     try {
       await FirebaseFirestore.instance.collection('statuses').add({
         'ownerUid': uid,
         'userName': FirebaseAuth.instance.currentUser?.displayName ?? 'ConnectX user',
-        'userPhotoUrl': (users.where((u) => u.key == uid).toList().isNotEmpty
-            ? users.firstWhere((u) => u.key == uid).photoUrl
-            : FirebaseAuth.instance.currentUser?.photoURL ?? ''),
+        'userPhotoUrl': statusOwnerPhotoUrl,
         'statusText': text,
         'mediaType': kind,
         if (url != null) 'mediaUrl': url,
