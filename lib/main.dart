@@ -95,55 +95,76 @@ class MyApp extends StatelessWidget {
 }
 
 ThemeData _buildTheme(Brightness brightness) {
-  const primary = Color(0xFF0AA5A8);
   final isDark = brightness == Brightness.dark;
+  const lightGreen = Color(0xFF008069);
+  const darkGreen = Color(0xFF59DCB5);
+  final primary = isDark ? darkGreen : lightGreen;
   final scheme = ColorScheme.fromSeed(
     seedColor: primary,
     brightness: brightness,
     primary: primary,
-    surface: isDark ? const Color(0xFF202C33) : Colors.white,
-    background: isDark ? const Color(0xFF111B21) : Colors.white,
+    secondary: isDark ? const Color(0xFF8BD5BF) : const Color(0xFF25D366),
+    surface: isDark ? const Color(0xFF141D24) : Colors.white,
+    background: isDark ? const Color(0xFF0B141B) : Colors.white,
   );
   return ThemeData(
     useMaterial3: true,
     brightness: brightness,
     colorScheme: scheme,
-    scaffoldBackgroundColor: isDark ? const Color(0xFF111B21) : const Color(0xFFFFFFFF),
+    fontFamily: 'Roboto',
+    scaffoldBackgroundColor: isDark ? const Color(0xFF0B141B) : Colors.white,
     appBarTheme: AppBarTheme(
-      toolbarHeight: 64,
-      titleTextStyle: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800, letterSpacing: -.35, color: Colors.white),
-      backgroundColor: isDark ? const Color(0xFF1F2C34) : const Color(0xFF087F83),
+      toolbarHeight: 56,
+      titleTextStyle: TextStyle(
+        fontFamily: 'Roboto',
+        fontSize: 20,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -.2,
+        color: Colors.white,
+      ),
+      backgroundColor: isDark ? const Color(0xFF141D24) : lightGreen,
       foregroundColor: Colors.white,
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: false,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(bottom: Radius.circular(18))),
+      surfaceTintColor: Colors.transparent,
     ),
-    floatingActionButtonTheme: const FloatingActionButtonThemeData(
+    navigationBarTheme: NavigationBarThemeData(
+      height: 68,
+      backgroundColor: isDark ? const Color(0xFF141D24) : Colors.white,
+      indicatorColor: isDark ? const Color(0xFF005B4A) : const Color(0xFFE7FCE3),
+      labelTextStyle: WidgetStateProperty.resolveWith((states) => TextStyle(
+        fontFamily: 'Roboto',
+        fontSize: 12,
+        fontWeight: states.contains(WidgetState.selected) ? FontWeight.w700 : FontWeight.w500,
+        color: isDark ? const Color(0xFFDAE4ED) : const Color(0xFF111B21),
+      )),
+    ),
+    floatingActionButtonTheme: FloatingActionButtonThemeData(
       backgroundColor: primary,
       foregroundColor: Colors.white,
       elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(18))),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     ),
-    dividerColor: isDark ? const Color(0xFF2B3941) : const Color(0xFFE7ECEF),
+    dividerColor: isDark ? const Color(0xFF2D363D) : const Color(0xFFE9EDEF),
     cardTheme: CardThemeData(
       elevation: 0,
       margin: EdgeInsets.zero,
-      color: isDark ? const Color(0xFF202C33) : const Color(0xFFF7FAFA),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      color: isDark ? const Color(0xFF141D24) : const Color(0xFFF7F8F8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: isDark ? const Color(0xFF202C33) : const Color(0xFFF0F2F5),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+      fillColor: isDark ? const Color(0xFF222B32) : const Color(0xFFF0F2F5),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: primary, width: 1.4),
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: primary, width: 1.4),
       ),
     ),
   );
