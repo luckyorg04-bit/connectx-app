@@ -50,16 +50,50 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> _pickPhoto() async {
-    final picked = await ImagePicker().pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 88,
-      maxWidth: 1400,
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              title: Text('Choose profile photo'),
+              subtitle: Text('Take a new photo or select one from your gallery'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined),
+              title: const Text('Take photo'),
+              onTap: () => Navigator.pop(sheetContext, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from gallery'),
+              onTap: () => Navigator.pop(sheetContext, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
     );
-    if (picked == null || !mounted) return;
-    setState(() {
-      _pickedPhoto = picked;
-      _removePhoto = false;
-    });
+    if (source == null || !mounted) return;
+    try {
+      final picked = await ImagePicker().pickImage(
+        source: source,
+        imageQuality: 88,
+        maxWidth: 1400,
+      );
+      if (picked == null || !mounted) return;
+      setState(() {
+        _pickedPhoto = picked;
+        _removePhoto = false;
+      });
+    } catch (error) {
+      debugPrint('ConnectX profile photo picker failed: $error');
+      if (mounted) {
+        _showMessage(source == ImageSource.camera
+            ? 'Camera could not be opened. Check camera permission and try again.'
+            : 'Gallery could not be opened. Check photo permission and try again.');
+      }
+    }
   }
 
   Future<void> _save() async {
