@@ -16,6 +16,7 @@ import 'models/user.dart';
 import 'profile_screen.dart';
 import 'services/notification_service.dart';
 import 'services/database_service.dart';
+import 'services/app_preferences.dart';
 
 List<User1> users = [];
 List<Chat> chats = [];
@@ -365,6 +366,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
     }
     await NotificationService.dispose();
     await FirebaseAuth.instance.signOut();
+    AppPreferences.reset();
     currentRoute = "/login";
     if (!mounted) return;
     await Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
