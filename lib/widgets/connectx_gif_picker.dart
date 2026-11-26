@@ -121,7 +121,7 @@ class _ConnectXGifPickerState extends State<ConnectXGifPicker> {
       _selectedCategory = 'Trending';
     });
     try {
-      // Six independently curated searches provide a 100+ item starter library.
+      // Seven independently curated searches provide up to 140 starter GIF results.
       final queries = _categories.entries.toList();
       final responses = await Future.wait(
         queries.map((entry) => _search(entry.value)),
