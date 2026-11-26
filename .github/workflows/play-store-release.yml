@@ -135,7 +135,10 @@ jobs:
           test -s "$AAB"
           test -x "$APKSIGNER"
           "$APKSIGNER" verify --verbose "$APK"
-          jarsigner -verify "$AAB"
+          JAR_VERIFY_OUTPUT="$(jarsigner -verify -verbose -certs "$AAB" 2>&1 || true)"
+          printf '%s\n' "$JAR_VERIFY_OUTPUT"
+          echo "$JAR_VERIFY_OUTPUT" | grep -q 'jar verified\.'
+          ! echo "$JAR_VERIFY_OUTPUT" | grep -Eqi 'jar is unsigned|jar is invalid'
           APK_CERT="$("$APKSIGNER" verify --print-certs "$APK" | awk -F': ' '/certificate SHA-256 digest:/ {print $2; exit}' | tr -d ':' | tr '[:lower:]' '[:upper:]')"
           AAB_CERT="$(keytool -printcert -jarfile "$AAB" | awk -F': ' '/SHA256:/ {print $2; exit}' | tr -d ':' | tr '[:lower:]' '[:upper:]')"
           test -n "$APK_CERT"
