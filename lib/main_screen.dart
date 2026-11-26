@@ -96,10 +96,13 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          _showProfile ? 'Profile' : 'ConnectX',
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
+        title: _showProfile
+            ? const Text('Profile', style: TextStyle(fontWeight: FontWeight.w700))
+            : const Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.forum_rounded, size: 21, color: Colors.white),
+                SizedBox(width: 9),
+                Text('ConnectX', style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: -.25)),
+              ]),
         automaticallyImplyLeading: false,
         leading: _showProfile
             ? IconButton(
