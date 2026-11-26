@@ -6,7 +6,7 @@ concurrency:
 
 on:
   push:
-    branches: ["master"]
+    branches: ["master", "release/connectx-ui-only-1.0.4"]
   pull_request:
     branches: ["master"]
 
