@@ -11,6 +11,8 @@ on:
       - 'pubspec.yaml'
       - 'pubspec.lock'
       - '.github/workflows/build-apk.yml'
+      - '.github/workflows/play-store-release.yml'
+      - '.github/workflows/ui-ux-check.yml'
   workflow_dispatch:
 
 permissions:
