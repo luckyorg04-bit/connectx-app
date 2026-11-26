@@ -1,24 +1,33 @@
-name: ConnectX Play Store Release AAB
+name: ConnectX Signed Release APK and Play Store AAB
 
 on:
   workflow_dispatch:
   push:
     branches:
-      - master
       - release/connectx-ui-only-1.0.4
     paths:
       - 'lib/**'
+      - 'android/**'
+      - 'assets/**'
       - 'pubspec.yaml'
       - 'pubspec.lock'
-      - 'android/**'
+      - 'firestore.rules'
+      - 'database.rules.json'
+      - 'firebase.json'
+      - 'firebase-tests/**'
       - '.github/workflows/play-store-release.yml'
 
 permissions:
   contents: read
 
+concurrency:
+  group: connectx-signed-release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  release-aab:
+  release-builds:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,16 +49,25 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: '17'
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.35.5"
+          flutter-version: '3.35.5'
           channel: stable
           cache: true
 
-      - name: Configure upload keystore
+      - name: Verify application, package, version and Firebase IDs
+        run: |
+          set -euo pipefail
+          grep -q 'applicationId "com.ghostgroup.connectx"' android/app/build.gradle
+          grep -q '^version: 1.0.4+5$' pubspec.yaml
+          node -e "const c=require('./android/app/google-services.json'); if(c.project_info.project_id!=='connectx-app-f8407') throw Error('Wrong Firebase project'); if(!c.client.some(x=>x.client_info.android_client_info.package_name==='com.ghostgroup.connectx')) throw Error('Missing Firebase Android client com.ghostgroup.connectx');"
+          grep -q 'targetSdk 36' android/app/build.gradle
+          test -f android/app/src/main/kotlin/com/ghostgroup/connectx/MainActivity.kt
+
+      - name: Configure existing upload keystore
         env:
           UPLOAD_KEYSTORE_BASE64: ${{ secrets.UPLOAD_KEYSTORE_BASE64 }}
           UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
@@ -64,24 +82,64 @@ jobs:
           keyAlias=$UPLOAD_KEY_ALIAS
           keyPassword=$UPLOAD_KEY_PASSWORD
           EOF
-
-      - name: Verify application and Firebase IDs
-        run: |
-          node -e "const c=require('./android/app/google-services.json'); if(c.project_info.project_id!=='connectx-app-f8407') throw Error('Wrong Firebase project'); if(!c.client.some(x=>x.client_info.android_client_info.package_name==='com.ghostgroup.connectx')) throw Error('Missing Firebase Android client com.ghostgroup.connectx; register this package in Firebase and replace google-services.json');"
-          grep -q 'applicationId "com.ghostgroup.connectx"' android/app/build.gradle
-          grep -q 'targetSdk 36' android/app/build.gradle
-          test -f android/app/src/main/kotlin/com/ghostgroup/connectx/MainActivity.kt
+          keytool -list -keystore android/app/upload-keystore.jks -storepass "$UPLOAD_KEYSTORE_PASSWORD" -alias "$UPLOAD_KEY_ALIAS" >/dev/null
 
       - name: Resolve Flutter dependencies
         run: flutter pub get
 
+      - name: Check VPS API and migration syntax
+        run: |
+          node --check vps-api/server.js
+          node --check functions/index.js
+          node --check vps-api/migrate-rtdb.js
+          node -e "for (const f of ['firebase.json','database.rules.json','firestore.indexes.json']) JSON.parse(require('fs').readFileSync(f, 'utf8'))"
+
+      - name: Run Firebase security rules tests
+        run: |
+          npm install --prefix firebase-tests --no-audit --no-fund
+          npx --yes firebase-tools emulators:exec --only database,firestore --project connectx-rules-test "npm test --prefix firebase-tests"
+
+      - name: Analyze Flutter project
+        run: flutter analyze --no-fatal-infos
+
+      - name: Run Flutter tests
+        run: flutter test
+
+      - name: Build signed release APK
+        run: flutter build apk --release
+
       - name: Build signed Play Store App Bundle
         run: flutter build appbundle --release
 
-      - name: Upload signed AAB
+      - name: Verify APK and AAB signatures match
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+          AAB="build/app/outputs/bundle/release/app-release.aab"
+          test -s "$APK"
+          test -s "$AAB"
+          apksigner verify --verbose "$APK"
+          jarsigner -verify "$AAB"
+          APK_CERT="$(apksigner verify --print-certs "$APK" | awk -F': ' '/certificate SHA-256 digest:/ {print $2; exit}' | tr -d ':' | tr '[:lower:]' '[:upper:]')"
+          AAB_CERT="$(keytool -printcert -jarfile "$AAB" | awk -F': ' '/SHA256:/ {print $2; exit}' | tr -d ':' | tr '[:lower:]' '[:upper:]')"
+          test -n "$APK_CERT"
+          test -n "$AAB_CERT"
+          test "$APK_CERT" = "$AAB_CERT"
+          echo "APK and AAB are signed with the same configured upload certificate."
+
+      - name: Upload signed release APK
         uses: actions/upload-artifact@v4
         with:
-          name: ConnectX-Play-Store-AAB
+          name: ConnectX-1.0.4-5-Signed-Release-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload signed Play Store AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: ConnectX-1.0.4-5-Signed-Play-Store-AAB
           path: build/app/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 30
