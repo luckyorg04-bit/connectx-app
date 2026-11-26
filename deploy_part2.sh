@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 PROJECT_ID="connectx-app-f8407"
-REPO_RAW="https://raw.githubusercontent.com/luckyorg04-bit/connectx-app/master"
+REPO_RAW="https://raw.githubusercontent.com/luckyorg04-bit/connectx-app/release/connectx-ui-only-1.0.4"
 SERVICE_ACCOUNT="/etc/connectx-api/service-account.json"
 API_CONTAINER="connectx-api"
 API_SOURCE_DIR="/opt/connectx-api"
