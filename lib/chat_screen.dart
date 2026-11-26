@@ -551,7 +551,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (context) => SafeArea(child: SizedBox(height: 420,
+      builder: (context) => SafeArea(child: SizedBox(height: (MediaQuery.of(context).size.height * .68).clamp(280.0, 520.0).toDouble(),
         child: items.isEmpty
           ? const Center(child: Text('No starred messages found.'))
           : ListView(children: items.map((doc) {
