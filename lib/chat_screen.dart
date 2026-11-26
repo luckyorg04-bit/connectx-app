@@ -13,6 +13,7 @@ import 'package:connectx/utils/chat_message.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
+import 'utils/app_feedback.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'models/user.dart';
 import 'models/message.dart';
@@ -195,7 +196,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
       });
       await _updateChatIndex();
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Poll could not be sent. Please try again.')));
+      showConnectXErrorDialog(context, 'Poll could not be sent. Please try again.');
     }
   }
 
@@ -241,9 +242,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
         _editing = null;
       });
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Message could not be sent. Please try again.')),
-      );
+      showConnectXErrorDialog(context, 'Message could not be sent. Please try again.');
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -360,9 +359,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
       );
       if (mounted && _sendViewOnce) setState(() => _sendViewOnce = false);
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Media upload failed. Check your connection and try again.')),
-      );
+      showConnectXErrorDialog(context, 'Media upload failed. Check your connection and try again.');
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -383,9 +380,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
         type: video ? 'video' : 'image',
       );
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Media could not be selected. Please try again.')),
-      );
+      showConnectXErrorDialog(context, 'Media could not be selected. Please try again.');
     }
   }
 
@@ -419,9 +414,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
     if (result == null || result.files.isEmpty) return;
     final file = result.files.first;
     if (file.bytes == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not read this file. Please select it again.')),
-      );
+      showConnectXErrorDialog(context, 'Could not read this file. Please select it again.');
       return;
     }
     final ext = (file.extension ?? '').toLowerCase();
@@ -456,9 +449,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
         longitude: position.longitude,
       );
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Location could not be shared. Check location permission and try again.')),
-      );
+      showConnectXErrorDialog(context, 'Location could not be shared. Check location permission and try again.');
     }
   }
 
