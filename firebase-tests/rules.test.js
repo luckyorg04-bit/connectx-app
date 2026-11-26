@@ -7,7 +7,7 @@ const {
   assertSucceeds,
 } = require('@firebase/rules-unit-testing');
 const { ref, get, set } = require('firebase/database');
-const { doc, getDoc, setDoc, updateDoc } = require('firebase/firestore');
+const { doc, getDoc, setDoc, updateDoc, serverTimestamp } = require('firebase/firestore');
 
 const root = path.resolve(__dirname, '..');
 let env;
@@ -60,6 +60,8 @@ test('Realtime Database permits only the intended owner preference writes', asyn
 
   await assertSucceeds(set(ref(alice, 'PrivateUsers/alice/chatMeta/bob/muted'), true));
   await assertSucceeds(set(ref(alice, 'PrivateUsers/alice/notificationSettings/messages'), false));
+  await assertSucceeds(set(ref(alice, 'PrivateUsers/alice/appSettings/themeMode'), 'dark'));
+  await assertSucceeds(set(ref(alice, 'PrivateUsers/alice/appSettings/languageCode'), 'hi'));
   await assertFails(set(ref(bob, 'PrivateUsers/alice/chatMeta/bob/muted'), false));
   await assertFails(set(ref(alice, 'PrivateUsers/alice/unreviewedAdminFlag'), true));
 });
@@ -78,6 +80,42 @@ test('Firestore direct messages are limited to conversation participants', async
     sender: 'bob', message: 'Spoofed sender', timestamp: Date.now(),
     isRead: false, isDelivered: false,
   }));
+});
+
+
+test('Firestore active statuses are readable by every signed-in ConnectX user', async () => {
+  const alice = env.authenticatedContext('alice').firestore();
+  const bob = env.authenticatedContext('bob').firestore();
+  const charlie = env.authenticatedContext('charlie').firestore();
+  const status = doc(alice, 'statuses/status-1');
+
+  await assertSucceeds(setDoc(status, {
+    ownerUid: 'alice',
+    statusText: 'Hello ConnectX',
+    mediaType: 'text',
+    audienceUids: ['alice'],
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+  }));
+  await assertSucceeds(getDoc(doc(bob, 'statuses/status-1')));
+  await assertSucceeds(getDoc(doc(charlie, 'statuses/status-1')));
+});
+
+test('Firestore direct call records are restricted to their participants', async () => {
+  const alice = env.authenticatedContext('alice').firestore();
+  const bob = env.authenticatedContext('bob').firestore();
+  const charlie = env.authenticatedContext('charlie').firestore();
+  const call = doc(alice, 'calls/call-1');
+
+  await assertSucceeds(setDoc(call, {
+    callerUid: 'alice',
+    calleeUid: 'bob',
+    participants: ['alice', 'bob'],
+    type: 'voice',
+    status: 'ringing',
+    createdAt: serverTimestamp(),
+  }));
+  await assertSucceeds(getDoc(doc(bob, 'calls/call-1')));
+  await assertFails(getDoc(doc(charlie, 'calls/call-1')));
 });
 
 test('Firestore group messages require membership and sender identity', async () => {
