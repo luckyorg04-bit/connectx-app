@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'services/chat_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectx/models/chat.dart';
@@ -281,6 +280,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
 
   Future<void> _createGroup() async {
     final nameController = TextEditingController();
+    final descriptionController = TextEditingController();
     final selected = <String>{};
     final available = users.where((person) =>
       person.key != FirebaseAuth.instance.currentUser!.uid).toList();
@@ -297,6 +297,12 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
                 controller: nameController,
                 maxLength: 40,
                 decoration: const InputDecoration(labelText: 'Group name'),
+              ),
+              TextField(
+                controller: descriptionController,
+                maxLength: 512,
+                maxLines: 2,
+                decoration: const InputDecoration(labelText: 'Group description (optional)'),
               ),
               const SizedBox(height: 8),
               const Align(alignment: Alignment.centerLeft,
@@ -326,7 +332,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
       ),
     );
     final groupName = nameController.text.trim();
+    final groupDescription = descriptionController.text.trim();
     nameController.dispose();
+    descriptionController.dispose();
     if (confirmed != true || groupName.isEmpty) return;
     final uid = FirebaseAuth.instance.currentUser!.uid;
     final members = <String>{uid, ...selected}.toList();
@@ -334,6 +342,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Ti
       final doc = FirebaseFirestore.instance.collection('groupChats').doc();
       await doc.set({
         'name': groupName,
+        'description': groupDescription,
         'createdBy': uid,
         'adminUids': [uid],
         'memberUids': members,
