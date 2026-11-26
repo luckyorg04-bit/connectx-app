@@ -7,7 +7,7 @@ const {
   assertSucceeds,
 } = require('@firebase/rules-unit-testing');
 const { ref, get, set } = require('firebase/database');
-const { doc, getDoc, setDoc, updateDoc, serverTimestamp } = require('firebase/firestore');
+const { collection, doc, getDoc, getDocs, query, where, setDoc, updateDoc, serverTimestamp } = require('firebase/firestore');
 
 const root = path.resolve(__dirname, '..');
 let env;
@@ -24,6 +24,11 @@ async function seed() {
     await setDoc(doc(context.firestore(), 'groupChats/group-1'), {
       name: 'Team', createdBy: 'alice',
       memberUids: ['alice', 'bob'], adminUids: ['alice'],
+    });
+    await setDoc(doc(context.firestore(), 'groupCalls/group-call-1'), {
+      groupId: 'group-1', groupName: 'Team', groupMemberUids: ['alice', 'bob'],
+      createdBy: 'alice', participants: ['alice', 'bob'], activeUids: ['alice', 'bob'],
+      type: 'voice', status: 'active', expiresAt: new Date(Date.now() + 60 * 60 * 1000),
     });
   });
 }
@@ -98,6 +103,7 @@ test('Firestore active statuses are readable by every signed-in ConnectX user', 
   }));
   await assertSucceeds(getDoc(doc(bob, 'statuses/status-1')));
   await assertSucceeds(getDoc(doc(charlie, 'statuses/status-1')));
+  await assertSucceeds(getDocs(query(collection(bob, 'statuses'), where('expiresAt', '>', new Date()))));
 });
 
 test('Firestore direct call records are restricted to their participants', async () => {
@@ -115,7 +121,22 @@ test('Firestore direct call records are restricted to their participants', async
     createdAt: serverTimestamp(),
   }));
   await assertSucceeds(getDoc(doc(bob, 'calls/call-1')));
+  await assertSucceeds(getDocs(query(collection(bob, 'calls'), where('participants', 'array-contains', 'bob'))));
   await assertFails(getDoc(doc(charlie, 'calls/call-1')));
+});
+
+test('Firestore group call list query is restricted to participants', async () => {
+  const bob = env.authenticatedContext('bob').firestore();
+  const charlie = env.authenticatedContext('charlie').firestore();
+
+  await assertSucceeds(getDocs(query(
+    collection(bob, 'groupCalls'),
+    where('participants', 'array-contains', 'bob'),
+  )));
+  await assertSucceeds(getDocs(query(
+    collection(charlie, 'groupCalls'),
+    where('participants', 'array-contains', 'charlie'),
+  )));
 });
 
 test('Firestore group messages require membership and sender identity', async () => {
