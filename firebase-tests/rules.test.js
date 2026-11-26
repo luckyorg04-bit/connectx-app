@@ -89,8 +89,10 @@ test('Firestore direct messages are limited to conversation participants', async
   await assertSucceeds(updateDoc(message, { 'reactions.alice': '❤️' }));
   console.log('Direct message test: add Bob reaction');
   await assertSucceeds(updateDoc(message, { 'reactions.bob': '👍' }));
-  console.log('Direct message test: reject replacing Alice reaction');
-  await assertFails(updateDoc(message, { 'reactions.alice': '😂' }));
+  console.log('Direct message test: allow Alice to change her own reaction');
+  await assertSucceeds(updateDoc(message, { 'reactions.alice': '😂' }));
+  console.log('Direct message test: reject Bob changing Alice reaction');
+  await assertFails(updateDoc(message, { 'reactions.alice': '🥲' }));
 });
 
 
