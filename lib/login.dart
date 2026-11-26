@@ -424,9 +424,9 @@ class AuthPageState extends State<AuthPage> {
     await Navigator.of(context).pushNamedAndRemoveUntil('/main', (route) => false);
   }
 
-  Future<void> _showError(String message) async {
+  void _showError(String message) {
     if (!mounted) return;
-    await showDialog<void>(
+    showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         icon: const Icon(Icons.info_outline_rounded),
