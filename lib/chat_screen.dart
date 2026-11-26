@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'widgets/connectx_gif_picker.dart';
+import 'chat_contact_info_screen.dart';
 import 'package:record/record.dart';
 import 'services/chat_storage.dart';
 import 'package:connectx/main.dart';
@@ -44,6 +45,8 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
   bool _recording = false;
   int _disappearingDurationMs = 0;
   bool _sendViewOnce = false;
+  String _wallpaperId = '0';
+  String? _wallpaperUrl;
   Timer? _expiryRefreshTimer;
   final Record _recorder = Record();
   final ImagePicker _imagePicker = ImagePicker();
@@ -68,6 +71,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
         onError: (Object error) => debugPrint('ConnectX read receipt listener failed: $error'));
       _listenForTyping();
       _loadDisappearingSetting();
+      _loadChatWallpaper();
       _expiryRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
         if (mounted) setState(() {});
       });
@@ -92,6 +96,42 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
     final value = await ConnectXDatabase.instance.ref('PrivateUsers').child(_uid)
       .child('chatMeta').child(user!.key).child('disappearingDurationMs').get();
     if (mounted) setState(() => _disappearingDurationMs = (value.value as num?)?.toInt() ?? 0);
+  }
+
+
+  DatabaseReference get _chatWallpaperRef => ConnectXDatabase.instance
+      .ref('PrivateUsers').child(_uid).child('chatMeta').child(user!.key).child('wallpaper');
+
+  Future<void> _loadChatWallpaper() async {
+    try {
+      final value = await _chatWallpaperRef.get();
+      final data = value.value;
+      if (!mounted || data is! Map) return;
+      setState(() {
+        _wallpaperId = (data['id'] ?? '0').toString();
+        _wallpaperUrl = data['url']?.toString();
+      });
+    } catch (error) {
+      debugPrint('ConnectX wallpaper preference unavailable: $error');
+    }
+  }
+
+  Future<void> _saveChatWallpaper(String id, String? url) async {
+    await _chatWallpaperRef.set({'id': id, 'url': url});
+    if (!mounted) return;
+    setState(() {
+      _wallpaperId = id;
+      _wallpaperUrl = url;
+    });
+  }
+
+  Future<void> _openContactInfo() async {
+    await Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => ChatContactInfoScreen(
+        user: user!,
+        onWallpaperSelected: _saveChatWallpaper,
+      ),
+    ));
   }
 
   Future<void> _setDisappearingSetting() async {
@@ -829,17 +869,21 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
               currentRoute = '/main';
             },
           ),
-          CircleAvatar(
+          GestureDetector(onTap: _openContactInfo, child: CircleAvatar(
             radius: 20,
             backgroundImage: user!.photoUrl.isNotEmpty ? NetworkImage(user!.photoUrl) : null,
             child: user!.photoUrl.isEmpty ? Text(user!.username.isEmpty ? 'C' : user!.username[0].toUpperCase()) : null,
-          ),
+          )),
           const SizedBox(width: 10),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(user!.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16)),
-            Text(_remoteTyping ? 'typing…' : (user!.online ? 'online' : 'last seen recently'),
-              style: const TextStyle(fontSize: 11)),
-          ])),
+          Expanded(child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _openContactInfo,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(user!.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16)),
+              Text(_remoteTyping ? 'typing…' : (user!.online ? 'online' : 'last seen recently'),
+                style: const TextStyle(fontSize: 11)),
+            ]),
+          )),
         ]),
         actions: [
           IconButton(tooltip: 'Voice call', icon: const Icon(Icons.call_outlined),
@@ -862,7 +906,12 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
           ),
         ],
       ),
-      body: CustomPaint(
+      body: Container(
+        decoration: BoxDecoration(
+          color: _wallpaperUrl == null ? _wallpaperColor(_wallpaperId, Theme.of(context).brightness == Brightness.dark) : null,
+          image: _wallpaperUrl == null ? null : DecorationImage(image: NetworkImage(_wallpaperUrl!), fit: BoxFit.cover),
+        ),
+        child: CustomPaint(
         painter: _ChatWallpaperPainter(dark: Theme.of(context).brightness == Brightness.dark),
         child: Column(children: [
         Expanded(child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -977,7 +1026,7 @@ class ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMix
           ]),
         )),
         ]),
-      ),
+      )),
     );
   }
 
@@ -1092,6 +1141,13 @@ class _ConnectXContactPickerState extends State<_ConnectXContactPicker> {
       ),
     );
   }
+}
+
+Color _wallpaperColor(String id, bool dark) {
+  const colors = [0xFFEFEAE2,0xFFDCEFE7,0xFFE1E9F8,0xFFF8E2E2,0xFFF5E9CF,0xFFE8DDF4,0xFFD9E8EA,0xFFF2E3D3,0xFF24323A,0xFF172B4D,0xFF283A2F,0xFF402D35,0xFF3A3150,0xFF263B48,0xFF4A3B2D,0xFF20252B,0xFFF0F1F3,0xFFE3F2FD,0xFFFCE4EC,0xFFE8F5E9];
+  final index = int.tryParse(id);
+  if (index == null || index < 0 || index >= colors.length) return dark ? const Color(0xFF0B141B) : const Color(0xFFEFEAE2);
+  return Color(colors[index]);
 }
 
 class _ChatWallpaperPainter extends CustomPainter {
