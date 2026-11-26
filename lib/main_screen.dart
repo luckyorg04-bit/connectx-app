@@ -732,7 +732,7 @@ class _UpdatesTab extends StatelessWidget {
           bytes: bytes,
           contentType: mime,
           resourceType: 'status',
-          audienceUids: audience,
+          audienceUids: [uid],
         );
       } catch (error) {
         if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Upload failed: $error')));
