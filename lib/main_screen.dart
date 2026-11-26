@@ -647,7 +647,7 @@ class _GroupsList extends StatelessWidget {
           stream: FirebaseFirestore.instance.collection('groupChats')
               .where('memberUids', arrayContains: uid).snapshots(),
           builder: (context, snapshot) {
-            if (snapshot.hasError) return Center(child: Text('Unable to load groups: ${snapshot.error}'));
+            if (snapshot.hasError) return const _SectionEmptyState(icon: Icons.cloud_off_outlined, title: 'Groups are unavailable', description: 'ConnectX could not load your groups. Check your connection and try again.') ;
             if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
             final groups = snapshot.data!.docs;
             if (groups.isEmpty) return const _SectionEmptyState(
@@ -735,7 +735,7 @@ class _UpdatesTab extends StatelessWidget {
           audienceUids: [uid],
         );
       } catch (error) {
-        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Upload failed: $error')));
+        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Media upload failed. Check your connection and try again.')));
         return;
       }
     }
@@ -756,7 +756,7 @@ class _UpdatesTab extends StatelessWidget {
       });
       if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Status shared for 24 hours.')));
     } catch (error) {
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not share status: $error')));
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Status could not be shared. Please try again.')));
     }
   }
 
@@ -907,7 +907,7 @@ class _CommunitiesTab extends StatelessWidget {
       );
     } catch (error) {
       if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not create community: $error')),
+        const SnackBar(content: Text('Community could not be created. Please try again.')),
       );
     }
   }
@@ -945,7 +945,7 @@ class _CommunitiesTab extends StatelessWidget {
                           : FieldValue.arrayUnion([uid])});
                       } catch (error) {
                         if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Membership update failed: $error')),
+                          const SnackBar(content: Text('Membership could not be updated. Please try again.')),
                         );
                       }
                     },
@@ -1017,7 +1017,7 @@ class _CommunitiesTab extends StatelessWidget {
                         controller.clear();
                       } catch (error) {
                         if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Post failed: $error')),
+                          const SnackBar(content: Text('Your post could not be published. Please try again.')),
                         );
                       }
                     },
@@ -1122,7 +1122,7 @@ class _ChannelsPanel extends StatelessWidget {
                     if (c.mounted) Navigator.pop(c);
                   } catch (error) {
                     if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Could not update channel membership: $error')),
+                      const SnackBar(content: Text('Channel membership could not be updated. Please try again.')),
                     );
                   }
                 },
